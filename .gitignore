@@ -1,0 +1,27 @@
+# Node / frontend
+node_modules/
+dist/
+*.local
+.vite/
+
+# Rust / Tauri
+/src-tauri/target/
+target/
+
+# Local SQLite (app DB lives in $APPDATA at runtime; ignore any stray local copies)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# Personal Claude instructions (not shared)
+CLAUDE.local.md
+
+# OS
+.DS_Store
+Thumbs.db
