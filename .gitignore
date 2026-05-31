@@ -9,6 +9,9 @@ dist/
 target/
 # Tauri-generated ACL/schema files — regenerated on every build
 /src-tauri/gen/
+# Mobile icon sets from `tauri icon` — desktop app, not needed
+/src-tauri/icons/android/
+/src-tauri/icons/ios/
 
 # Local SQLite (app DB lives in $APPDATA at runtime; ignore any stray local copies)
 *.db
