@@ -26,6 +26,7 @@ pub struct Cycle {
     pub name: String,
     pub state: String,
     pub time_left: Option<String>,
+    pub expiry: Option<String>, // ISO — drives the live client-side countdown
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,8 +44,8 @@ pub struct Fissure {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Baro {
     pub active: bool,
-    pub start: Option<String>,
-    pub end: Option<String>,
+    pub activation: Option<String>, // ISO — arrival
+    pub expiry: Option<String>,     // ISO — departure
     pub location: Option<String>,
     pub character: Option<String>,
 }
@@ -83,6 +84,7 @@ struct RawCycle {
     active: Option<String>, // cambion uses `active` (fass/vome)
     #[serde(rename = "timeLeft")]
     time_left: Option<String>,
+    expiry: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -98,18 +100,12 @@ struct RawFissure {
     is_hard: bool,
     #[serde(default, rename = "isStorm")]
     is_storm: bool,
-    #[serde(default)]
-    active: bool,
 }
 
 #[derive(Deserialize)]
 struct RawTrader {
-    #[serde(default)]
-    active: bool,
-    #[serde(rename = "startString")]
-    start_string: Option<String>,
-    #[serde(rename = "endString")]
-    end_string: Option<String>,
+    activation: Option<String>,
+    expiry: Option<String>,
     location: Option<String>,
     character: Option<String>,
 }
@@ -215,7 +211,7 @@ impl WorldstateClient {
         let fissures: Vec<Fissure> = raw
             .fissures
             .into_iter()
-            .filter(|f| f.active && f.tier.is_some())
+            .filter(|f| f.tier.is_some())
             .map(|f| Fissure {
                 tier: f.tier.unwrap_or_default(),
                 mission_type: f.mission_type.unwrap_or_default(),
@@ -228,12 +224,20 @@ impl WorldstateClient {
             })
             .collect();
 
-        let baro = raw.void_trader.map(|t| Baro {
-            active: t.active,
-            start: t.start_string,
-            end: t.end_string,
-            location: t.location,
-            character: t.character,
+        let baro = raw.void_trader.map(|t| {
+            let now = Utc::now();
+            let parse = |s: &str| chrono::DateTime::parse_from_rfc3339(s).ok();
+            let active = match (t.activation.as_deref(), t.expiry.as_deref()) {
+                (Some(a), Some(e)) => matches!((parse(a), parse(e)), (Some(a), Some(e)) if a <= now && now < e),
+                _ => false,
+            };
+            Baro {
+                active,
+                activation: t.activation,
+                expiry: t.expiry,
+                location: t.location,
+                character: t.character,
+            }
         });
 
         Ok(Worldstate {
@@ -252,5 +256,6 @@ fn make_cycle(id: &str, name: &str, c: RawCycle) -> Cycle {
         name: name.to_string(),
         state,
         time_left: c.time_left,
+        expiry: c.expiry,
     }
 }

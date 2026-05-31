@@ -59,6 +59,29 @@ export const syncedAgo = (iso: string | null): string => {
   return `${Math.floor(hrs / 24)}d`;
 };
 
+/** ms remaining until an ISO timestamp (negative if past). */
+export const msUntil = (iso: string | null | undefined): number =>
+  iso ? new Date(iso).getTime() - Date.now() : Number.NEGATIVE_INFINITY;
+
+/** Live countdown to an ISO timestamp: "2d 3h 04m" / "1h 23m 05s" / "45s". */
+export const countdown = (iso: string | null | undefined, now: number = Date.now()): string => {
+  if (!iso) return "—";
+  let s = Math.floor((new Date(iso).getTime() - now) / 1000);
+  if (Number.isNaN(s)) return "—";
+  if (s <= 0) return "now";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const d = Math.floor(s / 86400);
+  s -= d * 86400;
+  const h = Math.floor(s / 3600);
+  s -= h * 3600;
+  const m = Math.floor(s / 60);
+  s -= m * 60;
+  if (d > 0) return `${d}d ${h}h ${pad(m)}m`;
+  if (h > 0) return `${h}h ${pad(m)}m ${pad(s)}s`;
+  if (m > 0) return `${m}m ${pad(s)}s`;
+  return `${s}s`;
+};
+
 export const CATEGORY_LABELS: Record<string, string> = {
   warframe: "Warframe",
   weapon: "Weapon",

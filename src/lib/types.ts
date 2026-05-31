@@ -228,6 +228,7 @@ export interface Cycle {
   name: string;
   state: string;
   time_left: string | null;
+  expiry: string | null;
 }
 export interface Fissure {
   tier: string;
@@ -241,8 +242,8 @@ export interface Fissure {
 }
 export interface Baro {
   active: boolean;
-  start: string | null;
-  end: string | null;
+  activation: string | null;
+  expiry: string | null;
   location: string | null;
   character: string | null;
 }
