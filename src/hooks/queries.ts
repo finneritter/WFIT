@@ -33,6 +33,9 @@ function invalidateInventoryDerived(qc: ReturnType<typeof useQueryClient>) {
     qc.invalidateQueries({ queryKey: k });
   }
   qc.invalidateQueries({ queryKey: ["trends"] });
+  // Catalog rows carry owned_qty (joined from inventory), so the Add-items grid
+  // checkboxes/steppers track ownership — refresh it after any inventory change.
+  qc.invalidateQueries({ queryKey: ["catalog"] });
 }
 
 // ---- reads ----
