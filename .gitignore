@@ -7,6 +7,8 @@ dist/
 # Rust / Tauri
 /src-tauri/target/
 target/
+# Tauri-generated ACL/schema files — regenerated on every build
+/src-tauri/gen/
 
 # Local SQLite (app DB lives in $APPDATA at runtime; ignore any stray local copies)
 *.db
