@@ -132,7 +132,17 @@ body.flat-deltas .pos, body.flat-deltas .neg { color: var(--soft) !important; }
 .tab { font-family: var(--sans); font-size: 12.5px; color: var(--soft); background: transparent; border: none; border-bottom: 2px solid transparent; padding: 4px 9px; cursor: pointer; }
 .tab:hover { color: var(--ink); }
 .tab[aria-current="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.search-wrap { position: relative; flex: 1; min-width: 0; display: flex; }
 .search { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; border: 1px solid var(--line-2); background: var(--panel); padding: 5px 10px; }
+.search-results { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50; max-height: 60vh; overflow: auto; background: var(--panel); border: 1px solid var(--line-2); box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+.sr-empty { padding: 10px 12px; font-size: 11.5px; color: var(--faint); }
+.sr-row { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; background: transparent; border: none; border-top: 1px solid var(--line); padding: 6px 10px; cursor: pointer; color: var(--ink); font-family: var(--sans); }
+.sr-row:first-child { border-top: none; }
+.sr-row:hover { background: var(--hover); }
+.sr-i { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sr-n { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sr-s { font-size: 10px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sr-p { font-family: var(--mono); font-size: 12px; color: var(--soft); flex: none; }
 .search svg { width: 14px; height: 14px; flex: none; stroke: var(--faint); fill: none; stroke-width: 1.8; }
 .search input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-family: var(--mono); font-size: 12px; color: var(--ink); }
 .search input::placeholder { color: var(--faint); font-family: var(--sans); }

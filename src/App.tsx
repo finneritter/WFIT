@@ -2,6 +2,7 @@ import { useDeferredValue, useState } from "react";
 import { AddItems } from "./components/AddItems";
 import { Drawer } from "./components/Drawer";
 import { Icon } from "./components/Icon";
+import { SearchResults } from "./components/SearchResults";
 import { type ScreenId, Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { usePricesRefresh, useSummary } from "./hooks/queries";
@@ -64,13 +65,27 @@ export default function App() {
         <main className="main">
           <div className="topbar">
             <div className="screen-title">{TITLES[screen]}</div>
-            <div className="search">
-              <Icon name="search" />
-              <input
-                placeholder="Search…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+            <div className="search-wrap">
+              <div className="search">
+                <Icon name="search" />
+                <input
+                  placeholder="Search all items…  (ininv: to scope to inventory)"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setSearch("");
+                  }}
+                />
+              </div>
+              {search.trim() ? (
+                <SearchResults
+                  query={deferredSearch}
+                  onOpen={(slug) => {
+                    open(slug);
+                    setSearch("");
+                  }}
+                />
+              ) : null}
             </div>
             <button
               type="button"

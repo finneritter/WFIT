@@ -49,6 +49,13 @@ export const useSets = () => useQuery({ queryKey: keys.sets, queryFn: api.getSet
 export const useDucats = () => useQuery({ queryKey: keys.ducats, queryFn: api.getDucats });
 export const useCatalog = (cat?: string) =>
   useQuery({ queryKey: keys.catalog(cat), queryFn: () => api.getCatalog(cat) });
+export const useSearchCatalog = (q: string) =>
+  useQuery({
+    queryKey: ["searchCatalog", q],
+    queryFn: () => api.searchCatalog(q, 40),
+    enabled: q.trim().length >= 2,
+    staleTime: 30_000,
+  });
 export const useTrends = (tf: string, excludeOutliers = true) =>
   useQuery({
     queryKey: keys.trends(tf, excludeOutliers),

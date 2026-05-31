@@ -9,6 +9,7 @@ import {
 } from "../hooks/queries";
 import { clsx, fmt, pct, tier } from "../lib/format";
 import type { HistoryPoint } from "../lib/types";
+import { openWiki } from "../lib/wiki";
 import { type Candle, CandleChart } from "./charts";
 
 const TF = ["24h", "7d", "30d", "90d"] as const;
@@ -292,6 +293,14 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
             }
           >
             {item.on_watchlist ? "On watchlist" : "Add to watchlist"}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            title="Open this item's wiki page in an in-app window"
+            onClick={() => openWiki(item.display_name)}
+          >
+            Wiki ↗
           </button>
         </div>
       </div>
