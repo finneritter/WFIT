@@ -370,7 +370,10 @@ body.flat-deltas .pos, body.flat-deltas .neg { color: var(--soft) !important; }
 
 /* ---------------- detail drawer ---------------- */
 .scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.5); display: flex; justify-content: flex-end; }
-.drawer { width: 420px; max-width: 92vw; height: 100%; background: var(--bg-2); border-left: 1px solid var(--line-2); overflow: auto; }
+.drawer { width: 420px; max-width: 98vw; height: 100%; background: var(--bg-2); border-left: 1px solid var(--line-2); overflow: auto; }
+.drawer-grip { position: absolute; top: 0; bottom: 0; width: 7px; margin-right: -3px; z-index: 61; cursor: ew-resize; touch-action: none; }
+.drawer-grip:hover { background: var(--line-2); }
+.drawer-grip:active { background: var(--accent); }
 .drawer-h { display: flex; align-items: flex-start; gap: 11px; padding: 13px 14px; border-bottom: 1px solid var(--line); }
 .drawer-h .ph { width: 40px; height: 40px; flex: none; border: 1px solid var(--line-2); }
 .drawer-h .nm { font-size: 16px; font-weight: 700; }

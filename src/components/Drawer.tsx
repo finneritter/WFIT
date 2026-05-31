@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   useAddToBuyList,
   useAddWatch,
@@ -36,6 +36,45 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
   const watch = useAddWatch();
   const buy = useAddToBuyList();
 
+  // Resizable width — drag the grip on the drawer's left edge; remembered.
+  const [width, setWidth] = useState<number>(() => {
+    const saved = Number(localStorage.getItem("wfit.drawerWidth"));
+    return Number.isFinite(saved) && saved >= 360 ? saved : 440;
+  });
+  const widthRef = useRef(width);
+  widthRef.current = width;
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const onMove = (ev: PointerEvent) => {
+      const w = Math.min(Math.max(window.innerWidth - ev.clientX, 360), window.innerWidth - 80);
+      widthRef.current = w;
+      setWidth(w);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.userSelect = "";
+      try {
+        localStorage.setItem("wfit.drawerWidth", String(Math.round(widthRef.current)));
+      } catch {
+        // ignore persistence failures
+      }
+    };
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+  const grip = (
+    <div
+      className="drawer-grip"
+      style={{ right: width }}
+      onPointerDown={startResize}
+      onClick={(e) => e.stopPropagation()}
+      title="Drag to resize"
+    />
+  );
+
   const candles = useMemo(() => {
     if (!item) return [];
     return item.history
@@ -57,7 +96,8 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
   if (!item) {
     return (
       <div className="scrim" onClick={onClose}>
-        <div className="drawer" onClick={(e) => e.stopPropagation()}>
+        {grip}
+        <div className="drawer" style={{ width }} onClick={(e) => e.stopPropagation()}>
           <div className="drawer-h">
             <div className="di">
               <div className="nm">Loading…</div>
@@ -84,7 +124,8 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
 
   return (
     <div className="scrim" onClick={onClose}>
-      <div className="drawer" onClick={(e) => e.stopPropagation()}>
+      {grip}
+      <div className="drawer" style={{ width }} onClick={(e) => e.stopPropagation()}>
         <div className="drawer-h">
           <div className={clsx("ph", `t-${tier(price)}`)} />
           <div className="di">
