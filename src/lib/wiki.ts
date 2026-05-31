@@ -15,7 +15,9 @@ export function wikiUrl(name: string): string {
   return `https://wiki.warframe.com/w/${page}`;
 }
 
-/** Open (or refocus + navigate) the single shared in-app wiki window. */
+/** Open the in-app wiki window. It's frameless (the native GTK titlebar is huge
+ *  and we can't put a custom bar on a remote page), so it auto-dismisses when you
+ *  click back to WFIT — open with the Wiki button, read, click the app to close. */
 export async function openWiki(name: string): Promise<void> {
   const url = wikiUrl(name);
   const existing = await WebviewWindow.getByLabel("wiki");
@@ -31,6 +33,18 @@ export async function openWiki(name: string): Promise<void> {
     title: "Wiki — WFIT",
     width: 1000,
     height: 840,
+    decorations: false, // no oversized GTK header on a remote page
+    focus: true,
   });
   w.once("tauri://error", (e) => console.error("wiki window error", e));
+  // Close once it loses focus — but only after it has actually been focused, so
+  // the creation moment doesn't close it instantly.
+  let sawFocus = false;
+  void w.onFocusChanged(({ payload: focused }) => {
+    if (focused) {
+      sawFocus = true;
+    } else if (sawFocus) {
+      w.close().catch(() => {});
+    }
+  });
 }
