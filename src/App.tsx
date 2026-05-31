@@ -11,6 +11,7 @@ import { Inventory } from "./routes/Inventory";
 import { Listings } from "./routes/Listings";
 import { Rotation } from "./routes/Rotation";
 import { Sets } from "./routes/Sets";
+import { Settings } from "./routes/Settings";
 import { SoldHistory } from "./routes/SoldHistory";
 import { Trends } from "./routes/Trends";
 import { Watchlist } from "./routes/Watchlist";
@@ -25,6 +26,7 @@ const TITLES: Record<ScreenId, string> = {
   ducats: "Ducats",
   rotation: "Rotation",
   sold: "Sold History",
+  settings: "Settings",
 };
 
 export default function App() {
@@ -91,6 +93,14 @@ export default function App() {
             {screen === "ducats" && <Ducats onOpen={open} />}
             {screen === "rotation" && <Rotation />}
             {screen === "sold" && <SoldHistory onOpen={open} />}
+            {screen === "settings" && (
+              <Settings
+                onNavigate={(s) => {
+                  setScreen(s);
+                  setSearch("");
+                }}
+              />
+            )}
           </div>
         </main>
 

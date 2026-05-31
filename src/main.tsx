@@ -3,6 +3,10 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import { applyPrefs, loadPrefs } from "./lib/prefs";
+
+// Apply saved theme/density before first paint so there's no flash.
+applyPrefs(loadPrefs());
 
 // One client for the whole app. Everything is local SQLite via invoke(), so
 // cached data is cheap to re-read; keep it fresh-ish but not chatty.

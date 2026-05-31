@@ -22,6 +22,8 @@ import type {
 // catalog
 export const catalogCount = () => invoke<number>("catalog_count");
 export const catalogRefresh = () => invoke<number>("catalog_refresh");
+export const rebuildCache = () => invoke<number>("rebuild_cache");
+export const setsRefresh = () => invoke<number>("sets_refresh");
 export const getCatalog = (category?: string) =>
   invoke<CatalogRow[]>("get_catalog", { category: category ?? null });
 export const searchCatalog = (q: string, limit?: number) =>

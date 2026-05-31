@@ -93,6 +93,7 @@ pub fn run() {
             commands::get_item_detail,
             commands::get_item_history,
             commands::get_item_orders,
+            commands::rebuild_cache,
             // worldstate
             commands::get_worldstate,
             // wfm account

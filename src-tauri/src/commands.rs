@@ -37,6 +37,29 @@ pub async fn catalog_refresh(state: State<'_, Arc<AppState>>) -> AppResult<usize
     Ok(n)
 }
 
+/// Wipe the rebuildable API caches (prices, history, set composition) and
+/// re-fetch the catalog. User data (inventory/sales/watchlist/buy_list) is never
+/// touched. Prices repopulate via the background drain afterwards.
+#[tauri::command]
+pub async fn rebuild_cache(state: State<'_, Arc<AppState>>) -> AppResult<usize> {
+    state.db.with(|c| {
+        c.execute_batch(
+            "DELETE FROM price_history;
+             DELETE FROM price_cache;
+             DELETE FROM set_membership;",
+        )?;
+        Ok(())
+    })?;
+    let items = state.market.fetch_catalog().await?;
+    let n = catalog::upsert_many(&state.db, &items)?;
+    meta::set(
+        &state.db,
+        meta::KEY_LAST_CATALOG_SYNC,
+        &Utc::now().to_rfc3339(),
+    )?;
+    Ok(n)
+}
+
 #[tauri::command]
 pub fn get_catalog(
     state: State<'_, Arc<AppState>>,

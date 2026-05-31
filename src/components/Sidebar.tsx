@@ -11,7 +11,8 @@ export type ScreenId =
   | "listings"
   | "ducats"
   | "rotation"
-  | "sold";
+  | "sold"
+  | "settings";
 
 interface NavDef {
   id: ScreenId;
@@ -90,7 +91,12 @@ export function Sidebar({
       </div>
 
       <div className="nav-foot">
-        <button type="button" className="nav-item" onClick={() => onNavigate("listings")}>
+        <button
+          type="button"
+          className="nav-item"
+          aria-current={screen === "settings"}
+          onClick={() => onNavigate("settings")}
+        >
           <Icon name="settings" />
           Settings
         </button>

@@ -215,6 +215,22 @@ export function useCatalogRefresh() {
   });
 }
 
+export function useSetsRefresh() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.setsRefresh(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.sets }),
+  });
+}
+
+export function useRebuildCache() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.rebuildCache(),
+    onSuccess: () => qc.invalidateQueries(), // caches wiped — refetch everything
+  });
+}
+
 // ---- wfm account ----
 export function useWfmConnect() {
   const qc = useQueryClient();
