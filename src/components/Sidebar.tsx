@@ -46,11 +46,6 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
-      <div className="brand">
-        <b>WFIT</b>
-        <span className="sub">item tracker</span>
-      </div>
-
       <div className="syncbar">
         <span className="dot" />
         <span className="src">warframe.market</span>

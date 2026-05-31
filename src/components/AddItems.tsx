@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { createContext, memo, useContext, useDeferredValue, useMemo, useState } from "react";
 import { useAddToInventory, useCatalog, useRemoveItem, useSetQty } from "../hooks/queries";
 import { clsx, fmt } from "../lib/format";
 import type { CatalogRow } from "../lib/types";
@@ -11,6 +11,16 @@ const COLUMNS: { cat: string; label: string; grouped: boolean }[] = [
   { cat: "arcane", label: "Arcanes", grouped: false },
 ];
 
+// Mutations are hoisted to the modal and shared via context so the ~1.7k catalog
+// rows don't each instantiate their own useMutation hooks (the keystroke-lag cause).
+interface ItemHandlers {
+  add: (slug: string) => void;
+  remove: (slug: string) => void;
+  setQty: (slug: string, qty: number) => void;
+}
+const HandlersCtx = createContext<ItemHandlers | null>(null);
+const useHandlers = () => useContext(HandlersCtx) as ItemHandlers;
+
 function prettySet(setSlug: string): string {
   return setSlug
     .replace(/_set$/, "")
@@ -19,12 +29,11 @@ function prettySet(setSlug: string): string {
     .join(" ");
 }
 
-function Stepper({ slug, qty }: { slug: string; qty: number }) {
-  const setQ = useSetQty();
-  const remove = useRemoveItem();
+const Stepper = memo(function Stepper({ slug, qty }: { slug: string; qty: number }) {
+  const h = useHandlers();
   const change = (next: number) => {
-    if (next <= 0) remove.mutate(slug);
-    else setQ.mutate({ slug, qty: Math.min(99, next) });
+    if (next <= 0) h.remove(slug);
+    else h.setQty(slug, Math.min(99, next));
   };
   return (
     <div className="qstep" onClick={(e) => e.stopPropagation()}>
@@ -37,15 +46,14 @@ function Stepper({ slug, qty }: { slug: string; qty: number }) {
       </button>
     </div>
   );
-}
+});
 
-function Row({ row, leaf = false }: { row: CatalogRow; leaf?: boolean }) {
-  const add = useAddToInventory();
-  const remove = useRemoveItem();
+const Row = memo(function Row({ row, leaf = false }: { row: CatalogRow; leaf?: boolean }) {
+  const h = useHandlers();
   const owned = row.owned_qty > 0;
   const toggle = () => {
-    if (owned) remove.mutate(row.slug);
-    else add.mutate({ slug: row.slug });
+    if (owned) h.remove(row.slug);
+    else h.add(row.slug);
   };
   return (
     <div className={clsx("crow", owned && "on", leaf && "leaf")} onClick={toggle}>
@@ -58,7 +66,7 @@ function Row({ row, leaf = false }: { row: CatalogRow; leaf?: boolean }) {
       )}
     </div>
   );
-}
+});
 
 function GroupedColumn({ rows, filter }: { rows: CatalogRow[]; filter: string }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -69,6 +77,7 @@ function GroupedColumn({ rows, filter }: { rows: CatalogRow[]; filter: string })
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(r);
     }
+    for (const parts of map.values()) parts.sort((a, b) => a.display_name.localeCompare(b.display_name));
     return [...map.entries()].sort((a, b) => prettySet(a[0]).localeCompare(prettySet(b[0])));
   }, [rows]);
 
@@ -94,11 +103,7 @@ function GroupedColumn({ rows, filter }: { rows: CatalogRow[]; filter: string })
                 {ownedCount}/{parts.length}
               </span>
             </div>
-            {isOpen
-              ? parts
-                  .sort((a, b) => a.display_name.localeCompare(b.display_name))
-                  .map((p) => <Row key={p.slug} row={p} leaf />)
-              : null}
+            {isOpen ? parts.map((p) => <Row key={p.slug} row={p} leaf />) : null}
           </div>
         );
       })}
@@ -136,6 +141,22 @@ function Column({ def, filter }: { def: (typeof COLUMNS)[number]; filter: string
 
 export function AddItems({ onClose }: { onClose: () => void }) {
   const [filter, setFilter] = useState("");
+  // The input stays on the immediate value; the heavy list filters on the
+  // deferred value so typing never blocks on the re-render.
+  const deferredFilter = useDeferredValue(filter);
+
+  const add = useAddToInventory();
+  const remove = useRemoveItem();
+  const setQ = useSetQty();
+  const handlers = useMemo<ItemHandlers>(
+    () => ({
+      add: (slug) => add.mutate({ slug }),
+      remove: (slug) => remove.mutate(slug),
+      setQty: (slug, qty) => setQ.mutate({ slug, qty }),
+    }),
+    [add.mutate, remove.mutate, setQ.mutate],
+  );
+
   return (
     <div className="modal-scrim" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -153,11 +174,13 @@ export function AddItems({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
-        <div className="modal-cols">
-          {COLUMNS.map((def) => (
-            <Column key={def.cat} def={def} filter={filter} />
-          ))}
-        </div>
+        <HandlersCtx.Provider value={handlers}>
+          <div className="modal-cols">
+            {COLUMNS.map((def) => (
+              <Column key={def.cat} def={def} filter={deferredFilter} />
+            ))}
+          </div>
+        </HandlersCtx.Provider>
         <div className="modal-f">
           <div className="info">Click a row to toggle owned; use the stepper for quantity.</div>
           <div className="sp" />
