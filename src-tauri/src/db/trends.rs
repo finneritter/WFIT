@@ -118,7 +118,6 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
     // Market read over the LIQUID subset only — breadth + a robust median move.
     // (A value-weighted mean explodes when a 1p item ticks to Np; the median doesn't.)
     let (mut advancing, mut declining, mut flat) = (0i64, 0i64, 0i64);
-    let mut liq_deltas: Vec<f64> = Vec::new();
     for it in &items {
         if !liquid(it) {
             continue;
@@ -131,11 +130,14 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
             } else {
                 flat += 1;
             }
-            liq_deltas.push(m.delta);
         }
     }
-    let index_change = median(&mut liq_deltas);
-    let index_spark = build_index_spark(&items, days.max(7) as usize);
+    // The index is the priced basket's 90-day trajectory; its change is the
+    // start→end move of that curve — a price-level average, robust by
+    // construction (not a mean of per-item % moves) and consistent with the
+    // graph the user sees.
+    let index_spark = build_index_spark(&items, 90);
+    let index_change = spark_change(&index_spark);
 
     let make_row = |it: &Item, m: &Metrics| TrendRow {
         slug: it.slug.clone(),
@@ -248,6 +250,16 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
     })
 }
 
+/// Percent change between the first and last non-zero points of the index curve.
+fn spark_change(spark: &[f64]) -> f64 {
+    let first = spark.iter().copied().find(|v| *v > 0.0);
+    let last = spark.iter().rev().copied().find(|v| *v > 0.0);
+    match (first, last) {
+        (Some(f), Some(l)) if f > 0.0 => (l - f) / f * 100.0,
+        _ => 0.0,
+    }
+}
+
 /// Median of a slice (robust to the percent-change outliers cheap items produce).
 fn median(v: &mut [f64]) -> f64 {
     if v.is_empty() {
@@ -356,7 +368,7 @@ fn metrics_of(it: &Item, days: i64) -> Option<Metrics> {
 
 /// Weighted-average median across items per recent day, normalized to 1000.
 fn build_index_spark(items: &[Item], points: usize) -> Vec<f64> {
-    let points = points.clamp(7, 30);
+    let points = points.clamp(7, 90);
     let mut sums = vec![0.0f64; points];
     let mut counts = vec![0u32; points];
     for it in items {

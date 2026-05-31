@@ -116,6 +116,59 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
 
   return (
     <>
+      {/* Market hero — the big picture, fills the first screen */}
+      <div className="market-hero">
+        <div className="mh-top">
+          <div className="mh-head">
+            <span className="mh-label">Prime Market</span>
+            <span className="mh-span">90-day index</span>
+          </div>
+          <div className="mh-figure">
+            <span className={clsx("mh-chg num", data.index_change >= 0 ? "pos" : "neg")}>
+              {pct(data.index_change)}
+            </span>
+            <span className="mh-breadth">
+              <b className="up">{data.advancing}</b> up · <b className="dn">{data.declining}</b> down ·{" "}
+              <b>{data.flat}</b> flat
+              <span className="mh-liq">
+                · {fmt(data.liquid_count)} liquid of {fmt(data.total_priced)} priced
+              </span>
+            </span>
+          </div>
+        </div>
+        <div className="mh-chart">
+          <MiniArea
+            data={data.index_spark}
+            w={1200}
+            h={360}
+            accent={data.index_change >= 0 ? "var(--pos)" : "var(--neg)"}
+          />
+        </div>
+      </div>
+
+      {/* Your holdings — compact band */}
+      <div className="tpanel band hold-band">
+        <div className="tpanel-h">
+          <h3>Your holdings</h3>
+          <span className="meta">{tf}</span>
+        </div>
+        {data.holdings_value > 0 ? (
+          <div className="bandtop">
+            <span className="bandval num">{fmt(data.holdings_value)}p</span>
+            <span className={clsx("bandchg num", data.holdings_change >= 0 ? "pos" : "neg")}>
+              {pct(data.holdings_change)}
+            </span>
+            <span className="breadth">
+              <b className={data.sell_signal_count > 0 ? "up" : ""}>{data.sell_signal_count}</b> sell
+              signal{data.sell_signal_count === 1 ? "" : "s"}
+            </span>
+          </div>
+        ) : (
+          <div className="empty">No priced items owned yet.</div>
+        )}
+      </div>
+
+      {/* Signal controls */}
       <div className="tf-row">
         <span className="lbl">timeframe</span>
         {TFS.map((t) => (
@@ -139,52 +192,6 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
         >
           Exclude outliers
         </button>
-        <span className="note">
-          {fmt(data.liquid_count)} liquid of {fmt(data.total_priced)} priced
-        </span>
-      </div>
-
-      {/* Row 1 — market read + your holdings */}
-      <div className="tgrid trow-band">
-        <div className="tpanel band">
-          <div className="tpanel-h">
-            <h3>Prime market</h3>
-            <span className="meta">{tf}</span>
-          </div>
-          <div className="bandtop">
-            <span className={clsx("bandchg num", data.index_change >= 0 ? "pos" : "neg")}>
-              {pct(data.index_change)}
-            </span>
-            <span className="breadth">
-              <b className="up">{data.advancing}</b> up · <b className="dn">{data.declining}</b>{" "}
-              down · <b>{data.flat}</b> flat
-            </span>
-            <span className="bandspark">
-              <MiniArea data={data.index_spark} w={240} h={34} />
-            </span>
-          </div>
-        </div>
-
-        <div className="tpanel band">
-          <div className="tpanel-h">
-            <h3>Your holdings</h3>
-            <span className="meta">{tf}</span>
-          </div>
-          {data.holdings_value > 0 ? (
-            <div className="bandtop">
-              <span className="bandval num">{fmt(data.holdings_value)}p</span>
-              <span className={clsx("bandchg num", data.holdings_change >= 0 ? "pos" : "neg")}>
-                {pct(data.holdings_change)}
-              </span>
-              <span className="breadth">
-                <b className={data.sell_signal_count > 0 ? "up" : ""}>{data.sell_signal_count}</b>{" "}
-                sell signal{data.sell_signal_count === 1 ? "" : "s"}
-              </span>
-            </div>
-          ) : (
-            <div className="empty">No priced items owned yet.</div>
-          )}
-        </div>
       </div>
 
       {/* Row 2 — decision panels */}
