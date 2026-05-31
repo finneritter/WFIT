@@ -141,25 +141,24 @@ pub struct DucatRow {
 // Trends.
 // ---------------------------------------------------------------------------
 
+/// One catalog item, enriched with the signals the Trends screen ranks on.
+/// Shared by the Sell-signals, Buy-candidates and Unusual-moves panels.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MoverRow {
+pub struct TrendRow {
     pub slug: String,
     pub display_name: String,
     pub part_type: String,
     pub category: String,
-    pub median_plat: Option<i64>,
-    pub delta: f64,
-    pub spark: Vec<i64>, // recent median series for the mini sparkline
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VolRow {
-    pub slug: String,
-    pub display_name: String,
-    pub part_type: String,
-    pub category: String,
-    pub median_plat: Option<i64>,
-    pub volume: i64,
+    pub median_plat: i64,
+    pub delta: f64,       // % move over the selected timeframe
+    pub z: f64,           // move normalized by the item's own volatility (std devs)
+    pub range_pos: f64,   // 0..1 position of current price within its lookback low..high
+    pub range_low: i64,   // lookback low (plat)
+    pub range_high: i64,  // lookback high (plat)
+    pub volume: i64,      // avg daily traded volume over the lookback
+    pub owned_qty: i64,
+    pub on_watchlist: bool,
+    pub spark: Vec<i64>,  // recent median series for the mini sparkline
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -170,26 +169,24 @@ pub struct HeatRow {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImpactRow {
-    pub slug: String,
-    pub display_name: String,
-    pub category: String,
-    pub impact: f64, // qty * price * delta% / 100
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrendsData {
-    pub index_level: f64,
+    // Market read (row 1).
     pub index_change: f64,
     pub advancing: i64,
     pub declining: i64,
     pub flat: i64,
     pub index_spark: Vec<f64>,
-    pub gainers: Vec<MoverRow>,
-    pub losers: Vec<MoverRow>,
-    pub most_traded: Vec<VolRow>,
+    pub liquid_count: i64,
+    pub total_priced: i64,
+    // Your holdings (row 1).
+    pub holdings_value: i64,
+    pub holdings_change: f64, // value-weighted % over the timeframe
+    pub sell_signal_count: i64,
+    // Decision panels (row 2) + context (row 3).
+    pub sell_signals: Vec<TrendRow>,
+    pub buy_candidates: Vec<TrendRow>,
+    pub unusual: Vec<TrendRow>,
     pub category_heat: Vec<HeatRow>,
-    pub inventory_motion: Vec<ImpactRow>,
 }
 
 // ---------------------------------------------------------------------------

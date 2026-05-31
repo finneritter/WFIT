@@ -1,59 +1,84 @@
 import { useState } from "react";
-import { MiniArea, Spark } from "../components/charts";
+import { MiniArea, RangeBar, Spark } from "../components/charts";
 import { Glyph } from "../components/ui";
 import { useTrends } from "../hooks/queries";
 import { CATEGORY_LABELS, clsx, fmt, pct } from "../lib/format";
-import type { HeatRow, ImpactRow, MoverRow, VolRow } from "../lib/types";
+import type { HeatRow, TrendRow } from "../lib/types";
 
 const TFS = ["24h", "7d", "30d", "90d"] as const;
 
-function MoverRowView({ row, rank, onOpen }: { row: MoverRow; rank: number; onOpen: (s: string) => void }) {
+/** Headline % move plus the volatility-normalized z-score (the "is this actually
+ *  unusual?" signal). The σ badge lights up once the move clears ±1 std dev. */
+function Move({ delta, z }: { delta: number; z: number }) {
+  const cls = delta >= 0 ? "pos" : "neg";
+  const notable = Math.abs(z) >= 1;
   return (
-    <button type="button" className="mrow mover" onClick={() => onOpen(row.slug)}>
-      <span className="rk">{rank}</span>
+    <span className="mv">
+      <span className={clsx("mvd num", cls)}>{pct(delta)}</span>
+      <span className={clsx("zbadge num", notable ? cls : "muted")}>
+        {z >= 0 ? "+" : ""}
+        {z.toFixed(1)}σ
+      </span>
+    </span>
+  );
+}
+
+function SignalRow({
+  row,
+  mode,
+  onOpen,
+}: {
+  row: TrendRow;
+  mode: "sell" | "buy" | "unusual";
+  onOpen: (s: string) => void;
+}) {
+  return (
+    <button type="button" className="sigrow" onClick={() => onOpen(row.slug)}>
       <Glyph name={row.display_name} plat={row.median_plat} />
-      <span className="mi">
-        <span className="mn">{row.display_name}</span>
-        <span className="ms">{row.part_type}</span>
+      <span className="si">
+        <span className="sn">
+          {row.display_name}
+          {mode === "sell" && row.owned_qty > 0 ? <i className="own">×{row.owned_qty}</i> : null}
+          {mode !== "sell" && row.on_watchlist ? <i className="star">★</i> : null}
+        </span>
+        <RangeBar pos={row.range_pos} low={row.range_low} high={row.range_high} />
       </span>
       <Spark data={row.spark} />
-      <span className="mp num">{fmt(row.median_plat)}p</span>
-      <span className={clsx("md num", row.delta >= 0 ? "pos" : "neg")}>{pct(row.delta)}</span>
+      <span className="sr">
+        <span className="sp num">{fmt(row.median_plat)}p</span>
+        <Move delta={row.delta} z={row.z} />
+      </span>
     </button>
   );
 }
 
-function VolRowView({ row, rank, max, onOpen }: { row: VolRow; rank: number; max: number; onOpen: (s: string) => void }) {
+function Panel({
+  title,
+  note,
+  rows,
+  mode,
+  empty,
+  onOpen,
+}: {
+  title: string;
+  note?: string;
+  rows: TrendRow[];
+  mode: "sell" | "buy" | "unusual";
+  empty: string;
+  onOpen: (s: string) => void;
+}) {
   return (
-    <button type="button" className="mrow vol" onClick={() => onOpen(row.slug)}>
-      <span className="rk">{rank}</span>
-      <Glyph name={row.display_name} plat={row.median_plat} />
-      <span className="mi">
-        <span className="mn">{row.display_name}</span>
-        <span className="ms">{row.part_type}</span>
-      </span>
-      <span className="vbar2">
-        <i style={{ width: `${max ? Math.round((row.volume / max) * 100) : 0}%` }} />
-      </span>
-      <span className="vnum">{fmt(row.volume)}/wk</span>
-    </button>
-  );
-}
-
-function ImpactRowView({ row, onOpen }: { row: ImpactRow; onOpen: (s: string) => void }) {
-  return (
-    <button type="button" className="mrow imp" onClick={() => onOpen(row.slug)}>
-      <Glyph name={row.display_name} plat={null} />
-      <span className="mi">
-        <span className="mn">{row.display_name}</span>
-        <span className="ms">{CATEGORY_LABELS[row.category]}</span>
-      </span>
-      <span className="own">{row.category}</span>
-      <span className={clsx("impv", row.impact >= 0 ? "pos" : "neg")}>
-        {row.impact >= 0 ? "+" : ""}
-        {fmt(row.impact)}p
-      </span>
-    </button>
+    <div className="tpanel">
+      <div className="tpanel-h">
+        <h3>{title}</h3>
+        {note ? <span className="meta">{note}</span> : null}
+      </div>
+      {rows.length === 0 ? (
+        <div className="empty">{empty}</div>
+      ) : (
+        rows.map((r) => <SignalRow key={r.slug} row={r} mode={mode} onOpen={onOpen} />)
+      )}
+    </div>
   );
 }
 
@@ -86,7 +111,6 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
 
   if (isLoading || !data) return <div className="empty">Loading market trends…</div>;
 
-  const maxVol = Math.max(1, ...data.most_traded.map((v) => v.volume));
   const heatScale = Math.max(1, ...data.category_heat.map((h) => Math.abs(h.avg_delta)));
 
   return (
@@ -94,42 +118,95 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
       <div className="tf-row">
         <span className="lbl">timeframe</span>
         {TFS.map((t) => (
-          <button key={t} type="button" className="chip" aria-pressed={tf === t} onClick={() => setTf(t)}>
+          <button
+            key={t}
+            type="button"
+            className="chip"
+            aria-pressed={tf === t}
+            onClick={() => setTf(t)}
+          >
             {t}
           </button>
         ))}
         <span className="sp" />
-        <span className="note">priced subset only — drains in background</span>
+        <span className="note">
+          signals from {fmt(data.liquid_count)} liquid of {fmt(data.total_priced)} priced items
+        </span>
       </div>
 
-      <div className="tgrid trow-idx">
-        <div className="tpanel">
+      {/* Row 1 — market read + your holdings */}
+      <div className="tgrid trow-band">
+        <div className="tpanel band">
           <div className="tpanel-h">
-            <h3>Prime Market Index</h3>
+            <h3>Prime market</h3>
             <span className="meta">{tf}</span>
           </div>
-          <div className="idx">
-            <span className="lvl num">{fmt(data.index_level)}</span>
-            <span className={clsx("chg num", data.index_change >= 0 ? "pos" : "neg")}>
+          <div className="bandtop">
+            <span className={clsx("bandchg num", data.index_change >= 0 ? "pos" : "neg")}>
               {pct(data.index_change)}
             </span>
-          </div>
-          <div className="idx-sub">
-            <span>
-              advancing <b className="up">{data.advancing}</b>
+            <span className="breadth">
+              <b className="up">{data.advancing}</b> up · <b className="dn">{data.declining}</b>{" "}
+              down · <b>{data.flat}</b> flat
             </span>
-            <span>
-              declining <b className="dn">{data.declining}</b>
+            <span className="bandspark">
+              <MiniArea data={data.index_spark} w={240} h={34} />
             </span>
-            <span>
-              flat <b>{data.flat}</b>
-            </span>
-          </div>
-          <div className="idx-chart">
-            <MiniArea data={data.index_spark} w={520} h={70} />
           </div>
         </div>
 
+        <div className="tpanel band">
+          <div className="tpanel-h">
+            <h3>Your holdings</h3>
+            <span className="meta">{tf}</span>
+          </div>
+          {data.holdings_value > 0 ? (
+            <div className="bandtop">
+              <span className="bandval num">{fmt(data.holdings_value)}p</span>
+              <span className={clsx("bandchg num", data.holdings_change >= 0 ? "pos" : "neg")}>
+                {pct(data.holdings_change)}
+              </span>
+              <span className="breadth">
+                <b className={data.sell_signal_count > 0 ? "up" : ""}>{data.sell_signal_count}</b>{" "}
+                sell signal{data.sell_signal_count === 1 ? "" : "s"}
+              </span>
+            </div>
+          ) : (
+            <div className="empty">No priced items owned yet.</div>
+          )}
+        </div>
+      </div>
+
+      {/* Row 2 — decision panels */}
+      <div className="tgrid trow2">
+        <Panel
+          title="Sell signals"
+          note="you own these"
+          rows={data.sell_signals}
+          mode="sell"
+          empty="Items you own that are high in their range or spiking will surface here."
+          onOpen={onOpen}
+        />
+        <Panel
+          title="Buy / flip candidates"
+          note="low in range"
+          rows={data.buy_candidates}
+          mode="buy"
+          empty="No clear dips in liquid items right now."
+          onOpen={onOpen}
+        />
+      </div>
+
+      {/* Row 3 — context */}
+      <div className="tgrid trow2">
+        <Panel
+          title="Unusual moves"
+          note="volatility-adjusted"
+          rows={data.unusual}
+          mode="unusual"
+          empty="Nothing moving unusually."
+          onOpen={onOpen}
+        />
         <div className="tpanel">
           <div className="tpanel-h">
             <h3>Category heat</h3>
@@ -137,46 +214,6 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
           {data.category_heat.map((h) => (
             <HeatRowView key={h.category} row={h} scale={heatScale} />
           ))}
-        </div>
-      </div>
-
-      <div className="tgrid trow2">
-        <div className="tpanel">
-          <div className="tpanel-h">
-            <h3>Top gainers</h3>
-          </div>
-          {data.gainers.map((m, i) => (
-            <MoverRowView key={m.slug} row={m} rank={i + 1} onOpen={onOpen} />
-          ))}
-        </div>
-        <div className="tpanel">
-          <div className="tpanel-h">
-            <h3>Top losers</h3>
-          </div>
-          {data.losers.map((m, i) => (
-            <MoverRowView key={m.slug} row={m} rank={i + 1} onOpen={onOpen} />
-          ))}
-        </div>
-      </div>
-
-      <div className="tgrid trow2">
-        <div className="tpanel">
-          <div className="tpanel-h">
-            <h3>Most traded</h3>
-          </div>
-          {data.most_traded.map((v, i) => (
-            <VolRowView key={v.slug} row={v} rank={i + 1} max={maxVol} onOpen={onOpen} />
-          ))}
-        </div>
-        <div className="tpanel">
-          <div className="tpanel-h">
-            <h3>Your inventory in motion</h3>
-          </div>
-          {data.inventory_motion.length === 0 ? (
-            <div className="empty">Own some priced items to see their market impact.</div>
-          ) : (
-            data.inventory_motion.map((m) => <ImpactRowView key={m.slug} row={m} onOpen={onOpen} />)
-          )}
         </div>
       </div>
     </>

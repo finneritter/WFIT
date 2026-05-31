@@ -115,23 +115,21 @@ export interface DucatRow {
   verdict: "ducat" | "plat";
 }
 
-export interface MoverRow {
+export interface TrendRow {
   slug: string;
   display_name: string;
   part_type: string;
   category: Category;
-  median_plat: number | null;
-  delta: number;
+  median_plat: number;
+  delta: number; // % move over the selected timeframe
+  z: number; // volatility-normalized move (std devs)
+  range_pos: number; // 0..1 within lookback low..high
+  range_low: number;
+  range_high: number;
+  volume: number; // avg daily volume
+  owned_qty: number;
+  on_watchlist: boolean;
   spark: number[];
-}
-
-export interface VolRow {
-  slug: string;
-  display_name: string;
-  part_type: string;
-  category: Category;
-  median_plat: number | null;
-  volume: number;
 }
 
 export interface HeatRow {
@@ -140,25 +138,21 @@ export interface HeatRow {
   count: number;
 }
 
-export interface ImpactRow {
-  slug: string;
-  display_name: string;
-  category: Category;
-  impact: number;
-}
-
 export interface TrendsData {
-  index_level: number;
   index_change: number;
   advancing: number;
   declining: number;
   flat: number;
   index_spark: number[];
-  gainers: MoverRow[];
-  losers: MoverRow[];
-  most_traded: VolRow[];
+  liquid_count: number;
+  total_priced: number;
+  holdings_value: number;
+  holdings_change: number;
+  sell_signal_count: number;
+  sell_signals: TrendRow[];
+  buy_candidates: TrendRow[];
+  unusual: TrendRow[];
   category_heat: HeatRow[];
-  inventory_motion: ImpactRow[];
 }
 
 export interface HistoryPoint {

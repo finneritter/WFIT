@@ -53,6 +53,22 @@ export function MiniArea({
   );
 }
 
+/** Where the current price sits within its lookback low..high (the 52-week-range
+ *  pattern). The fill reads as "how elevated": near-full = expensive, sliver = cheap. */
+export function RangeBar({ pos, low, high }: { pos: number; low: number; high: number }) {
+  const p = Math.max(0, Math.min(1, pos)) * 100;
+  return (
+    <span className="rbar" title={`range ${low}–${high}p · ${p.toFixed(0)}% of range`}>
+      <span className="rbar-end num">{low}</span>
+      <span className="rbar-track">
+        <span className="rbar-fill" style={{ width: `${p}%` }} />
+        <span className="rbar-dot" style={{ left: `${p}%` }} />
+      </span>
+      <span className="rbar-end num">{high}</span>
+    </span>
+  );
+}
+
 export function BigChart({ data, w = 380, h = 150 }: { data: number[]; w?: number; h?: number }) {
   if (!data || data.length < 2) {
     return <div className="muted">No price history yet.</div>;

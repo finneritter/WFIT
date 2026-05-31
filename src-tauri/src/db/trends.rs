@@ -1,9 +1,9 @@
 use crate::db::Db;
 use crate::error::AppResult;
-use crate::types::{HeatRow, ImpactRow, MoverRow, TrendsData, VolRow};
-use std::collections::HashMap;
+use crate::types::{HeatRow, TrendRow, TrendsData};
+use std::collections::{HashMap, HashSet};
 
-/// Days in each timeframe window.
+/// Days in each timeframe window (drives the headline % move).
 fn window_days(tf: &str) -> i64 {
     match tf {
         "24h" => 1,
@@ -13,165 +13,190 @@ fn window_days(tf: &str) -> i64 {
     }
 }
 
-struct Priced {
+/// Min avg-daily volume for an item to count as liquid enough to act on.
+/// Below this a price move is noise — nobody's actually trading it.
+const LIQUID_MIN: f64 = 3.0;
+
+struct Item {
     slug: String,
     display_name: String,
     part_type: String,
     category: String,
     median_plat: i64,
-    volume_7d: i64,
     owned_qty: i64,
-    series: Vec<i64>, // median series, oldest-first
+    on_watchlist: bool,
+    medians: Vec<i64>, // daily median series, oldest-first
+    volumes: Vec<i64>, // daily volume series, oldest-first (parallel to medians)
 }
 
-/// Aggregate the priced subset into the Trends screen payload for one timeframe.
+struct Metrics {
+    delta: f64,     // % move over the timeframe
+    z: f64,         // volatility-normalized move
+    range_pos: f64, // 0..1 within lookback low..high
+    range_low: i64,
+    range_high: i64,
+    avg_vol: f64, // avg daily volume over the lookback
+}
+
+/// Aggregate the priced subset into the Trends payload for one timeframe.
 pub fn get(db: &Db, timeframe: &str) -> AppResult<TrendsData> {
     let days = window_days(timeframe);
 
-    // Priced items joined with ownership.
-    let mut items: Vec<Priced> = db.with(|c| {
+    let mut items: Vec<Item> = db.with(|c| {
+        let watched: HashSet<String> = {
+            let mut stmt = c.prepare("SELECT slug FROM watchlist")?;
+            let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+            rows.collect::<Result<_, _>>()?
+        };
         let mut stmt = c.prepare(
             "SELECT pc.slug, ci.display_name, ci.part_type, ci.category,
-                    pc.median_plat, COALESCE(pc.volume_7d, 0), COALESCE(ii.qty, 0)
+                    pc.median_plat, COALESCE(ii.qty, 0)
              FROM price_cache pc
              JOIN catalog_items ci ON ci.slug = pc.slug
              LEFT JOIN inventory_items ii ON ii.slug = pc.slug",
         )?;
         let rows = stmt.query_map([], |r| {
-            Ok(Priced {
-                slug: r.get(0)?,
+            let slug: String = r.get(0)?;
+            Ok(Item {
+                on_watchlist: watched.contains(&slug),
+                slug,
                 display_name: r.get(1)?,
                 part_type: r.get(2)?,
                 category: r.get(3)?,
                 median_plat: r.get(4)?,
-                volume_7d: r.get(5)?,
-                owned_qty: r.get(6)?,
-                series: Vec::new(),
+                owned_qty: r.get(5)?,
+                medians: Vec::new(),
+                volumes: Vec::new(),
             })
         })?;
-        let mut out = Vec::new();
-        for r in rows {
-            out.push(r?);
-        }
-        Ok(out)
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })?;
 
-    // Pull all history once and bucket by slug (oldest-first).
-    let history: HashMap<String, Vec<i64>> = db.with(|c| {
+    // Pull the daily (median, volume) history once and bucket by slug.
+    let (med_hist, vol_hist) = db.with(|c| {
         let mut stmt = c.prepare(
-            "SELECT slug, median FROM price_history
+            "SELECT slug, median, COALESCE(volume, 0) FROM price_history
              WHERE median IS NOT NULL ORDER BY slug, day ASC",
         )?;
-        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
-        let mut map: HashMap<String, Vec<i64>> = HashMap::new();
+        let rows = stmt.query_map([], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?))
+        })?;
+        let mut med: HashMap<String, Vec<i64>> = HashMap::new();
+        let mut vol: HashMap<String, Vec<i64>> = HashMap::new();
         for r in rows {
-            let (slug, median) = r?;
-            map.entry(slug).or_default().push(median);
+            let (slug, m, v) = r?;
+            med.entry(slug.clone()).or_default().push(m);
+            vol.entry(slug).or_default().push(v);
         }
-        Ok(map)
+        Ok::<_, crate::error::AppError>((med, vol))
     })?;
-
     for it in &mut items {
-        if let Some(series) = history.get(&it.slug) {
-            it.series = series.clone();
+        if let Some(s) = med_hist.get(&it.slug) {
+            it.medians = s.clone();
+        }
+        if let Some(s) = vol_hist.get(&it.slug) {
+            it.volumes = s.clone();
         }
     }
 
-    // Per-item delta over the window.
-    let delta_of = |it: &Priced| -> Option<f64> {
-        if it.series.len() < 2 {
-            return None;
-        }
-        let current = *it.series.last().unwrap() as f64;
-        let idx = it.series.len().saturating_sub(1 + days as usize);
-        let baseline = it.series[idx] as f64;
-        if baseline <= 0.0 {
-            return None;
-        }
-        Some((current - baseline) / baseline * 100.0)
-    };
+    // Per-item metrics. Volatility + range use the full available series (≤90d)
+    // so they're stable; only the headline % move respects the timeframe.
+    let metrics: HashMap<String, Metrics> = items
+        .iter()
+        .filter_map(|it| metrics_of(it, days).map(|m| (it.slug.clone(), m)))
+        .collect();
 
-    // Breadth + weighted index change.
-    let mut advancing = 0i64;
-    let mut declining = 0i64;
-    let mut flat = 0i64;
-    let mut weighted_change_num = 0.0f64;
-    let mut weighted_change_den = 0.0f64;
-    let mut deltas: HashMap<String, f64> = HashMap::new();
+    let liquid = |it: &Item| metrics.get(&it.slug).is_some_and(|m| m.avg_vol >= LIQUID_MIN);
+    let liquid_count = items.iter().filter(|it| liquid(it)).count() as i64;
+
+    // Market read over the LIQUID subset only — breadth + a robust median move.
+    // (A value-weighted mean explodes when a 1p item ticks to Np; the median doesn't.)
+    let (mut advancing, mut declining, mut flat) = (0i64, 0i64, 0i64);
+    let mut liq_deltas: Vec<f64> = Vec::new();
     for it in &items {
-        if let Some(d) = delta_of(it) {
-            deltas.insert(it.slug.clone(), d);
-            if d > 1.0 {
+        if !liquid(it) {
+            continue;
+        }
+        if let Some(m) = metrics.get(&it.slug) {
+            if m.delta > 1.0 {
                 advancing += 1;
-            } else if d < -1.0 {
+            } else if m.delta < -1.0 {
                 declining += 1;
             } else {
                 flat += 1;
             }
-            let w = it.median_plat as f64;
-            weighted_change_num += d * w;
-            weighted_change_den += w;
+            liq_deltas.push(m.delta);
         }
     }
-    let index_change = if weighted_change_den > 0.0 {
-        weighted_change_num / weighted_change_den
-    } else {
-        0.0
-    };
-    let index_level = 1000.0 * (1.0 + index_change / 100.0);
-
-    // Index sparkline: weighted-average median per recent day, normalized to 1000.
+    let index_change = median(&mut liq_deltas);
     let index_spark = build_index_spark(&items, days.max(7) as usize);
 
-    // Movers.
-    let spark_of = |it: &Priced| -> Vec<i64> {
-        let n = it.series.len();
-        let take = n.min(12);
-        it.series[n - take..].to_vec()
+    let make_row = |it: &Item, m: &Metrics| TrendRow {
+        slug: it.slug.clone(),
+        display_name: it.display_name.clone(),
+        part_type: it.part_type.clone(),
+        category: it.category.clone(),
+        median_plat: it.median_plat,
+        delta: m.delta,
+        z: m.z,
+        range_pos: m.range_pos,
+        range_low: m.range_low,
+        range_high: m.range_high,
+        volume: m.avg_vol.round() as i64,
+        owned_qty: it.owned_qty,
+        on_watchlist: it.on_watchlist,
+        spark: spark_of(it),
     };
-    let mut movers: Vec<MoverRow> = items
+
+    // Sell signals: liquid items you OWN that are elevated — high in their range
+    // or a strong positive volatility-adjusted move. Ranked by plat at stake.
+    let mut sell: Vec<(f64, TrendRow)> = items
         .iter()
-        .filter_map(|it| {
-            deltas.get(&it.slug).map(|&d| MoverRow {
-                slug: it.slug.clone(),
-                display_name: it.display_name.clone(),
-                part_type: it.part_type.clone(),
-                category: it.category.clone(),
-                median_plat: Some(it.median_plat),
-                delta: d,
-                spark: spark_of(it),
-            })
+        .filter(|it| it.owned_qty > 0 && liquid(it))
+        .filter_map(|it| metrics.get(&it.slug).map(|m| (it, m)))
+        .filter(|(_, m)| m.range_pos >= 0.7 || m.z >= 1.0)
+        .map(|(it, m)| {
+            let stake = it.owned_qty as f64 * it.median_plat as f64;
+            // weight by how elevated and how much plat is on the table
+            let score = stake * (0.5 + m.range_pos);
+            (score, make_row(it, m))
         })
         .collect();
-    movers.sort_by(|a, b| {
-        b.delta
-            .partial_cmp(&a.delta)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    let gainers: Vec<MoverRow> = movers.iter().take(8).cloned().collect();
-    let losers: Vec<MoverRow> = movers.iter().rev().take(8).cloned().collect();
+    sell.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let sell_signals: Vec<TrendRow> = sell.into_iter().map(|(_, r)| r).take(6).collect();
 
-    // Most traded.
-    let mut vol: Vec<VolRow> = items
+    // Buy candidates: liquid items trading LOW in their range (deep-value / dip),
+    // not already owned. Watchlist items float to the top. Ranked by cheapness.
+    let mut buy: Vec<(f64, TrendRow)> = items
         .iter()
-        .map(|it| VolRow {
-            slug: it.slug.clone(),
-            display_name: it.display_name.clone(),
-            part_type: it.part_type.clone(),
-            category: it.category.clone(),
-            median_plat: Some(it.median_plat),
-            volume: it.volume_7d,
+        .filter(|it| it.owned_qty == 0 && liquid(it))
+        .filter_map(|it| metrics.get(&it.slug).map(|m| (it, m)))
+        .filter(|(_, m)| m.range_pos <= 0.3 || m.z <= -1.0)
+        .map(|(it, m)| {
+            // lower range_pos = cheaper = better; watchlist gets a boost
+            let score = (1.0 - m.range_pos) + if it.on_watchlist { 1.0 } else { 0.0 };
+            (score, make_row(it, m))
         })
         .collect();
-    vol.sort_by_key(|v| std::cmp::Reverse(v.volume));
-    let most_traded: Vec<VolRow> = vol.into_iter().take(8).collect();
+    buy.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let buy_candidates: Vec<TrendRow> = buy.into_iter().map(|(_, r)| r).take(6).collect();
 
-    // Category heat.
+    // Unusual moves: liquid items ranked by |z| — the biggest volatility-adjusted
+    // moves, so a real Prime swing beats a 1p mod blip.
+    let mut unusual: Vec<TrendRow> = items
+        .iter()
+        .filter(|it| liquid(it))
+        .filter_map(|it| metrics.get(&it.slug).map(|m| make_row(it, m)))
+        .collect();
+    unusual.sort_by(|a, b| b.z.abs().total_cmp(&a.z.abs()));
+    unusual.truncate(8);
+
+    // Category heat (timeframe deltas, all priced items).
     let mut heat_acc: HashMap<String, (f64, i64)> = HashMap::new();
     for it in &items {
-        if let Some(&d) = deltas.get(&it.slug) {
+        if let Some(m) = metrics.get(&it.slug) {
             let e = heat_acc.entry(it.category.clone()).or_insert((0.0, 0));
-            e.0 += d;
+            e.0 += m.delta;
             e.1 += 1;
         }
     }
@@ -185,59 +210,135 @@ pub fn get(db: &Db, timeframe: &str) -> AppResult<TrendsData> {
         .collect();
     category_heat.sort_by(|a, b| a.category.cmp(&b.category));
 
-    // Inventory in motion (owned items only).
-    let mut motion: Vec<ImpactRow> = items
-        .iter()
-        .filter(|it| it.owned_qty > 0)
-        .filter_map(|it| {
-            deltas.get(&it.slug).map(|&d| ImpactRow {
-                slug: it.slug.clone(),
-                display_name: it.display_name.clone(),
-                category: it.category.clone(),
-                impact: it.owned_qty as f64 * it.median_plat as f64 * d / 100.0,
-            })
-        })
-        .collect();
-    motion.sort_by(|a, b| {
-        b.impact
-            .abs()
-            .partial_cmp(&a.impact.abs())
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    let inventory_motion: Vec<ImpactRow> = motion.into_iter().take(8).collect();
+    // Holdings band: value of owned priced items + value-weighted % move.
+    let (mut hv, mut hnum, mut hden) = (0i64, 0.0f64, 0.0f64);
+    for it in &items {
+        if it.owned_qty > 0 {
+            let val = it.owned_qty * it.median_plat;
+            hv += val;
+            if let Some(m) = metrics.get(&it.slug) {
+                hnum += m.delta * val as f64;
+                hden += val as f64;
+            }
+        }
+    }
+    let holdings_change = if hden > 0.0 { hnum / hden } else { 0.0 };
 
     Ok(TrendsData {
-        index_level,
         index_change,
         advancing,
         declining,
         flat,
         index_spark,
-        gainers,
-        losers,
-        most_traded,
+        liquid_count,
+        total_priced: items.len() as i64,
+        holdings_value: hv,
+        holdings_change,
+        sell_signal_count: sell_signals.len() as i64,
+        sell_signals,
+        buy_candidates,
+        unusual,
         category_heat,
-        inventory_motion,
     })
 }
 
-/// Weighted-average median across items for each of the last `points` days,
-/// normalized so the first non-zero point is 1000.
-fn build_index_spark(items: &[Priced], points: usize) -> Vec<f64> {
+/// Median of a slice (robust to the percent-change outliers cheap items produce).
+fn median(v: &mut [f64]) -> f64 {
+    if v.is_empty() {
+        return 0.0;
+    }
+    v.sort_by(f64::total_cmp);
+    let n = v.len();
+    if n % 2 == 1 {
+        v[n / 2]
+    } else {
+        (v[n / 2 - 1] + v[n / 2]) / 2.0
+    }
+}
+
+/// Recent median series (≤12 points) for the row sparkline.
+fn spark_of(it: &Item) -> Vec<i64> {
+    let n = it.medians.len();
+    it.medians[n - n.min(12)..].to_vec()
+}
+
+/// Per-item signal metrics, or None if there isn't enough history.
+fn metrics_of(it: &Item, days: i64) -> Option<Metrics> {
+    let s = &it.medians;
+    if s.len() < 2 {
+        return None;
+    }
+    let current = *s.last().unwrap() as f64;
+
+    // Headline % move over the timeframe.
+    let base_idx = s.len().saturating_sub(1 + days as usize);
+    let baseline = s[base_idx] as f64;
+    let delta = if baseline > 0.0 {
+        (current - baseline) / baseline * 100.0
+    } else {
+        0.0
+    };
+
+    // Volatility: std dev of daily % returns over the full series, scaled to the
+    // timeframe (σ_tf = σ_daily · √days). z = move / σ_tf — how many std devs.
+    let mut returns: Vec<f64> = Vec::with_capacity(s.len());
+    for w in s.windows(2) {
+        if w[0] > 0 {
+            returns.push((w[1] - w[0]) as f64 / w[0] as f64 * 100.0);
+        }
+    }
+    let z = if returns.len() >= 2 {
+        let mean = returns.iter().sum::<f64>() / returns.len() as f64;
+        let var = returns.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / returns.len() as f64;
+        let sd_daily = var.sqrt();
+        let sd_tf = sd_daily * (days as f64).sqrt();
+        if sd_tf > 1e-6 { delta / sd_tf } else { 0.0 }
+    } else {
+        0.0
+    };
+
+    // Range position over the full available series.
+    let lo = *s.iter().min().unwrap();
+    let hi = *s.iter().max().unwrap();
+    let range_pos = if hi > lo {
+        (current - lo as f64) / (hi - lo) as f64
+    } else {
+        0.5
+    };
+
+    // Avg daily volume over the lookback.
+    let avg_vol = if it.volumes.is_empty() {
+        0.0
+    } else {
+        it.volumes.iter().sum::<i64>() as f64 / it.volumes.len() as f64
+    };
+
+    Some(Metrics {
+        delta,
+        z,
+        range_pos,
+        range_low: lo,
+        range_high: hi,
+        avg_vol,
+    })
+}
+
+/// Weighted-average median across items per recent day, normalized to 1000.
+fn build_index_spark(items: &[Item], points: usize) -> Vec<f64> {
     let points = points.clamp(7, 30);
     let mut sums = vec![0.0f64; points];
     let mut counts = vec![0u32; points];
     for it in items {
-        let n = it.series.len();
+        let n = it.medians.len();
         if n == 0 {
             continue;
         }
         for (p, sum) in sums.iter_mut().enumerate() {
             if points - p > n {
-                continue; // not enough history for this slot
+                continue;
             }
             let idx = n - (points - p);
-            if let Some(v) = it.series.get(idx) {
+            if let Some(v) = it.medians.get(idx) {
                 *sum += *v as f64;
                 counts[p] += 1;
             }
