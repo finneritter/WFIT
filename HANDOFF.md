@@ -1,162 +1,123 @@
-# WFIT — Session Handoff (2026-05-31)
+# WFIT — Session Handoff (2026-05-31, polish + features)
 
-This session took WFIT from **planning-only** (empty `src/` + `src-tauri/` trees) to a **working
-first implementation of the full approved plan** that runs end-to-end against the live
-warframe.market API. Committed as `aea3e4f` on branch `feat/initial-app-implementation`
-(off `main`); not yet pushed.
+This supersedes the original first-implementation notes. WFIT went from "builds and runs" to a
+feature-rich, installed desktop app over this session. Everything below is committed and pushed to
+the **private GitHub repo `finneritter/WFIT`** (branch `main`), and the launchable app is installed.
 
-> Read this with `.claude/plans/i-just-added-the-noble-widget.md` (the build roadmap) and `CLAUDE.md`
-> (hard constraints). Those remain authoritative; this doc records what was actually built and the
-> sharp edges hit along the way.
-
----
-
-## TL;DR — current state
-
-- **All 5 build phases implemented**: scaffold → DB layer → market.rs (v2) + domain → command surface
-  + launch orchestration → frontend (9 screens). 23 Rust files, 21 TS/TSX files.
-- **Verified green**: `npx tsc --noEmit`, `npm run build`, `cargo check` (0 errors), `cargo test`
-  (2/2), `cargo clippy` (0 warnings), **and a live `tauri dev` run**.
-- **Live run proof**: app boots → migrates DB → fetches catalog (**2573 items**) → background price
-  drain populates real 90-day history (`price_cache` + thousands of `price_history` rows).
-- **One required env var on this box** to run the GUI (Wayland/WebKitGTK) — see "Running it" below.
-- **Not yet done**: visual click-through of the 9 screens; `git push`; Pass-B set composition run;
-  Tier-2 JWT path exercised; macOS build.
+> Read with `CLAUDE.md` (hard constraints) and `.claude/plans/i-just-added-the-noble-widget.md`
+> (original roadmap). Newer plans: `.claude/plans/search-and-wiki.md`.
 
 ---
 
 ## Running it
 
-Plain `npm run tauri dev` **crashes instantly on this machine** with:
-
+```bash
+npm run tauri:dev          # dev (bakes in the WebKitGTK/Wayland env vars; plain `tauri dev` crashes)
+scripts/install.sh         # build optimized release + install as a launchable app (search "WFIT" in KRunner)
 ```
-Gdk-Message: Error 71 (Protocol error) dispatching to Wayland display.
-```
 
-This is the known **WebKitGTK-on-Wayland renderer bug**, NOT an app bug — the Rust had already
-logged `opening database` → `launch: refreshing catalog` before the window blew up; the crash takes
-the process and the vite dev server down with it (the `write EPIPE` noise is a symptom, not a cause).
+- **Linux prereq:** `webkit2gtk-4.1`. The dev/installed launch needs
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1` (baked into both the
+  `tauri:dev` script and the installed `.desktop` Exec).
+- `scripts/install.sh` is the one-command update: rebuild + reinstall binary/icon/.desktop.
 
-**Use the wrapper script that bakes in the fix:**
+## Verification gates (all currently pass)
 
 ```bash
-npm run tauri:dev      # = WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev
-```
-
-If it still misbehaves, also try `GDK_BACKEND=x11` (XWayland). `npm run dev` (frontend only) and
-`npm run build` need none of this.
-
-**Prereq already satisfied here:** `webkit2gtk-4.1` (2.52.3) is installed. A fresh machine needs it
-(`sudo pacman -S webkit2gtk-4.1` on CachyOS) before any Tauri build.
-
----
-
-## What was built
-
-### Backend — `src-tauri/src/`
-- `migrations/0001_init.sql` — full schema, **13 tables** (catalog_items, price_cache, price_history,
-  inventory_items, sale_events, watchlist, buy_list, set_membership, wfm_account, market_listings,
-  app_meta, app_settings, + sqlite_sequence). `category` is NOT NULL with the 5 design values;
-  `set_slug` is deliberately **not** a FK (prior attempt's lesson).
-- `market.rs` — warframe.market client: v2 `/items` catalog, v1 `/items/<slug>/statistics`
-  (real 90-day median/volume → trend/delta_7d/volume_7d + history), v2 detail (Pass B), v1 profile
-  orders. One global 350ms throttle (`throttled()`), headers per CLAUDE.md.
-- `worldstate.rs` — **isolated** api.warframestat.us client (own throttle + 45s in-memory cache,
-  degrades to stale on failure). Powers Rotation. Never touches the market path.
-- `wfm_account.rs` — JWT in OS keychain via `keyring` (never in SQLite).
-- `domain/{classify,partname}.rs` — pure: 5-category `category_of`, `part_type_of`,
-  `derive_set_slug`, `split_name`. Has the 2 passing unit tests.
-- `db/*.rs` — one module per table; transactional writes; `Db` = `Arc<Mutex<Connection>>`.
-- `commands.rs` — the full `#[command]` surface (catalog/inventory/sales+undo/watchlist/buylist/
-  sets/ducats/trends/prices/detail/worldstate/wfm account+import/sets_refresh).
-- `lib.rs` — `AppState{db, market, worldstate}`; on launch spawns `launch_refresh`: catalog if
-  empty/stale → priority prices (owned+watchlist) → background drain oldest-first, persisting in
-  chunks so the UI sees data early and the 350ms cap is never exceeded.
-
-### Frontend — `src/`
-- `lib/{types,api,format}.ts` — TS DTO mirrors of the Rust types, `invoke()` wrappers, presentation
-  helpers (tier/glyph/relativeDay/syncedAgo).
-- `hooks/queries.ts` — React Query reads + mutations with cross-screen invalidation.
-- `components/` — Sidebar, Drawer, AddItems modal, Icon, charts (Spark/MiniArea/BigChart), ui.
-- `routes/` — all 9 screens: Inventory, Sets, Trends, Watchlist, BuyList, Listings, Ducats,
-  Rotation, SoldHistory.
-- `theme.css` — lifted verbatim from `design_handoff_wfit_update1/WFIT Wireframe.html`.
-
----
-
-## Live-run numbers (this session, partial drain in progress when captured)
-
-`~/.local/share/dev.finn.wfit/wfit.sqlite`:
-
-| metric | value |
-|---|---|
-| catalog_items | 2573 |
-| — by category | arcane 166 · mod 1384 · set 227 · warframe 196 · weapon 600 |
-| with real ducats | 715 |
-| with heuristic set_slug | 559 |
-| price_cache | 120 (drain ongoing) |
-| price_history rows | ~8,900 (drain ongoing) |
-
-The full price drain takes minutes (all-mods scope, throttled); these counts grow until it finishes.
-Everything except inventory/sales/watchlist/buy_list is a rebuildable cache.
-
----
-
-## Fixes made during bring-up (don't re-discover these)
-
-1. **`capabilities/default.json` needs `"local": true`.** Without it Tauri 2.x fails the build with
-   *"data did not match any variant of untagged enum CapabilityFile"* (F0307).
-2. **tsconfig project-references conflict.** `tsconfig.json` referenced `tsconfig.node.json` as a
-   composite project with `noEmit` → TS6310. Dropped the `references` and made `tsconfig.node.json`
-   a plain non-composite config. (Also turned `noUnusedLocals`/`noUnusedParameters` off to avoid
-   brittle churn.)
-3. **WebKit/Wayland env var** — see "Running it".
-
----
-
-## Known gaps / next steps
-
-- **UI not click-tested.** The 9 screens type-check, build, and are wired to working commands, but
-  no one has visually exercised add-item / sell / undo / watchlist / set-completion / import in the
-  live window. Recommended next: drive the running app through those flows.
-- **Committed but not pushed.** All work is in commit `aea3e4f` on branch
-  `feat/initial-app-implementation` (`main` is untouched). Push with
-  `git push -u origin feat/initial-app-implementation` when ready. Note: `src-tauri/gen/schemas/*`
-  (Tauri-generated, regenerated on build) was committed — consider adding `src-tauri/gen/` to
-  `.gitignore` and `git rm --cached`-ing it.
-- **Pass-B set composition** (`sets_refresh` / `set_membership`) is implemented but not run; Sets
-  screen currently uses the `set_slug` heuristic (`quantity_in_set` assumed 1). Run `sets_refresh`
-  for authoritative membership.
-- **WFM account**: Tier 1 (public username) wired; Tier 2 (pasted JWT) implemented but not exercised
-  against a real account. Listings are **read-only in v1** (price-edit/Match/status are deferred).
-- **macOS build** must be done on macOS (no webview cross-compile).
-
----
-
-## Environment notes / gotchas
-
-- **This box's interactive shell has unreliable stdout** (corrupted/duplicated trailing lines).
-  Route command output to a temp file and Read it; trust **exit codes** over printed text.
-- **Stop the dev server with exact-name kills** (`pkill -x wfit`, `pkill -x node`). Broad
-  `pkill -f "vite"` / `pkill -f "tauri dev"` also match the agent's own wrapper shell → exit 144
-  (self-kill), which masquerades as a failure.
-- **Catalog fetch takes ~30–40s** after launch; poll the DB rather than assuming instant population.
-
----
-
-## Verification commands (all currently pass)
-
-```bash
-# frontend
 npx tsc --noEmit
 npm run build
-
-# rust (from src-tauri/)
-cargo check
-cargo test
-cargo clippy
-
-# live (from repo root) — needs the env var
-npm run tauri:dev
-# then inspect: sqlite3 ~/.local/share/dev.finn.wfit/wfit.sqlite 'SELECT COUNT(*) FROM catalog_items;'
+cd src-tauri && cargo check    # also validates the Tauri capability ACL
+npx biome check .              # frontend lint/format (pre-existing a11y warnings on interactive divs are tolerated)
 ```
+
+---
+
+## What was built this session
+
+**Window / shell**
+- Frameless window (`decorations:false`) with a custom in-app titlebar (drag region + min/max/close):
+  `src/components/TitleBar.tsx`, window ACL perms in `capabilities/default.json`.
+- App **icon** (cat monogram) generated via `tauri icon` from `src-tauri/icons/source.png`.
+- Sidebar brand panel removed (title now in the titlebar); syncbar/topbar seam aligned (both 42px).
+
+**Settings + theming** (`src/routes/Settings.tsx`, `src/lib/prefs.ts`)
+- New Settings screen (the sidebar footer used to mis-route to Listings). Sections: Appearance
+  (**Light/Dark theme**, density, flat-deltas), Data & cache (refresh prices/catalog, sync set
+  composition, **Rebuild cache**), Account, About.
+- **Light mode** = `body.light` palette override in `theme.css`; introduced `--accent-ink` so the
+  4 hardcoded on-accent text colors invert correctly. Prefs persist in localStorage, applied
+  pre-paint in `main.tsx`.
+
+**Trends → decision surface** (`src/routes/Trends.tsx`, `src-tauri/src/db/trends.rs`)
+- Reframed: full-width **Prime Market hero** (big graph), Your-holdings band, then Sell signals /
+  Buy candidates / **Unusual moves** (z-score ranked) / Category heat.
+- Per-item signals computed from history: **z-score, range position, avg daily volume**.
+- **Prime Market index**: spans the **selected timeframe** (responds to 24h/7d/30d/90d) and is a
+  **consistent-membership, value-weighted basket** (only full-window items, summed, normalized);
+  the headline % is its start→end change. Replaces an earlier broken median/ragged-spark index.
+- **"Exclude outliers"** toggle (default on): winsorizes each series (median ± k·MAD, with a
+  `center·0.5` fallback when MAD≈0) so a 50k-plat troll print on a 1p mod can't pollute the index,
+  signals, or **Unusual moves** (and the displayed price uses the cleaned value).
+
+**Item drawer — deep analytics** (`src/components/Drawer.tsx`, `src/components/charts.tsx`)
+- Real **candlestick** chart (OHLC) with MA7/MA30 overlays, volume bars, period hi/lo lines.
+  OHLC added via migration **`0002_ohlc.sql`** + `market.rs` parsing; backfills as prices drain.
+- Stats: range position, avg volume, **live spread/best buy-sell** (`get_item_orders` →
+  `/v2/orders/item`), ducat-efficiency verdict, owned stack, realized P&L from past sales.
+- **Resizable** (drag the left-edge grip; width remembered).
+- **Remove from inventory** button; **Wiki ↗** button (see below).
+
+**Sets as parts** (`src-tauri/src/db/inventory.rs`, `sales.rs`, `catalog.rs`)
+- Adding a set adds its component parts; a complete set is **recognized and valued at the set
+  price** (not the part-sum). Inventory collapses complete sets into one set tile. Set-aware
+  `set_qty`/`remove`/`record_sale` (selling a set decrements one of each part). Composition from
+  the `catalog_items.set_slug` heuristic (Pass B available via `sets_refresh` but not required).
+
+**Rotation** (`src-tauri/src/worldstate.rs`, `src/routes/Rotation.tsx`)
+- Fixed (was dead): warframestat.us dropped the per-fissure `active` flag (we filtered all out)
+  and the void-trader string fields. Now surfaces ISO timestamps (cycle/fissure/Baro
+  `expiry`/`activation`) and a 1s `useNow` ticker drives **live countdowns**.
+- **Per-tier fissure refresh strip** with **Omnia highlighted** and a "⚡ Void Cascade" flag.
+
+**Icons + search + wiki**
+- Real **warframe.market item icons** everywhere (Glyph renders the thumbnail, monogram fallback);
+  threaded `thumbnail_url` through all row types (TrendRow/DucatRow/SaleRow/ListingRow + queries).
+- **Global search** (`src/components/SearchResults.tsx`): top-bar search is now a command palette
+  over the whole tradable catalog (`search_catalog`); results dropdown, click opens the drawer
+  (owned or not), `ininv:` prefix scopes to owned.
+- **In-app wiki**: `src/lib/wiki.ts` opens an item's `wiki.warframe.com` page in a dedicated reused
+  `WebviewWindow` (iframing is blocked by the wiki's `X-Frame-Options: DENY`). "Wiki ↗" on the
+  drawer. Perms: `core:webview:allow-create-webview-window`, `core:window:allow-set-focus`.
+- Add-items picker: shows **specific part names** ("Neuroptics Blueprint", not "Blueprint") and is
+  **target-aware** — on Watchlist/Buy List it adds to that list; catalog rows carry
+  `on_watchlist`/`buy_qty`.
+
+## New backend surface (since first handoff)
+- Migrations: `0001_init.sql`, **`0002_ohlc.sql`** (adds open/high/low/close to price_history).
+- New commands: `rebuild_cache`, `get_item_orders`, plus `sets_refresh` now wired in Settings.
+- `total_value`/`owned_holdings` (set-aware valuation) in `db/inventory.rs`.
+
+## Known gaps / next steps
+- **Pass B set composition** (`sets_refresh` → `set_membership`) is available but Sets/valuation
+  still use the `set_slug` heuristic (`quantity_in_set` assumed 1). Wiring it in is a TODO.
+- **Listings write actions** (price edit / status / list-on-market) remain v1-deferred (read-only).
+- **Set-sale undo** re-adds against the set slug, not the member parts (edge case).
+- **Wiki page mapping** is heuristic (prime parts → "<X> Prime"); some items may land on a wiki
+  search page. Refine names case-by-case.
+- **macOS build** not done (needs a Mac).
+- **Search**: tradable catalog only (warframe.market). Non-tradable items aren't indexed.
+
+## Environment gotchas (important for the next session)
+- **Could not visually verify most UI this session.** The dev window repeatedly got buried behind
+  the editor and there is no window-raise/input-injection tool on this box (no wmctrl/ydotool/
+  xdotool; only screenshot tools). Changes were verified via build gates + replicating logic
+  against the live SQLite DB. **Next session should click-test:** the Trends hero/timeframes, the
+  candle drawer + Wiki button (does the WebviewWindow actually open?), light mode across screens,
+  global search + `ininv:`, set tiles, and the Rotation strip.
+- Shell stdout on this box can be unreliable — route to temp files / trust exit codes.
+- Stop the dev server with exact-name kills (`pkill -x wfit`, `pkill -x node`).
+- Live DB: `~/.local/share/dev.finn.wfit/wfit.sqlite`.
+
+## Repo
+- Private GitHub: **github.com/finneritter/WFIT**, branch `main` (origin set, `git push` works).
+- `src-tauri/gen/` is gitignored (regenerated each build).
