@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useWorldstate } from "../hooks/queries";
 import { clsx, countdown, msUntil } from "../lib/format";
 
-const TIERS = ["All", "Lith", "Meso", "Neo", "Axi", "Requiem"] as const;
+const TIERS = ["All", "Lith", "Meso", "Neo", "Axi", "Requiem", "Omnia"] as const;
+// Order for the per-type refresh strip. Omnia last + highlighted: it's the
+// rotating Zariman type, the only place to crack relics in Void Cascade.
+const FISSURE_TIERS = ["Lith", "Meso", "Neo", "Axi", "Requiem", "Omnia"] as const;
 
 /** Re-render every `ms` so countdowns tick live. */
 function useNow(ms = 1000): number {
@@ -34,6 +37,26 @@ export function Rotation() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ws, tier, steelPath, now]);
 
+  // Per-tier refresh summary: how soon each fissure type next rotates, plus the
+  // mission types currently up (the point of Omnia).
+  const typeSummary = useMemo(() => {
+    const live = (ws?.fissures ?? []).filter((f) => msUntil(f.expiry) > 0);
+    return FISSURE_TIERS.map((t) => {
+      const of = live
+        .filter((f) => f.tier.toLowerCase() === t.toLowerCase())
+        .sort((a, b) => msUntil(a.expiry) - msUntil(b.expiry));
+      const missions = [...new Set(of.map((f) => f.mission_type))];
+      return {
+        tier: t,
+        count: of.length,
+        nextExpiry: of[0]?.expiry ?? null,
+        missions,
+        cascade: of.some((f) => /cascade/i.test(f.mission_type)),
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ws, now]);
+
   if (isLoading) return <div className="empty">Loading world-state…</div>;
   if (isError || !ws)
     return (
@@ -48,6 +71,29 @@ export function Rotation() {
             <div className="cyc-st">{c.state}</div>
             <div className="cyc-pl">{c.name}</div>
             <div className="cyc-end num">{c.expiry ? countdown(c.expiry, now) : (c.time_left ?? "—")}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="ftypes">
+        {typeSummary.map((s) => (
+          <div
+            key={s.tier}
+            className={clsx("ftype", s.tier === "Omnia" && "omnia", s.cascade && "cascade")}
+            title={s.missions.join(" · ")}
+          >
+            <div className="ft-h">
+              <span className="ft-name">{s.tier}</span>
+              <span className="ft-n num">{s.count}</span>
+            </div>
+            <div className="ft-timer num">{s.count ? countdown(s.nextExpiry, now) : "—"}</div>
+            {s.tier === "Omnia" && s.count ? (
+              <div className="ft-missions">
+                {s.cascade ? <b>⚡ Void Cascade</b> : s.missions[0] ?? "—"}
+              </div>
+            ) : (
+              <div className="ft-sub">{s.count ? "next refresh" : "none up"}</div>
+            )}
           </div>
         ))}
       </div>

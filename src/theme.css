@@ -200,7 +200,21 @@ body.flat-deltas .pos, body.flat-deltas .neg { color: var(--soft) !important; }
 .ftier.t-neo::before { background: #c9a84a; }
 .ftier.t-axi::before { background: #9a83e0; }
 .ftier.t-requiem::before { background: #d0685c; }
+.ftier.t-omnia::before { background: var(--hot); }
 .badge.sp { color: var(--hot); border-color: var(--hot); }
+
+/* per-tier fissure refresh strip */
+.ftypes { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 12px; }
+@media (max-width: 1040px) { .ftypes { grid-template-columns: repeat(3, 1fr); } }
+.ftype { border: 1px solid var(--line-2); border-top: 2px solid var(--line-2); background: var(--panel); padding: 7px 10px; min-width: 0; }
+.ftype .ft-h { display: flex; align-items: baseline; justify-content: space-between; }
+.ft-name { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.ft-n { font-size: 11px; color: var(--faint); }
+.ft-timer { font-size: 16px; font-weight: 600; letter-spacing: -.02em; margin-top: 3px; }
+.ft-sub, .ft-missions { font-size: 9.5px; color: var(--faint); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ft-missions b { color: var(--hot); font-weight: 700; }
+.ftype.omnia { border-top-color: var(--hot); }
+.ftype.cascade { border-color: var(--hot); background: linear-gradient(180deg, color-mix(in srgb, var(--hot) 8%, var(--panel)), var(--panel)); }
 
 /* listings / warframe.market connection */
 .conn { display: flex; align-items: center; gap: 12px; padding: 9px 13px; border: 1px solid var(--line-2); background: linear-gradient(100deg, var(--panel-2), var(--panel)); margin-bottom: 12px; flex-wrap: wrap; }
