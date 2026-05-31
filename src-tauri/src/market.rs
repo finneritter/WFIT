@@ -169,6 +169,10 @@ impl Market {
             datetime: Option<String>,
             median: Option<f64>,
             volume: Option<f64>,
+            open_price: Option<f64>,
+            closed_price: Option<f64>,
+            min_price: Option<f64>,
+            max_price: Option<f64>,
         }
 
         let url = format!("{API_V1}/items/{slug}/statistics");
@@ -188,10 +192,15 @@ impl Market {
             .filter_map(|d| {
                 let dt = d.datetime.as_ref()?;
                 let day = dt.split('T').next().unwrap_or(dt).to_string();
+                let r = |x: Option<f64>| x.map(|v| v.round() as i64);
                 Some(DayStat {
                     day,
-                    median: d.median.map(|m| m.round() as i64),
-                    volume: d.volume.map(|v| v.round() as i64),
+                    median: r(d.median),
+                    volume: r(d.volume),
+                    open: r(d.open_price),
+                    high: r(d.max_price),
+                    low: r(d.min_price),
+                    close: r(d.closed_price),
                 })
             })
             .collect();
@@ -270,6 +279,61 @@ impl Market {
             set_root: resp.data.set_root.unwrap_or(false),
             quantity_in_set: resp.data.quantity_in_set.unwrap_or(1),
         }))
+    }
+
+    /// Public live orders for one item → best buy/sell among online users (the
+    /// actionable market) + buyer/seller counts. Powers the drawer's spread row.
+    pub async fn fetch_item_orders(&self, slug: &str) -> AppResult<crate::types::ItemOrders> {
+        self.throttled().await;
+
+        #[derive(Deserialize)]
+        struct Resp {
+            #[serde(default)]
+            data: Vec<Order>,
+        }
+        #[derive(Deserialize)]
+        struct Order {
+            #[serde(rename = "type")]
+            order_type: String,
+            platinum: Option<i64>,
+            user: Option<OrderUser>,
+        }
+        #[derive(Deserialize)]
+        struct OrderUser {
+            status: Option<String>,
+        }
+
+        let url = format!("{API_V2}/orders/item/{slug}");
+        let r = self.http.get(url).send().await?;
+        if !r.status().is_success() {
+            return Ok(crate::types::ItemOrders::default());
+        }
+        let resp: Resp = r.json().await?;
+
+        let mut out = crate::types::ItemOrders::default();
+        for o in &resp.data {
+            let online = o
+                .user
+                .as_ref()
+                .and_then(|u| u.status.as_deref())
+                .is_some_and(|s| s == "ingame" || s == "online");
+            if !online {
+                continue;
+            }
+            let Some(p) = o.platinum else { continue };
+            match o.order_type.as_str() {
+                "buy" => {
+                    out.buyers += 1;
+                    out.best_buy = Some(out.best_buy.map_or(p, |b| b.max(p)));
+                }
+                "sell" => {
+                    out.sellers += 1;
+                    out.best_sell = Some(out.best_sell.map_or(p, |b| b.min(p)));
+                }
+                _ => {}
+            }
+        }
+        Ok(out)
     }
 
     /// Tier 1 (public): a user's visible orders. Auth header optional (Tier 2).

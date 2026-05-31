@@ -159,6 +159,10 @@ export interface HistoryPoint {
   day: string;
   median: number | null;
   volume: number | null;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
 }
 
 export interface ItemDetail {
@@ -176,7 +180,16 @@ export interface ItemDetail {
   owned_qty: number;
   on_watchlist: boolean;
   listed: boolean;
+  realized_plat: number;
+  sold_qty: number;
   history: HistoryPoint[];
+}
+
+export interface ItemOrders {
+  best_buy: number | null;
+  best_sell: number | null;
+  buyers: number;
+  sellers: number;
 }
 
 export interface WfmAccount {

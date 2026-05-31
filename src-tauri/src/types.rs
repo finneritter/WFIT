@@ -198,6 +198,20 @@ pub struct HistoryPoint {
     pub day: String,
     pub median: Option<i64>,
     pub volume: Option<i64>,
+    pub open: Option<i64>,
+    pub high: Option<i64>,
+    pub low: Option<i64>,
+    pub close: Option<i64>,
+}
+
+/// Live best buy/sell from public warframe.market orders (online sellers/buyers
+/// only — the actually-tradeable market). Fetched lazily for the item drawer.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ItemOrders {
+    pub best_buy: Option<i64>,  // highest buy order — what you'd get selling now
+    pub best_sell: Option<i64>, // lowest sell order — what you'd pay buying now
+    pub buyers: i64,
+    pub sellers: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -216,6 +230,8 @@ pub struct ItemDetail {
     pub owned_qty: i64,
     pub on_watchlist: bool,
     pub listed: bool,
+    pub realized_plat: i64, // total plat from past sales of this item
+    pub sold_qty: i64,      // units sold historically
     pub history: Vec<HistoryPoint>,
 }
 

@@ -92,6 +92,7 @@ pub fn run() {
             commands::prices_refresh,
             commands::get_item_detail,
             commands::get_item_history,
+            commands::get_item_orders,
             // worldstate
             commands::get_worldstate,
             // wfm account

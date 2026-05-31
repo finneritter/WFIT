@@ -349,7 +349,19 @@ body.flat-deltas .pos, body.flat-deltas .neg { color: var(--soft) !important; }
 .dgrid .v { font-family: var(--mono); font-size: 16px; font-weight: 600; margin-top: 2px; }
 .chart { padding: 12px 14px; }
 .chart svg { width: 100%; height: auto; display: block; }
-.chart-tf { display: flex; gap: 5px; margin-bottom: 8px; }
+.chart-tf { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; }
+.chart-tf .sp { flex: 1; }
+.malegend { display: inline-flex; align-items: center; gap: 4px; font-size: 9.5px; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+.malegend i { width: 11px; border-top: 2px solid; display: inline-block; }
+.malegend i.ma7 { border-color: var(--t-rare); }
+.malegend i.ma30 { border-color: var(--t-exotic); }
+.candle .cref { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 2 3; }
+.candle .ma { fill: none; stroke-width: 1.3; }
+.candle .ma7 { stroke: var(--t-rare); }
+.candle .ma30 { stroke: var(--t-exotic); }
+.candle .cvol { fill: var(--line-2); }
+.dgrid .v .u { font-size: 10.5px; color: var(--faint); font-weight: 500; }
+.dgrid .v .u.pos { color: var(--pos); }
 .drawer-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); }
 .btn { font-family: var(--sans); font-size: 12.5px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); }
 .btn:hover { border-color: var(--line-2); background: var(--hover); }

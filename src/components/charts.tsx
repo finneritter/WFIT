@@ -84,3 +84,92 @@ export function BigChart({ data, w = 380, h = 150 }: { data: number[]; w?: numbe
     </svg>
   );
 }
+
+export interface Candle {
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+}
+
+/** Trailing moving average of closes; entries are null until `period` points. */
+function movingAvg(closes: number[], period: number): (number | null)[] {
+  return closes.map((_, i) => {
+    if (i + 1 < period) return null;
+    let s = 0;
+    for (let k = i - period + 1; k <= i; k++) s += closes[k];
+    return s / period;
+  });
+}
+
+/** Candlestick chart with volume bars, MA(7)/MA(30) overlays and period hi/lo
+ *  reference lines. Driven by real OHLC from warframe.market statistics. */
+export function CandleChart({ candles, w = 560, h = 240 }: { candles: Candle[]; w?: number; h?: number }) {
+  if (!candles || candles.length < 2) {
+    return <div className="muted">No price history yet — refreshing in the background.</div>;
+  }
+  const priceH = Math.round(h * 0.72);
+  const volTop = priceH + 10;
+  const volH = h - volTop;
+
+  const lo = Math.min(...candles.map((c) => c.l));
+  const hi = Math.max(...candles.map((c) => c.h));
+  const span = hi - lo || 1;
+  const vmax = Math.max(1, ...candles.map((c) => c.v));
+  const n = candles.length;
+  const pad = 3;
+  const step = (w - pad * 2) / n;
+  const bodyW = Math.max(1, step * 0.62);
+
+  const yP = (p: number) => 1 + (priceH - 2) * (1 - (p - lo) / span);
+  const cx = (i: number) => pad + step * i + step / 2;
+
+  const closes = candles.map((c) => c.c);
+  const ma7 = movingAvg(closes, 7);
+  const ma30 = movingAvg(closes, 30);
+  const maLine = (ma: (number | null)[]) =>
+    ma
+      .map((v, i) => (v == null ? null : `${cx(i).toFixed(1)},${yP(v).toFixed(1)}`))
+      .filter((p): p is string => p != null)
+      .join(" ");
+
+  return (
+    <svg className="candle" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+      {/* period hi/lo reference lines */}
+      <line x1="0" y1={yP(hi)} x2={w} y2={yP(hi)} className="cref" />
+      <line x1="0" y1={yP(lo)} x2={w} y2={yP(lo)} className="cref" />
+      {/* candles */}
+      {candles.map((c, i) => {
+        const up = c.c >= c.o;
+        const color = up ? "var(--pos)" : "var(--neg)";
+        const x = cx(i);
+        const bodyTop = yP(Math.max(c.o, c.c));
+        const bodyH = Math.max(1, Math.abs(yP(c.o) - yP(c.c)));
+        return (
+          <g key={i} stroke={color} fill={color}>
+            <line x1={x} y1={yP(c.h)} x2={x} y2={yP(c.l)} strokeWidth="1" />
+            <rect x={x - bodyW / 2} y={bodyTop} width={bodyW} height={bodyH} strokeWidth="0" />
+          </g>
+        );
+      })}
+      {/* moving averages */}
+      <polyline points={maLine(ma7)} className="ma ma7" />
+      <polyline points={maLine(ma30)} className="ma ma30" />
+      {/* volume */}
+      {candles.map((c, i) => {
+        const bh = Math.round((c.v / vmax) * volH);
+        return (
+          <rect
+            key={`v${i}`}
+            x={cx(i) - bodyW / 2}
+            y={h - bh}
+            width={bodyW}
+            height={bh}
+            className="cvol"
+          />
+        );
+      })}
+    </svg>
+  );
+}

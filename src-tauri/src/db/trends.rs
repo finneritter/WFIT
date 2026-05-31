@@ -39,7 +39,10 @@ struct Metrics {
 }
 
 /// Aggregate the priced subset into the Trends payload for one timeframe.
-pub fn get(db: &Db, timeframe: &str) -> AppResult<TrendsData> {
+/// When `exclude_outliers`, each item's daily series is winsorized first so a
+/// single troll/fat-finger print (a common mod "selling" for 50k plat) can't
+/// pollute the move, the index, or the signals.
+pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<TrendsData> {
     let days = window_days(timeframe);
 
     let mut items: Vec<Item> = db.with(|c| {
@@ -96,6 +99,9 @@ pub fn get(db: &Db, timeframe: &str) -> AppResult<TrendsData> {
         }
         if let Some(s) = vol_hist.get(&it.slug) {
             it.volumes = s.clone();
+        }
+        if exclude_outliers {
+            winsorize(&mut it.medians);
         }
     }
 
@@ -253,6 +259,31 @@ fn median(v: &mut [f64]) -> f64 {
         v[n / 2]
     } else {
         (v[n / 2 - 1] + v[n / 2]) / 2.0
+    }
+}
+
+/// Clamp gross outliers in a daily price series toward the item's own center,
+/// using a robust median ± k·(scaled MAD) band. Leaves normal series untouched.
+fn winsorize(series: &mut [i64]) {
+    if series.len() < 4 {
+        return;
+    }
+    let mut sorted: Vec<f64> = series.iter().map(|&v| v as f64).collect();
+    let center = median(&mut sorted);
+    let mut devs: Vec<f64> = series.iter().map(|&v| (v as f64 - center).abs()).collect();
+    let mad = median(&mut devs);
+    if mad <= 0.0 {
+        return; // flat/degenerate series — nothing meaningful to clamp
+    }
+    let spread = 1.4826 * mad; // MAD → σ-equivalent
+    let (lo, hi) = (center - 6.0 * spread, center + 6.0 * spread);
+    for v in series.iter_mut() {
+        let f = *v as f64;
+        if f > hi {
+            *v = hi.round() as i64;
+        } else if f < lo {
+            *v = lo.round() as i64;
+        }
     }
 }
 

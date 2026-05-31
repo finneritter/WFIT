@@ -107,7 +107,8 @@ function HeatRowView({ row, scale }: { row: HeatRow; scale: number }) {
 
 export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
   const [tf, setTf] = useState<(typeof TFS)[number]>("7d");
-  const { data, isLoading } = useTrends(tf);
+  const [excludeOutliers, setExcludeOutliers] = useState(true);
+  const { data, isLoading } = useTrends(tf, excludeOutliers);
 
   if (isLoading || !data) return <div className="empty">Loading market trends…</div>;
 
@@ -129,8 +130,17 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
           </button>
         ))}
         <span className="sp" />
+        <button
+          type="button"
+          className="chip"
+          aria-pressed={excludeOutliers}
+          title="Clamp troll/fat-finger price prints so they don't skew the index or signals"
+          onClick={() => setExcludeOutliers((v) => !v)}
+        >
+          Exclude outliers
+        </button>
         <span className="note">
-          signals from {fmt(data.liquid_count)} liquid of {fmt(data.total_priced)} priced items
+          {fmt(data.liquid_count)} liquid of {fmt(data.total_priced)} priced
         </span>
       </div>
 

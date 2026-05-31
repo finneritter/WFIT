@@ -13,7 +13,7 @@ export const keys = {
   sets: ["sets"] as const,
   ducats: ["ducats"] as const,
   catalog: (cat?: string) => ["catalog", cat ?? "all"] as const,
-  trends: (tf: string) => ["trends", tf] as const,
+  trends: (tf: string, excludeOutliers: boolean) => ["trends", tf, excludeOutliers] as const,
   itemDetail: (slug: string) => ["itemDetail", slug] as const,
   worldstate: ["worldstate"] as const,
   wfmAccount: ["wfmAccount"] as const,
@@ -50,13 +50,23 @@ export const useSets = () => useQuery({ queryKey: keys.sets, queryFn: api.getSet
 export const useDucats = () => useQuery({ queryKey: keys.ducats, queryFn: api.getDucats });
 export const useCatalog = (cat?: string) =>
   useQuery({ queryKey: keys.catalog(cat), queryFn: () => api.getCatalog(cat) });
-export const useTrends = (tf: string) =>
-  useQuery({ queryKey: keys.trends(tf), queryFn: () => api.getTrends(tf) });
+export const useTrends = (tf: string, excludeOutliers = true) =>
+  useQuery({
+    queryKey: keys.trends(tf, excludeOutliers),
+    queryFn: () => api.getTrends(tf, excludeOutliers),
+  });
 export const useItemDetail = (slug: string | null) =>
   useQuery({
     queryKey: keys.itemDetail(slug ?? ""),
     queryFn: () => api.getItemDetail(slug as string),
     enabled: !!slug,
+  });
+export const useItemOrders = (slug: string | null) =>
+  useQuery({
+    queryKey: ["itemOrders", slug ?? ""],
+    queryFn: () => api.getItemOrders(slug as string),
+    enabled: !!slug,
+    staleTime: 60_000,
   });
 export const useWorldstate = () =>
   useQuery({ queryKey: keys.worldstate, queryFn: api.getWorldstate, refetchInterval: 45_000 });

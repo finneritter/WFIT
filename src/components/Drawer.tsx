@@ -3,29 +3,56 @@ import {
   useAddToBuyList,
   useAddWatch,
   useItemDetail,
+  useItemOrders,
   useRecordSale,
 } from "../hooks/queries";
 import { clsx, fmt, pct, tier } from "../lib/format";
-import { BigChart } from "./charts";
+import type { HistoryPoint } from "../lib/types";
+import { type Candle, CandleChart } from "./charts";
 
 const TF = ["24h", "7d", "30d", "90d"] as const;
 const TF_DAYS: Record<string, number> = { "24h": 2, "7d": 7, "30d": 30, "90d": 90 };
 
+/** A history row → candle, falling back to the median when OHLC is absent
+ *  (older cached rows pre-date OHLC capture and draw as flat ticks). */
+function toCandle(h: HistoryPoint): Candle | null {
+  const close = h.close ?? h.median;
+  if (close == null) return null;
+  const open = h.open ?? close;
+  return {
+    o: open,
+    c: close,
+    h: h.high ?? Math.max(open, close),
+    l: h.low ?? Math.min(open, close),
+    v: h.volume ?? 0,
+  };
+}
+
 export function Drawer({ slug, onClose }: { slug: string; onClose: () => void }) {
   const { data: item } = useItemDetail(slug);
+  const { data: orders } = useItemOrders(slug);
   const [tf, setTf] = useState<(typeof TF)[number]>("90d");
   const sell = useRecordSale();
   const watch = useAddWatch();
   const buy = useAddToBuyList();
 
-  const series = useMemo(() => {
+  const candles = useMemo(() => {
     if (!item) return [];
-    const days = TF_DAYS[tf];
     return item.history
-      .slice(-days)
-      .map((h) => h.median)
-      .filter((m): m is number => m != null);
+      .slice(-TF_DAYS[tf])
+      .map(toCandle)
+      .filter((c): c is Candle => c != null);
   }, [item, tf]);
+
+  const stats = useMemo(() => {
+    if (candles.length === 0) return null;
+    const hi = Math.max(...candles.map((c) => c.h));
+    const lo = Math.min(...candles.map((c) => c.l));
+    const cur = candles[candles.length - 1].c;
+    const rangePos = hi > lo ? (cur - lo) / (hi - lo) : 0.5;
+    const avgVol = candles.reduce((s, c) => s + c.v, 0) / candles.length;
+    return { hi, lo, rangePos, avgVol };
+  }, [candles]);
 
   if (!item) {
     return (
@@ -48,8 +75,12 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
   const delta = item.delta_7d ?? 0;
   const price = item.median_plat;
   const stack = price != null ? price * item.owned_qty : null;
-  const lo = price != null ? Math.round(price * 0.82) : null;
-  const hi = price != null ? Math.round(price * 1.15) : null;
+
+  const spread =
+    orders?.best_buy != null && orders?.best_sell != null
+      ? orders.best_sell - orders.best_buy
+      : null;
+  const dPerPlat = item.ducats != null && price ? item.ducats / price : null;
 
   return (
     <div className="scrim" onClick={onClose}>
@@ -91,28 +122,85 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
                 {t}
               </button>
             ))}
+            <span className="sp" />
+            <span className="malegend">
+              <i className="ma7" /> MA7 <i className="ma30" /> MA30
+            </span>
           </div>
-          <BigChart data={series} />
+          <CandleChart candles={candles} />
         </div>
 
         <div className="dgrid">
           <div className="cell">
-            <div className="k">You own</div>
-            <div className="v num">×{item.owned_qty}</div>
+            <div className="k">{tf} high · low</div>
+            <div className="v num">{stats ? `${fmt(stats.hi)} · ${fmt(stats.lo)}` : "—"}</div>
           </div>
           <div className="cell">
-            <div className="k">Ducat value</div>
-            <div className="v num">{item.ducats == null ? "—" : fmt(item.ducats)}</div>
+            <div className="k">Range position</div>
+            <div className="v num">{stats ? `${Math.round(stats.rangePos * 100)}%` : "—"}</div>
           </div>
           <div className="cell">
-            <div className="k">7d range</div>
+            <div className="k">Avg volume</div>
+            <div className="v num">{stats ? `${fmt(stats.avgVol)}/day` : "—"}</div>
+          </div>
+          <div className="cell">
+            <div className="k">Spread (live)</div>
             <div className="v num">
-              {lo == null ? "—" : `${fmt(lo)}–${fmt(hi)}`}
+              {spread == null ? (
+                <span className="muted">—</span>
+              ) : (
+                <>
+                  {fmt(spread)}p
+                  <span className="u">
+                    {" "}
+                    {fmt(orders?.best_buy)}→{fmt(orders?.best_sell)}
+                  </span>
+                </>
+              )}
             </div>
           </div>
           <div className="cell">
-            <div className="k">Stack value</div>
-            <div className="v num">{stack == null ? "—" : `${fmt(stack)}p`}</div>
+            <div className="k">Ducats</div>
+            <div className="v num">
+              {item.ducats == null ? (
+                <span className="muted">—</span>
+              ) : (
+                <>
+                  {fmt(item.ducats)}
+                  {dPerPlat != null ? (
+                    <span className={clsx("u", dPerPlat >= 10 ? "pos" : "")}>
+                      {" "}
+                      {dPerPlat.toFixed(1)} d/p · {dPerPlat >= 10 ? "ducat it" : "sell for plat"}
+                    </span>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
+          <div className="cell">
+            <div className="k">Sellers · buyers</div>
+            <div className="v num">
+              {orders ? `${fmt(orders.sellers)} · ${fmt(orders.buyers)}` : "—"}
+            </div>
+          </div>
+          <div className="cell">
+            <div className="k">You own · stack</div>
+            <div className="v num">
+              ×{item.owned_qty}
+              {stack != null ? <span className="u"> · {fmt(stack)}p</span> : null}
+            </div>
+          </div>
+          <div className="cell">
+            <div className="k">Realized (sold)</div>
+            <div className="v num">
+              {item.sold_qty > 0 ? (
+                <>
+                  {fmt(item.realized_plat)}p<span className="u"> · ×{item.sold_qty}</span>
+                </>
+              ) : (
+                <span className="muted">none</span>
+              )}
+            </div>
           </div>
         </div>
 

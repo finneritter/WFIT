@@ -10,6 +10,10 @@ pub struct DayStat {
     pub day: String,
     pub median: Option<i64>,
     pub volume: Option<i64>,
+    pub open: Option<i64>,
+    pub high: Option<i64>,
+    pub low: Option<i64>,
+    pub close: Option<i64>,
 }
 
 /// A fully-derived price record: the cache figures + the daily series that
@@ -42,11 +46,15 @@ pub fn upsert_many(db: &Db, prices: &[PriceUpsert], ttl: Duration) -> AppResult<
                     expires_at  = excluded.expires_at",
             )?;
             let mut hist_stmt = tx.prepare(
-                "INSERT INTO price_history (slug, day, median, volume)
-                 VALUES (?1, ?2, ?3, ?4)
+                "INSERT INTO price_history (slug, day, median, volume, open, high, low, close)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
                  ON CONFLICT(slug, day) DO UPDATE SET
                     median = excluded.median,
-                    volume = excluded.volume",
+                    volume = excluded.volume,
+                    open   = excluded.open,
+                    high   = excluded.high,
+                    low    = excluded.low,
+                    close  = excluded.close",
             )?;
             for p in prices {
                 cache_stmt.execute(params![
@@ -59,7 +67,9 @@ pub fn upsert_many(db: &Db, prices: &[PriceUpsert], ttl: Duration) -> AppResult<
                     expires_at
                 ])?;
                 for d in &p.history {
-                    hist_stmt.execute(params![p.slug, d.day, d.median, d.volume])?;
+                    hist_stmt.execute(params![
+                        p.slug, d.day, d.median, d.volume, d.open, d.high, d.low, d.close
+                    ])?;
                 }
             }
         }
@@ -122,8 +132,8 @@ pub fn history(db: &Db, slug: &str, limit: i64) -> AppResult<Vec<HistoryPoint>> 
     db.with(|c| {
         // Pull the most recent `limit` days, then return them ascending.
         let mut stmt = c.prepare(
-            "SELECT day, median, volume FROM (
-                SELECT day, median, volume FROM price_history
+            "SELECT day, median, volume, open, high, low, close FROM (
+                SELECT day, median, volume, open, high, low, close FROM price_history
                 WHERE slug = ?1 ORDER BY day DESC LIMIT ?2
              ) ORDER BY day ASC",
         )?;
@@ -132,6 +142,10 @@ pub fn history(db: &Db, slug: &str, limit: i64) -> AppResult<Vec<HistoryPoint>> 
                 day: r.get(0)?,
                 median: r.get(1)?,
                 volume: r.get(2)?,
+                open: r.get(3)?,
+                high: r.get(4)?,
+                low: r.get(5)?,
+                close: r.get(6)?,
             })
         })?;
         let mut out = Vec::new();

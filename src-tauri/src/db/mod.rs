@@ -19,8 +19,12 @@ pub mod watchlist;
 pub mod wfm;
 
 // Append future migrations here; never edit a shipped one.
-static MIGRATIONS: Lazy<Migrations<'static>> =
-    Lazy::new(|| Migrations::new(vec![M::up(include_str!("../../migrations/0001_init.sql"))]));
+static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
+    Migrations::new(vec![
+        M::up(include_str!("../../migrations/0001_init.sql")),
+        M::up(include_str!("../../migrations/0002_ohlc.sql")),
+    ])
+});
 
 #[derive(Clone)]
 pub struct Db {

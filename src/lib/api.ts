@@ -8,6 +8,7 @@ import type {
   ImportRow,
   InventoryRow,
   ItemDetail,
+  ItemOrders,
   ListingRow,
   SaleRow,
   SetRow,
@@ -66,13 +67,14 @@ export const setBudget = (value: number) => invoke<void>("set_budget", { value }
 // computed
 export const getSets = () => invoke<SetRow[]>("get_sets");
 export const getDucats = () => invoke<DucatRow[]>("get_ducats");
-export const getTrends = (timeframe?: string) =>
-  invoke<TrendsData>("get_trends", { timeframe: timeframe ?? null });
+export const getTrends = (timeframe?: string, excludeOutliers = true) =>
+  invoke<TrendsData>("get_trends", { timeframe: timeframe ?? null, excludeOutliers });
 
 // prices / detail
 export const pricesRefresh = (slugs?: string[], force?: boolean) =>
   invoke<number>("prices_refresh", { slugs: slugs ?? null, force: force ?? null });
 export const getItemDetail = (slug: string) => invoke<ItemDetail>("get_item_detail", { slug });
+export const getItemOrders = (slug: string) => invoke<ItemOrders>("get_item_orders", { slug });
 
 // worldstate
 export const getWorldstate = () => invoke<Worldstate>("get_worldstate");

@@ -351,8 +351,13 @@ pub fn get_ducats(state: State<'_, Arc<AppState>>) -> AppResult<Vec<DucatRow>> {
 pub fn get_trends(
     state: State<'_, Arc<AppState>>,
     timeframe: Option<String>,
+    exclude_outliers: Option<bool>,
 ) -> AppResult<TrendsData> {
-    trends::get(&state.db, timeframe.as_deref().unwrap_or("7d"))
+    trends::get(
+        &state.db,
+        timeframe.as_deref().unwrap_or("7d"),
+        exclude_outliers.unwrap_or(true),
+    )
 }
 
 // ===========================================================================
@@ -426,6 +431,14 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
         .ok()
         .flatten())
     })?;
+    let (realized_plat, sold_qty): (i64, i64) = state.db.with(|c| {
+        Ok(c.query_row(
+            "SELECT COALESCE(SUM(qty * plat_per_unit), 0), COALESCE(SUM(qty), 0)
+             FROM sale_events WHERE slug = ?1",
+            rusqlite::params![slug],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?)
+    })?;
 
     Ok(ItemDetail {
         slug: row.slug,
@@ -442,6 +455,8 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
         owned_qty: row.owned_qty,
         on_watchlist,
         listed,
+        realized_plat,
+        sold_qty,
         history,
     })
 }
@@ -459,6 +474,15 @@ pub fn get_item_history(
         _ => 90,
     };
     prices::history(&state.db, &slug, days)
+}
+
+/// Live best buy/sell + buyer/seller counts for the drawer's spread row.
+#[tauri::command]
+pub async fn get_item_orders(
+    state: State<'_, Arc<AppState>>,
+    slug: String,
+) -> AppResult<crate::types::ItemOrders> {
+    state.market.fetch_item_orders(&slug).await
 }
 
 // ===========================================================================
