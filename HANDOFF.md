@@ -88,6 +88,11 @@ npx biome check .              # frontend lint/format (pre-existing a11y warning
 - **In-app wiki**: `src/lib/wiki.ts` opens an item's `wiki.warframe.com` page in a dedicated reused
   `WebviewWindow` (iframing is blocked by the wiki's `X-Frame-Options: DENY`). "Wiki ↗" on the
   drawer. Perms: `core:webview:allow-create-webview-window`, `core:window:allow-set-focus`.
+  The window is **frameless** (`decorations:false`) — the native GTK titlebar was oversized and we
+  can't add a custom bar to a remote page — so it has no close/maximize/move; it **auto-closes on
+  blur** (guarded against the creation moment) — open → read → click back to WFIT to dismiss. If a
+  persistent/movable window is wanted instead, drop the frameless + blur-close and add an app-side
+  "✕ close wiki" control.
 - Add-items picker: shows **specific part names** ("Neuroptics Blueprint", not "Blueprint") and is
   **target-aware** — on Watchlist/Buy List it adds to that list; catalog rows carry
   `on_watchlist`/`buy_qty`.
