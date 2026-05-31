@@ -96,10 +96,14 @@ const CATALOG_SELECT: &str = "SELECT
             FROM catalog_items m
             LEFT JOIN inventory_items mi ON mi.slug = m.slug
             WHERE m.set_slug = ci.slug
-        ) ELSE COALESCE(ii.qty, 0) END AS owned_qty
+        ) ELSE COALESCE(ii.qty, 0) END AS owned_qty,
+        CASE WHEN w.slug IS NOT NULL THEN 1 ELSE 0 END AS on_watchlist,
+        COALESCE(bl.buy_qty, 0) AS buy_qty
      FROM catalog_items ci
      LEFT JOIN price_cache pc ON pc.slug = ci.slug
-     LEFT JOIN inventory_items ii ON ii.slug = ci.slug";
+     LEFT JOIN inventory_items ii ON ii.slug = ci.slug
+     LEFT JOIN watchlist w ON w.slug = ci.slug
+     LEFT JOIN buy_list bl ON bl.slug = ci.slug";
 
 fn map_catalog_row(r: &rusqlite::Row) -> rusqlite::Result<CatalogRow> {
     Ok(CatalogRow {
@@ -115,6 +119,8 @@ fn map_catalog_row(r: &rusqlite::Row) -> rusqlite::Result<CatalogRow> {
         delta_7d: r.get(9)?,
         thumbnail_url: r.get(10)?,
         owned_qty: r.get(11)?,
+        on_watchlist: r.get::<_, i64>(12)? != 0,
+        buy_qty: r.get(13)?,
     })
 }
 

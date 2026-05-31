@@ -105,7 +105,12 @@ export default function App() {
         </main>
 
         {drawer ? <Drawer slug={drawer} onClose={() => setDrawer(null)} /> : null}
-        {adding ? <AddItems onClose={() => setAdding(false)} /> : null}
+        {adding ? (
+          <AddItems
+            target={screen === "watchlist" ? "watchlist" : screen === "buy" ? "buy" : "inventory"}
+            onClose={() => setAdding(false)}
+          />
+        ) : null}
       </div>
     </div>
   );

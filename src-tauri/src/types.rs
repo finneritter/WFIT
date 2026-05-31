@@ -20,6 +20,8 @@ pub struct CatalogRow {
     pub delta_7d: Option<f64>,
     pub thumbnail_url: Option<String>,
     pub owned_qty: i64,
+    pub on_watchlist: bool,
+    pub buy_qty: i64,
 }
 
 /// An owned inventory row joined with catalog + price. Powers the Inventory grid.

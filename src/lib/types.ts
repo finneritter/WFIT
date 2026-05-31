@@ -17,6 +17,8 @@ export interface CatalogRow {
   delta_7d: number | null;
   thumbnail_url: string | null;
   owned_qty: number;
+  on_watchlist: boolean;
+  buy_qty: number;
 }
 
 export interface InventoryRow {

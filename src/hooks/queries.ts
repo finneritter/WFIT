@@ -130,6 +130,7 @@ export function useAddWatch() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.watchlist });
       qc.invalidateQueries({ queryKey: keys.summary });
+      qc.invalidateQueries({ queryKey: ["catalog"] });
     },
   });
 }
@@ -140,6 +141,7 @@ export function useRemoveWatch() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.watchlist });
       qc.invalidateQueries({ queryKey: keys.summary });
+      qc.invalidateQueries({ queryKey: ["catalog"] });
     },
   });
 }
@@ -159,21 +161,30 @@ export function useAddToBuyList() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (a: { slug: string; qty?: number }) => api.addToBuyList(a.slug, a.qty),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.buyList }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.buyList });
+      qc.invalidateQueries({ queryKey: ["catalog"] });
+    },
   });
 }
 export function useSetBuyQty() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (a: { slug: string; qty: number }) => api.setBuyQty(a.slug, a.qty),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.buyList }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.buyList });
+      qc.invalidateQueries({ queryKey: ["catalog"] });
+    },
   });
 }
 export function useRemoveBuy() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (slug: string) => api.removeBuy(slug),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.buyList }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.buyList });
+      qc.invalidateQueries({ queryKey: ["catalog"] });
+    },
   });
 }
 export function usePurchaseBuy() {
