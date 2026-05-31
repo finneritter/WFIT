@@ -44,7 +44,8 @@ export const recordSale = (slug: string, qty?: number, platPerUnit?: number, not
     notes: notes ?? null,
   });
 export const undoSale = (id: number) => invoke<void>("undo_sale", { id });
-export const getSales = (limit?: number) => invoke<SaleRow[]>("get_sales", { limit: limit ?? null });
+export const getSales = (limit?: number) =>
+  invoke<SaleRow[]>("get_sales", { limit: limit ?? null });
 
 // watchlist
 export const getWatchlist = () => invoke<WatchRow[]>("get_watchlist");

@@ -71,35 +71,32 @@ pub async fn add_to_inventory(
     slug: String,
     qty: Option<i64>,
 ) -> AppResult<i64> {
-    let new_qty = inventory::add(&state.db, &slug, qty.unwrap_or(1))?;
-    if let Ok(Some(p)) = state.market.fetch_statistics(&slug).await {
-        let _ = prices::upsert_many(&state.db, &[p], Duration::hours(PRICE_TTL_HOURS));
+    let refresh = inventory::add_item_or_set(&state.db, &slug, qty.unwrap_or(1))?;
+    for s in &refresh {
+        if let Ok(Some(p)) = state.market.fetch_statistics(s).await {
+            let _ = prices::upsert_many(&state.db, &[p], Duration::hours(PRICE_TTL_HOURS));
+        }
     }
-    Ok(new_qty)
+    Ok(refresh.len() as i64)
 }
 
 #[tauri::command]
 pub fn set_qty(state: State<'_, Arc<AppState>>, slug: String, qty: i64) -> AppResult<i64> {
-    inventory::set_qty(&state.db, &slug, qty)
+    inventory::set_qty_aware(&state.db, &slug, qty)
 }
 
 #[tauri::command]
 pub fn remove_item(state: State<'_, Arc<AppState>>, slug: String) -> AppResult<()> {
-    inventory::remove(&state.db, &slug)
+    inventory::remove_aware(&state.db, &slug)
 }
 
 #[tauri::command]
 pub fn get_summary(state: State<'_, Arc<AppState>>) -> AppResult<Summary> {
     let at_target_count = watchlist::at_target_count(&state.db)?;
     let sold_7d = sales::earned_since(&state.db, 7)?;
+    // Set-aware: complete sets are valued at the set price, not the sum of parts.
+    let total_plat = inventory::total_value(&state.db)?;
     state.db.with(|c| {
-        let total_plat: i64 = c.query_row(
-            "SELECT COALESCE(SUM(COALESCE(pc.median_plat, 0) * ii.qty), 0)
-             FROM inventory_items ii LEFT JOIN price_cache pc ON pc.slug = ii.slug
-             WHERE ii.qty > 0",
-            [],
-            |r| r.get(0),
-        )?;
         let total_ducats: i64 = c.query_row(
             "SELECT COALESCE(SUM(COALESCE(ci.ducats, 0) * ii.qty), 0)
              FROM inventory_items ii JOIN catalog_items ci ON ci.slug = ii.slug
@@ -186,11 +183,25 @@ pub fn record_sale(
     plat_per_unit: Option<i64>,
     notes: Option<String>,
 ) -> AppResult<i64> {
+    let qty = qty.unwrap_or(1);
+    let category: Option<String> = state.db.with(|c| {
+        Ok(c.query_row(
+            "SELECT category FROM catalog_items WHERE slug = ?1",
+            rusqlite::params![slug],
+            |r| r.get(0),
+        )
+        .ok())
+    })?;
+    // Selling a set sells one of each member part (a set is owned as its parts).
+    if category.as_deref() == Some("set") {
+        let members = inventory::set_members(&state.db, &slug)?;
+        return sales::record_set(&state.db, &slug, &members, qty, plat_per_unit, notes);
+    }
     sales::record(
         &state.db,
         sales::SaleRecord {
             slug,
-            qty: qty.unwrap_or(1),
+            qty,
             plat_per_unit,
             notes,
         },
@@ -412,6 +423,12 @@ pub async fn prices_refresh(
 pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResult<ItemDetail> {
     let row = catalog::get(&state.db, &slug)?
         .ok_or_else(|| AppError::NotFound(format!("unknown slug: {slug}")))?;
+    // A set isn't stored in inventory directly — you own it by owning its parts.
+    let owned_qty = if row.category == "set" {
+        inventory::complete_set_count(&state.db, &slug)?
+    } else {
+        row.owned_qty
+    };
     let history = prices::history(&state.db, &slug, HISTORY_DRAWER_DAYS)?;
     let on_watchlist = watchlist::is_watched(&state.db, &slug)?;
     let listed: bool = state.db.with(|c| {
@@ -452,7 +469,7 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
         delta_7d: row.delta_7d,
         volume_7d,
         thumbnail_url: row.thumbnail_url,
-        owned_qty: row.owned_qty,
+        owned_qty,
         on_watchlist,
         listed,
         realized_plat,

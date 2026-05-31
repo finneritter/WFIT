@@ -80,6 +80,77 @@ pub fn record(db: &Db, sale: SaleRecord) -> AppResult<i64> {
     })
 }
 
+/// Sell a complete set: verify each member part is owned, decrement one of each
+/// by `qty`, and record a single sale_events row against the set slug (priced at
+/// the set median). Returns `qty` sold.
+pub fn record_set(
+    db: &Db,
+    set_slug: &str,
+    members: &[String],
+    qty: i64,
+    plat_per_unit: Option<i64>,
+    notes: Option<String>,
+) -> AppResult<i64> {
+    if qty <= 0 {
+        return Err(AppError::Invalid("qty must be > 0".into()));
+    }
+    if members.is_empty() {
+        return Err(AppError::Invalid("unknown set composition".into()));
+    }
+    db.with_mut(|conn| {
+        let tx = conn.transaction()?;
+        for m in members {
+            let q: i64 = tx
+                .query_row(
+                    "SELECT qty FROM inventory_items WHERE slug = ?1",
+                    params![m],
+                    |r| r.get(0),
+                )
+                .unwrap_or(0);
+            if q < qty {
+                return Err(AppError::Invalid(format!(
+                    "incomplete set — not enough {m}"
+                )));
+            }
+        }
+        let set_median: Option<i64> = tx
+            .query_row(
+                "SELECT median_plat FROM price_cache WHERE slug = ?1",
+                params![set_slug],
+                |r| r.get(0),
+            )
+            .ok();
+        let plat = plat_per_unit.or(set_median);
+        let now = Utc::now().to_rfc3339();
+        tx.execute(
+            "INSERT INTO sale_events
+                (slug, qty, plat_per_unit, market_median_at_sale_time, sold_at, notes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![set_slug, qty, plat, set_median, now, notes],
+        )?;
+        for m in members {
+            let q: i64 = tx
+                .query_row(
+                    "SELECT qty FROM inventory_items WHERE slug = ?1",
+                    params![m],
+                    |r| r.get(0),
+                )
+                .unwrap_or(0);
+            let nq = q - qty;
+            if nq <= 0 {
+                tx.execute("DELETE FROM inventory_items WHERE slug = ?1", params![m])?;
+            } else {
+                tx.execute(
+                    "UPDATE inventory_items SET qty = ?1, last_modified_at = ?2 WHERE slug = ?3",
+                    params![nq, now, m],
+                )?;
+            }
+        }
+        tx.commit()?;
+        Ok(qty)
+    })
+}
+
 /// Undo a sale recorded today: delete the event and add its qty back to inventory.
 /// Restricted to same-UTC-day rows so the ledger stays trustworthy.
 pub fn undo(db: &Db, id: i64) -> AppResult<()> {

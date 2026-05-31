@@ -42,8 +42,7 @@ function invalidateInventoryDerived(qc: ReturnType<typeof useQueryClient>) {
 export const useInventory = () => useQuery({ queryKey: keys.inventory, queryFn: api.getInventory });
 export const useSummary = () => useQuery({ queryKey: keys.summary, queryFn: api.getSummary });
 export const useSales = () => useQuery({ queryKey: keys.sales, queryFn: () => api.getSales() });
-export const useWatchlist = () =>
-  useQuery({ queryKey: keys.watchlist, queryFn: api.getWatchlist });
+export const useWatchlist = () => useQuery({ queryKey: keys.watchlist, queryFn: api.getWatchlist });
 export const useBuyList = () => useQuery({ queryKey: keys.buyList, queryFn: api.getBuyList });
 export const useBudget = () => useQuery({ queryKey: keys.budget, queryFn: api.getBudget });
 export const useSets = () => useQuery({ queryKey: keys.sets, queryFn: api.getSets });

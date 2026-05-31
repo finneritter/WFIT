@@ -3,6 +3,7 @@ use crate::error::{AppError, AppResult};
 use crate::types::InventoryRow;
 use chrono::Utc;
 use rusqlite::params;
+use std::collections::HashMap;
 
 pub fn add(db: &Db, slug: &str, qty: i64) -> AppResult<i64> {
     if qty <= 0 {
@@ -35,6 +36,114 @@ pub fn add(db: &Db, slug: &str, qty: i64) -> AppResult<i64> {
     })
 }
 
+/// Add an item to inventory — or, if `slug` is a set, add each of its member
+/// parts instead (a set is owned by owning its parts). Returns the slugs whose
+/// price should be refreshed: the item, or the set + all its parts.
+pub fn add_item_or_set(db: &Db, slug: &str, qty: i64) -> AppResult<Vec<String>> {
+    if qty <= 0 {
+        return Err(AppError::Invalid("qty must be > 0".into()));
+    }
+    let category: String = db.with(|c| {
+        c.query_row(
+            "SELECT category FROM catalog_items WHERE slug = ?1",
+            params![slug],
+            |r| r.get(0),
+        )
+        .map_err(|_| AppError::NotFound(format!("unknown slug: {slug}")))
+    })?;
+
+    if category == "set" {
+        let parts: Vec<String> = db.with(|c| {
+            let mut stmt = c.prepare("SELECT slug FROM catalog_items WHERE set_slug = ?1")?;
+            let rows = stmt.query_map(params![slug], |r| r.get::<_, String>(0))?;
+            Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        })?;
+        if parts.is_empty() {
+            // No known composition — fall back to adding the set item itself.
+            add(db, slug, qty)?;
+            return Ok(vec![slug.to_string()]);
+        }
+        for p in &parts {
+            add(db, p, qty)?;
+        }
+        let mut refresh = parts;
+        refresh.push(slug.to_string()); // also refresh the set's own price for valuation
+        Ok(refresh)
+    } else {
+        add(db, slug, qty)?;
+        Ok(vec![slug.to_string()])
+    }
+}
+
+fn is_set(db: &Db, slug: &str) -> AppResult<bool> {
+    db.with(|c| {
+        let cat: Option<String> = c
+            .query_row(
+                "SELECT category FROM catalog_items WHERE slug = ?1",
+                params![slug],
+                |r| r.get(0),
+            )
+            .ok();
+        Ok(cat.as_deref() == Some("set"))
+    })
+}
+
+/// Move owned holdings toward `target` complete sets by applying the delta
+/// uniformly across member parts. Preserves extras beyond a complete set.
+fn adjust_set(db: &Db, set_slug: &str, target: i64) -> AppResult<()> {
+    let members = set_members(db, set_slug)?;
+    if members.is_empty() {
+        return Ok(());
+    }
+    let delta = target - complete_set_count(db, set_slug)?;
+    if delta == 0 {
+        return Ok(());
+    }
+    let now = Utc::now().to_rfc3339();
+    db.with(|c| {
+        for m in &members {
+            let cur: i64 = c
+                .query_row(
+                    "SELECT qty FROM inventory_items WHERE slug = ?1",
+                    params![m],
+                    |r| r.get(0),
+                )
+                .unwrap_or(0);
+            let nq = (cur + delta).max(0);
+            if nq == 0 {
+                c.execute("DELETE FROM inventory_items WHERE slug = ?1", params![m])?;
+            } else {
+                c.execute(
+                    "INSERT INTO inventory_items (slug, qty, first_added_at, last_modified_at, source)
+                     VALUES (?1, ?2, ?3, ?3, 'manual')
+                     ON CONFLICT(slug) DO UPDATE SET qty = ?2, last_modified_at = ?3",
+                    params![m, nq, now],
+                )?;
+            }
+        }
+        Ok(())
+    })
+}
+
+/// set_qty that understands sets (adjusts member parts); otherwise plain set_qty.
+pub fn set_qty_aware(db: &Db, slug: &str, qty: i64) -> AppResult<i64> {
+    if is_set(db, slug)? {
+        adjust_set(db, slug, qty.max(0))?;
+        Ok(qty.max(0))
+    } else {
+        set_qty(db, slug, qty)
+    }
+}
+
+/// remove that understands sets (removes a complete set's worth of parts).
+pub fn remove_aware(db: &Db, slug: &str) -> AppResult<()> {
+    if is_set(db, slug)? {
+        adjust_set(db, slug, 0)
+    } else {
+        remove(db, slug)
+    }
+}
+
 pub fn set_qty(db: &Db, slug: &str, qty: i64) -> AppResult<i64> {
     if qty < 0 {
         return Err(AppError::Invalid("qty must be >= 0".into()));
@@ -64,7 +173,59 @@ pub fn remove(db: &Db, slug: &str) -> AppResult<()> {
     })
 }
 
+/// The owned inventory as displayed/valued: complete sets are collapsed into a
+/// single set entry priced at the set's median; leftover/partial parts and
+/// non-set items pass through. Ranked by value.
 pub fn list_ranked(db: &Db) -> AppResult<Vec<InventoryRow>> {
+    let mut out = owned_holdings(db)?;
+    out.sort_by(|a, b| {
+        let av = a.median_plat.unwrap_or(0) * a.qty;
+        let bv = b.median_plat.unwrap_or(0) * b.qty;
+        bv.cmp(&av).then_with(|| a.display_name.cmp(&b.display_name))
+    });
+    Ok(out)
+}
+
+/// Set-aware total plat value of the inventory (complete sets at set price).
+pub fn total_value(db: &Db) -> AppResult<i64> {
+    Ok(owned_holdings(db)?
+        .iter()
+        .map(|r| r.median_plat.unwrap_or(0) * r.qty)
+        .sum())
+}
+
+/// Number of complete sets currently owned (all member parts present).
+pub fn complete_set_count(db: &Db, set_slug: &str) -> AppResult<i64> {
+    let members = set_members(db, set_slug)?;
+    if members.is_empty() {
+        return Ok(0);
+    }
+    db.with(|c| {
+        let mut min_qty = i64::MAX;
+        for m in &members {
+            let q: i64 = c
+                .query_row(
+                    "SELECT qty FROM inventory_items WHERE slug = ?1",
+                    params![m],
+                    |r| r.get(0),
+                )
+                .unwrap_or(0);
+            min_qty = min_qty.min(q);
+        }
+        Ok(min_qty.max(0))
+    })
+}
+
+pub fn set_members(db: &Db, set_slug: &str) -> AppResult<Vec<String>> {
+    db.with(|c| {
+        let mut stmt = c.prepare("SELECT slug FROM catalog_items WHERE set_slug = ?1")?;
+        let rows = stmt.query_map(params![set_slug], |r| r.get::<_, String>(0))?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    })
+}
+
+/// Raw owned rows joined with catalog + price (no set collapsing).
+fn fetch_owned(db: &Db) -> AppResult<Vec<InventoryRow>> {
     db.with(|c| {
         let mut stmt = c.prepare(
             "SELECT
@@ -75,8 +236,7 @@ pub fn list_ranked(db: &Db) -> AppResult<Vec<InventoryRow>> {
              FROM inventory_items ii
              JOIN catalog_items ci ON ci.slug = ii.slug
              LEFT JOIN price_cache pc ON pc.slug = ii.slug
-             WHERE ii.qty > 0
-             ORDER BY COALESCE(pc.median_plat, 0) * ii.qty DESC, ci.display_name ASC",
+             WHERE ii.qty > 0",
         )?;
         let rows = stmt.query_map([], |r| {
             Ok(InventoryRow {
@@ -96,12 +256,94 @@ pub fn list_ranked(db: &Db) -> AppResult<Vec<InventoryRow>> {
                 last_modified_at: r.get(13)?,
             })
         })?;
-        let mut out = Vec::new();
-        for row in rows {
-            out.push(row?);
-        }
-        Ok(out)
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })
+}
+
+/// set_slug → its catalog/price row, used as the collapsed-set template.
+fn set_templates(db: &Db) -> AppResult<HashMap<String, InventoryRow>> {
+    db.with(|c| {
+        let mut stmt = c.prepare(
+            "SELECT ci.slug, ci.display_name, ci.part_type, ci.ducats, ci.is_vaulted,
+                    pc.median_plat, pc.trend, pc.delta_7d, pc.volume_7d, ci.thumbnail_url
+             FROM catalog_items ci
+             LEFT JOIN price_cache pc ON pc.slug = ci.slug
+             WHERE ci.category = 'set'",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(InventoryRow {
+                slug: r.get(0)?,
+                display_name: r.get(1)?,
+                part_type: r.get(2)?,
+                category: "set".into(),
+                set_slug: None,
+                qty: 0,
+                ducats: r.get(3)?,
+                is_vaulted: r.get::<_, i64>(4)? != 0,
+                median_plat: r.get(5)?,
+                trend: r.get(6)?,
+                delta_7d: r.get(7)?,
+                volume_7d: r.get(8)?,
+                thumbnail_url: r.get(9)?,
+                last_modified_at: String::new(),
+            })
+        })?;
+        let mut m = HashMap::new();
+        for r in rows {
+            let row = r?;
+            m.insert(row.slug.clone(), row);
+        }
+        Ok(m)
+    })
+}
+
+fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
+    let owned = fetch_owned(db)?;
+    let templates = set_templates(db)?;
+
+    // member part slugs per set, plus the qty each owned part contributes.
+    let owned_qty: HashMap<&str, i64> = owned.iter().map(|r| (r.slug.as_str(), r.qty)).collect();
+    let mut members: HashMap<String, Vec<String>> = HashMap::new();
+    for r in &owned {
+        if let Some(set) = &r.set_slug {
+            members.entry(set.clone()).or_default().push(r.slug.clone());
+        }
+    }
+    // A set is complete only if EVERY catalog member is owned, so pull the full
+    // membership (not just owned parts) to detect missing ones.
+    let mut consumed: HashMap<String, i64> = HashMap::new();
+    let mut out: Vec<InventoryRow> = Vec::new();
+    for set_slug in members.keys() {
+        let Some(tmpl) = templates.get(set_slug) else { continue };
+        if tmpl.median_plat.is_none() {
+            continue; // no set price → don't collapse, value parts individually
+        }
+        let all_members = set_members(db, set_slug)?;
+        let complete = all_members
+            .iter()
+            .map(|m| *owned_qty.get(m.as_str()).unwrap_or(&0))
+            .min()
+            .unwrap_or(0);
+        if complete > 0 {
+            let mut row = tmpl.clone();
+            row.qty = complete;
+            out.push(row);
+            for m in &all_members {
+                *consumed.entry(m.clone()).or_insert(0) += complete;
+            }
+        }
+    }
+
+    for r in &owned {
+        let used = *consumed.get(&r.slug).unwrap_or(&0);
+        let left = r.qty - used;
+        if left > 0 {
+            let mut row = r.clone();
+            row.qty = left;
+            out.push(row);
+        }
+    }
+    Ok(out)
 }
 
 /// Owned slugs with qty > 0 — the priority set for price refresh.

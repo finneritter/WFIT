@@ -90,7 +90,13 @@ pub fn id_slug_map(db: &Db) -> AppResult<HashMap<String, String>> {
 const CATALOG_SELECT: &str = "SELECT
         ci.slug, ci.display_name, ci.part_type, ci.category, ci.set_slug,
         ci.ducats, ci.is_vaulted, pc.median_plat, pc.trend, pc.delta_7d,
-        ci.thumbnail_url, COALESCE(ii.qty, 0) AS owned_qty
+        ci.thumbnail_url,
+        CASE WHEN ci.category = 'set' THEN (
+            SELECT COALESCE(MIN(COALESCE(mi.qty, 0)), 0)
+            FROM catalog_items m
+            LEFT JOIN inventory_items mi ON mi.slug = m.slug
+            WHERE m.set_slug = ci.slug
+        ) ELSE COALESCE(ii.qty, 0) END AS owned_qty
      FROM catalog_items ci
      LEFT JOIN price_cache pc ON pc.slug = ci.slug
      LEFT JOIN inventory_items ii ON ii.slug = ci.slug";
