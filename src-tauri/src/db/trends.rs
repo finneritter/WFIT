@@ -30,6 +30,7 @@ struct Item {
 }
 
 struct Metrics {
+    current: i64,   // latest median (cleaned, when outliers excluded)
     delta: f64,     // % move over the timeframe
     z: f64,         // volatility-normalized move
     range_pos: f64, // 0..1 within lookback low..high
@@ -144,7 +145,9 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
         display_name: it.display_name.clone(),
         part_type: it.part_type.clone(),
         category: it.category.clone(),
-        median_plat: it.median_plat,
+        // cleaned current (winsorized when outliers are excluded) so a spiked
+        // print never shows as the price in any panel
+        median_plat: m.current,
         delta: m.delta,
         z: m.z,
         range_pos: m.range_pos,
@@ -284,10 +287,13 @@ fn winsorize(series: &mut [i64]) {
     let center = median(&mut sorted);
     let mut devs: Vec<f64> = series.iter().map(|&v| (v as f64 - center).abs()).collect();
     let mad = median(&mut devs);
-    if mad <= 0.0 {
-        return; // flat/degenerate series — nothing meaningful to clamp
+    // Fall back to a fraction of the center when MAD ≈ 0 — a mostly-flat series
+    // with a single spike (a common 1p mod with a 50k-plat troll print) has
+    // MAD 0, so a pure-MAD band would skip clamping and let the spike through.
+    let spread = (1.4826 * mad).max(center.abs() * 0.5);
+    if spread <= 0.0 {
+        return; // genuinely flat (or 0-priced) — nothing to clamp
     }
-    let spread = 1.4826 * mad; // MAD → σ-equivalent
     let (lo, hi) = (center - 6.0 * spread, center + 6.0 * spread);
     for v in series.iter_mut() {
         let f = *v as f64;
@@ -357,6 +363,7 @@ fn metrics_of(it: &Item, days: i64) -> Option<Metrics> {
     };
 
     Some(Metrics {
+        current: current.round() as i64,
         delta,
         z,
         range_pos,
