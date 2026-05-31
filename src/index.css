@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* WFIT design tokens + lifted wireframe styles. Loaded after Tailwind so the
+   square/dense/mono aesthetic always wins over utility defaults. */
+@import "./theme.css";
+
+/* Globals the wireframe assumes (square, dense, mono numbers, no radius). */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  #root {
+    isolation: isolate;
+  }
+}
