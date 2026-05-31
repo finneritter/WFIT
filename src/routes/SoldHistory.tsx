@@ -64,7 +64,7 @@ export function SoldHistory({ onOpen }: { onOpen: (slug: string) => void }) {
                   <td className="when">{relativeDay(r.sold_at)}</td>
                   <td>
                     <div className="dnm">
-                      <Glyph name={r.display_name} plat={r.plat_per_unit} />
+                      <Glyph name={r.display_name} plat={r.plat_per_unit} thumb={r.thumbnail_url} />
                       <div className="di">
                         <span className="nm">{r.display_name}</span>
                         <span className="sub">{r.category}</span>

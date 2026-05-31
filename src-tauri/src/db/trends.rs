@@ -25,6 +25,7 @@ struct Item {
     median_plat: i64,
     owned_qty: i64,
     on_watchlist: bool,
+    thumbnail_url: Option<String>,
     medians: Vec<i64>, // daily median series, oldest-first
     volumes: Vec<i64>, // daily volume series, oldest-first (parallel to medians)
 }
@@ -54,7 +55,7 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
         };
         let mut stmt = c.prepare(
             "SELECT pc.slug, ci.display_name, ci.part_type, ci.category,
-                    pc.median_plat, COALESCE(ii.qty, 0)
+                    pc.median_plat, COALESCE(ii.qty, 0), ci.thumbnail_url
              FROM price_cache pc
              JOIN catalog_items ci ON ci.slug = pc.slug
              LEFT JOIN inventory_items ii ON ii.slug = pc.slug",
@@ -69,6 +70,7 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
                 category: r.get(3)?,
                 median_plat: r.get(4)?,
                 owned_qty: r.get(5)?,
+                thumbnail_url: r.get(6)?,
                 medians: Vec::new(),
                 volumes: Vec::new(),
             })
@@ -157,6 +159,7 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
         owned_qty: it.owned_qty,
         on_watchlist: it.on_watchlist,
         spark: spark_of(it),
+        thumbnail_url: it.thumbnail_url.clone(),
     };
 
     // Sell signals: liquid items you OWN that are elevated — high in their range

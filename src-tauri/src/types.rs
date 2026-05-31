@@ -55,6 +55,7 @@ pub struct SaleRow {
     pub market_median_at_sale_time: Option<i64>,
     pub sold_at: String,
     pub notes: Option<String>,
+    pub thumbnail_url: Option<String>,
 }
 
 /// Inventory stat band + sidebar quick-read figures.
@@ -137,6 +138,7 @@ pub struct DucatRow {
     pub ducats: i64,
     pub ducats_per_plat: Option<f64>,
     pub verdict: String, // 'ducat' | 'plat'
+    pub thumbnail_url: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +163,7 @@ pub struct TrendRow {
     pub owned_qty: i64,
     pub on_watchlist: bool,
     pub spark: Vec<i64>,  // recent median series for the mini sparkline
+    pub thumbnail_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -263,6 +266,7 @@ pub struct ListingRow {
     pub visible: bool,
     pub market_low: Option<i64>, // current market median for context
     pub updated_at: Option<String>,
+    pub thumbnail_url: Option<String>,
 }
 
 /// A reviewable import row (preview), before the user confirms it into inventory.

@@ -330,7 +330,8 @@ pub fn get_sets(state: State<'_, Arc<AppState>>) -> AppResult<Vec<SetRow>> {
 pub fn get_ducats(state: State<'_, Arc<AppState>>) -> AppResult<Vec<DucatRow>> {
     let mut rows: Vec<DucatRow> = state.db.with(|c| {
         let mut stmt = c.prepare(
-            "SELECT ci.slug, ci.display_name, ci.part_type, ii.qty, pc.median_plat, ci.ducats
+            "SELECT ci.slug, ci.display_name, ci.part_type, ii.qty, pc.median_plat, ci.ducats,
+                    ci.thumbnail_url
              FROM inventory_items ii
              JOIN catalog_items ci ON ci.slug = ii.slug
              LEFT JOIN price_cache pc ON pc.slug = ii.slug
@@ -343,6 +344,7 @@ pub fn get_ducats(state: State<'_, Arc<AppState>>) -> AppResult<Vec<DucatRow>> {
             let qty: i64 = r.get(3)?;
             let median_plat: Option<i64> = r.get(4)?;
             let ducats: i64 = r.get(5)?;
+            let thumbnail_url: Option<String> = r.get(6)?;
             let ducats_per_plat = median_plat
                 .filter(|&m| m > 0)
                 .map(|m| ducats as f64 / m as f64);
@@ -358,6 +360,7 @@ pub fn get_ducats(state: State<'_, Arc<AppState>>) -> AppResult<Vec<DucatRow>> {
                 ducats,
                 ducats_per_plat,
                 verdict: verdict.to_string(),
+                thumbnail_url,
             })
         })?;
         let mut out = Vec::new();

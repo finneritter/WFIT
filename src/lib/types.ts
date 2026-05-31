@@ -48,6 +48,7 @@ export interface SaleRow {
   market_median_at_sale_time: number | null;
   sold_at: string;
   notes: string | null;
+  thumbnail_url: string | null;
 }
 
 export interface Summary {
@@ -115,6 +116,7 @@ export interface DucatRow {
   ducats: number;
   ducats_per_plat: number | null;
   verdict: "ducat" | "plat";
+  thumbnail_url: string | null;
 }
 
 export interface TrendRow {
@@ -132,6 +134,7 @@ export interface TrendRow {
   owned_qty: number;
   on_watchlist: boolean;
   spark: number[];
+  thumbnail_url: string | null;
 }
 
 export interface HeatRow {
@@ -213,6 +216,7 @@ export interface ListingRow {
   visible: boolean;
   market_low: number | null;
   updated_at: string | null;
+  thumbnail_url: string | null;
 }
 
 export interface ImportRow {

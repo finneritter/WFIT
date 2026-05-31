@@ -10,10 +10,18 @@ const CATS = ["warframe", "weapon", "set", "mod", "arcane"] as const;
 function Tile({ row, onOpen }: { row: InventoryRow; onOpen: (slug: string) => void }) {
   const plat = row.median_plat;
   return (
-    <button type="button" className={clsx("tile", `t-${tier(plat)}`)} onClick={() => onOpen(row.slug)}>
+    <button
+      type="button"
+      className={clsx("tile", `t-${tier(plat)}`)}
+      onClick={() => onOpen(row.slug)}
+    >
       {row.trend === "up" ? <span className="ct-tl">▲</span> : null}
       <span className="qty num">×{row.qty}</span>
-      <span className="glyph">{glyph(row.display_name)}</span>
+      {row.thumbnail_url ? (
+        <img className="glyph-img" src={row.thumbnail_url} alt="" loading="lazy" />
+      ) : (
+        <span className="glyph">{glyph(row.display_name)}</span>
+      )}
       <div className="vbar">
         <span className="pl num">{plat == null ? "—" : `${fmt(plat)}p`}</span>
       </div>
@@ -97,7 +105,10 @@ export function Inventory({
   }, [filtered]);
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: inv.length, hot: inv.filter((r) => r.trend === "up").length };
+    const c: Record<string, number> = {
+      all: inv.length,
+      hot: inv.filter((r) => r.trend === "up").length,
+    };
     for (const cat of CATS) c[cat] = inv.filter((r) => r.category === cat).length;
     return c;
   }, [inv]);

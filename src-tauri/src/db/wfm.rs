@@ -128,7 +128,8 @@ pub fn list_listings(db: &Db) -> AppResult<Vec<ListingRow>> {
     db.with(|c| {
         let mut stmt = c.prepare(
             "SELECT ml.order_id, ml.slug, ci.display_name, ci.part_type, ml.order_type,
-                    ml.your_price, ml.qty, ml.visible, pc.median_plat, ml.updated_at
+                    ml.your_price, ml.qty, ml.visible, pc.median_plat, ml.updated_at,
+                    ci.thumbnail_url
              FROM market_listings ml
              JOIN catalog_items ci ON ci.slug = ml.slug
              LEFT JOIN price_cache pc ON pc.slug = ml.slug
@@ -147,6 +148,7 @@ pub fn list_listings(db: &Db) -> AppResult<Vec<ListingRow>> {
                 visible: r.get::<_, i64>(7)? != 0,
                 market_low: r.get(8)?,
                 updated_at: r.get(9)?,
+                thumbnail_url: r.get(10)?,
             })
         })?;
         let mut out = Vec::new();

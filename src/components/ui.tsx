@@ -1,9 +1,22 @@
 // Small shared presentational primitives used across screens.
 import { clsx, glyph, tier } from "../lib/format";
 
-/** The tier-edged 2-letter monogram chip (used in tables + mover rows). */
-export function Glyph({ name, plat }: { name: string; plat: number | null | undefined }) {
-  return <span className={clsx("gl", `t-${tier(plat)}`)}>{glyph(name)}</span>;
+/** The tier-edged item chip: the real warframe.market icon when available,
+ *  falling back to a 2-letter monogram. */
+export function Glyph({
+  name,
+  plat,
+  thumb,
+}: {
+  name: string;
+  plat: number | null | undefined;
+  thumb?: string | null;
+}) {
+  return (
+    <span className={clsx("gl", `t-${tier(plat)}`, thumb && "gl-img")}>
+      {thumb ? <img src={thumb} alt="" loading="lazy" /> : glyph(name)}
+    </span>
+  );
 }
 
 export function StatBox({

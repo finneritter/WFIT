@@ -101,6 +101,9 @@ const Row = memo(function Row({
   return (
     <div className={clsx("crow", active && "on", leaf && "leaf")} onClick={toggle}>
       <span className="cb">{active ? "✓" : ""}</span>
+      {row.thumbnail_url ? (
+        <img className="crow-ic" src={row.thumbnail_url} alt="" loading="lazy" />
+      ) : null}
       <span className="cn">{leaf ? (label ?? row.part_type) : row.display_name}</span>
       {showStepper ? (
         <Stepper slug={row.slug} qty={qty} />

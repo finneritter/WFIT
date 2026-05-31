@@ -55,7 +55,7 @@ export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
                 <tr key={r.slug} onClick={() => onOpen(r.slug)}>
                   <td>
                     <div className="dnm">
-                      <Glyph name={r.display_name} plat={r.median_plat} />
+                      <Glyph name={r.display_name} plat={r.median_plat} thumb={r.thumbnail_url} />
                       <div className="di">
                         <span className="nm">{r.display_name}</span>
                         <span className="sub">

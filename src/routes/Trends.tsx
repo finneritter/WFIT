@@ -34,7 +34,7 @@ function SignalRow({
 }) {
   return (
     <button type="button" className="sigrow" onClick={() => onOpen(row.slug)}>
-      <Glyph name={row.display_name} plat={row.median_plat} />
+      <Glyph name={row.display_name} plat={row.median_plat} thumb={row.thumbnail_url} />
       <span className="si">
         <span className="sn">
           {row.display_name}

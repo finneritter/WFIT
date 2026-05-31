@@ -5,6 +5,7 @@ import {
   useItemDetail,
   useItemOrders,
   useRecordSale,
+  useRemoveItem,
 } from "../hooks/queries";
 import { clsx, fmt, pct, tier } from "../lib/format";
 import type { HistoryPoint } from "../lib/types";
@@ -35,6 +36,7 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
   const sell = useRecordSale();
   const watch = useAddWatch();
   const buy = useAddToBuyList();
+  const remove = useRemoveItem();
 
   // Resizable width — drag the grip on the drawer's left edge; remembered.
   const [width, setWidth] = useState<number>(() => {
@@ -127,7 +129,9 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
       {grip}
       <div className="drawer" style={{ width }} onClick={(e) => e.stopPropagation()}>
         <div className="drawer-h">
-          <div className={clsx("ph", `t-${tier(price)}`)} />
+          <div className={clsx("ph", `t-${tier(price)}`)}>
+            {item.thumbnail_url ? <img src={item.thumbnail_url} alt="" /> : null}
+          </div>
           <div className="di">
             <div className="nm">{item.display_name}</div>
             <div className="sub">
@@ -255,8 +259,16 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
               >
                 Sell 1 · {fmt(price)}p
               </button>
-              <button type="button" className="btn" disabled title="Order management is v1-deferred">
-                {item.listed ? "Listed" : "List on market"}
+              <button
+                type="button"
+                className="btn warn"
+                title="Remove this item from your inventory"
+                onClick={() => {
+                  remove.mutate(item.slug);
+                  onClose();
+                }}
+              >
+                Remove
               </button>
             </>
           ) : (

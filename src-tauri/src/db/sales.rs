@@ -193,7 +193,7 @@ pub fn list_recent(db: &Db, limit: i64) -> AppResult<Vec<SaleRow>> {
     db.with(|c| {
         let mut stmt = c.prepare(
             "SELECT se.id, se.slug, ci.display_name, ci.category, se.qty, se.plat_per_unit,
-                    se.market_median_at_sale_time, se.sold_at, se.notes
+                    se.market_median_at_sale_time, se.sold_at, se.notes, ci.thumbnail_url
              FROM sale_events se
              JOIN catalog_items ci ON ci.slug = se.slug
              ORDER BY se.sold_at DESC
@@ -210,6 +210,7 @@ pub fn list_recent(db: &Db, limit: i64) -> AppResult<Vec<SaleRow>> {
                 market_median_at_sale_time: r.get(6)?,
                 sold_at: r.get(7)?,
                 notes: r.get(8)?,
+                thumbnail_url: r.get(9)?,
             })
         })?;
         let mut out = Vec::new();

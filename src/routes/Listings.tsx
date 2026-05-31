@@ -218,7 +218,7 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
                   <tr key={l.order_id} onClick={() => onOpen(l.slug)}>
                     <td>
                       <div className="dnm">
-                        <Glyph name={l.display_name} plat={l.your_price} />
+                        <Glyph name={l.display_name} plat={l.your_price} thumb={l.thumbnail_url} />
                         <div className="di">
                           <span className="nm">{l.display_name}</span>
                           <span className="sub">{l.part_type}</span>
