@@ -51,12 +51,12 @@ export const relativeDay = (iso: string): string => {
 export const syncedAgo = (iso: string | null): string => {
   if (!iso) return "never";
   const secs = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (secs < 60) return "just now";
+  if (secs < 60) return "now";
   const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) return `${mins}m`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
 };
 
 export const CATEGORY_LABELS: Record<string, string> = {

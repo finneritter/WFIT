@@ -74,8 +74,8 @@ body.flat-deltas .pos, body.flat-deltas .neg { color: var(--soft) !important; }
 /* market-sync status strip (replaces account/profile) */
 .syncbar { display: flex; align-items: center; gap: 7px; height: 42px; padding: 0 12px; border-bottom: 1px solid var(--line); font-size: 10.5px; color: var(--soft); }
 .syncbar .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--pos); flex: none; }
-.syncbar .src { font-weight: 600; color: var(--ink); }
-.syncbar .ago { margin-left: auto; color: var(--faint); font-family: var(--mono); }
+.syncbar .src { font-weight: 600; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.syncbar .ago { margin-left: auto; padding-left: 8px; color: var(--faint); font-family: var(--mono); white-space: nowrap; flex: none; }
 
 .nav-cta { margin: 8px 10px; padding: 6px; cursor: pointer; font-family: var(--sans); font-size: 11.5px; font-weight: 600; background: var(--panel-2); color: var(--ink); border: 1px solid var(--line-2); text-align: center; }
 .nav-cta:hover { background: var(--hover); border-color: var(--soft); }
