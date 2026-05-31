@@ -135,11 +135,12 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
             }
         }
     }
-    // The index is the priced basket's 90-day trajectory; its change is the
-    // start→end move of that curve — a price-level average, robust by
-    // construction (not a mean of per-item % moves) and consistent with the
-    // graph the user sees.
-    let index_spark = build_index_spark(&items, 90);
+    // The index is the priced basket's trajectory over the SELECTED timeframe;
+    // its change is the start→end move of that curve — a price-level average,
+    // robust by construction (not a mean of per-item % moves) and consistent
+    // with the graph the user sees. Spanning the timeframe makes it respond to
+    // the timeframe chips (24h/7d/30d/90d) instead of being a fixed 90d figure.
+    let index_spark = build_index_spark(&items, (days + 1).max(2) as usize);
     let index_change = spark_change(&index_spark);
 
     let make_row = |it: &Item, m: &Metrics| TrendRow {
@@ -376,35 +377,33 @@ fn metrics_of(it: &Item, days: i64) -> Option<Metrics> {
     })
 }
 
-/// Weighted-average median across items per recent day, normalized to 1000.
+/// Total value of a CONSISTENT basket per day, normalized to 1000.
+///
+/// Only items with at least `points` days of history are included, and the same
+/// items contribute to every slot — so the curve reflects real price movement,
+/// not a changing roster. Summing medians makes it value-weighted (high-value
+/// items move it more, penny items barely register). The series is winsorized
+/// upstream, so a single troll print can't distort it. The start→end change of
+/// this curve is the headline index move.
 fn build_index_spark(items: &[Item], points: usize) -> Vec<f64> {
-    let points = points.clamp(7, 90);
+    // Can't span more history than the longest series actually has.
+    let max_len = items.iter().map(|it| it.medians.len()).max().unwrap_or(0);
+    let points = points.min(max_len).max(2);
     let mut sums = vec![0.0f64; points];
-    let mut counts = vec![0u32; points];
+    let mut count = 0u32;
     for it in items {
         let n = it.medians.len();
-        if n == 0 {
-            continue;
+        if n < points {
+            continue; // consistent membership: full-window history only
         }
         for (p, sum) in sums.iter_mut().enumerate() {
-            if points - p > n {
-                continue;
-            }
-            let idx = n - (points - p);
-            if let Some(v) = it.medians.get(idx) {
-                *sum += *v as f64;
-                counts[p] += 1;
-            }
+            *sum += it.medians[n - points + p] as f64;
         }
+        count += 1;
     }
-    let avgs: Vec<f64> = sums
-        .iter()
-        .zip(counts.iter())
-        .map(|(s, c)| if *c > 0 { s / *c as f64 } else { 0.0 })
-        .collect();
-    let base = avgs.iter().find(|v| **v > 0.0).copied().unwrap_or(0.0);
-    if base <= 0.0 {
+    if count == 0 || sums[0] <= 0.0 {
         return vec![1000.0; points];
     }
-    avgs.into_iter().map(|v| 1000.0 * v / base).collect()
+    let base = sums[0];
+    sums.into_iter().map(|v| 1000.0 * v / base).collect()
 }

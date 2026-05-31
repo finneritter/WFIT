@@ -121,7 +121,7 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
         <div className="mh-top">
           <div className="mh-head">
             <span className="mh-label">Prime Market</span>
-            <span className="mh-span">90-day index</span>
+            <span className="mh-span">{tf} index · liquid basket</span>
           </div>
           <div className="mh-figure">
             <span className={clsx("mh-chg num", data.index_change >= 0 ? "pos" : "neg")}>
