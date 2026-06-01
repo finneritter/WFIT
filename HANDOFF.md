@@ -5,14 +5,15 @@ owned Warframe tradeables, warframe.market prices, sets, ducats, your sell order
 world-state. Read with `CLAUDE.md` (hard constraints). This handoff supersedes the earlier ones; the
 2026-05-31 "polish + features" session is condensed at the bottom.
 
-## ⚠️ Status: everything below this session is UNCOMMITTED
+## Status: all merged to `main` (committed + pushed)
 
-The 2026-05-31 work is committed/pushed to **github.com/finneritter/WFIT** (`main`). **All of this
-session's work — game inventory import (migrations 0003–0005), rank-aware + reliable pricing, the
-frontend changes, and the doc updates — is sitting in the working tree, not committed.** First
-decision next session: review `git status`/`git diff` and commit (suggest a feature branch off `main`).
+This session's work — game inventory import, rank-aware mods/arcanes, robust order-book pricing, and
+liquidation-adjusted ("realizable") valuation (Phases 1–3) — was built on the `game-inventory-import`
+branch and **merged to `main`** (`github.com/finneritter/WFIT`). The installed desktop app is on this
+code. The `game-inventory-import` branch still exists (not deleted). The user noted some **future UI
+tweaks** (not yet specified/built).
 
-All gates pass: `cargo check`/`clippy` clean · `cargo test` **12 pass** · `tsc` · `npm run build` ·
+All gates pass: `cargo check`/`clippy` clean · `cargo test` **19 pass** · `tsc` · `npm run build` ·
 `biome` (pre-existing a11y warnings on interactive divs are tolerated).
 
 ---
@@ -26,7 +27,7 @@ scripts/install.sh                  # build optimized release + install as a lau
 ```
 - **Linux prereq:** `webkit2gtk-4.1`. Launch needs `WEBKIT_DISABLE_DMABUF_RENDERER=1
   WEBKIT_DISABLE_COMPOSITING_MODE=1` (baked into the `tauri:dev` script + installed `.desktop`).
-- Live DB: `~/.local/share/dev.finn.wfit/wfit.sqlite`. Migrations `0001`–`0005` applied on launch.
+- Live DB: `~/.local/share/dev.finn.wfit/wfit.sqlite`. Migrations `0001`–`0006` applied on launch.
 
 ---
 
@@ -77,23 +78,46 @@ The recurring "price is wrong / 50000p" had **two** causes — both fixed:
   Fetched for all owned items by `refresh_owned_orders` (background on launch; forced by Refresh prices).
 - **Refresh (the structural fix):** fixes never reached already-cached values because refresh is
   TTL-gated. Now there's a **`PRICING_VERSION` const + `KEY_PRICING_VERSION` meta** — on launch a
-  mismatch wipes `price_cache`/`price_rank`/`order_cache` and recomputes. **➜ Bump `PRICING_VERSION`
-  (in `lib.rs`) whenever you change how prices are derived** so it auto-reprices on next launch instead
-  of stale values surviving. Currently `"2"`.
+  mismatch wipes the derived price caches (`price_cache`/`price_rank`/`order_cache`/`buy_orders`) and
+  recomputes. **➜ Bump `PRICING_VERSION` (in `lib.rs`) whenever you change how prices/valuation are
+  derived** so it auto-reprices on next launch instead of stale values surviving. Currently `"3"`.
 - Chart fix (`charts.tsx CandleChart`): robust 4th–96th-percentile y-domain so one spike candle no
   longer flattens the graph.
-- Validated live: disruptor (had a 50000p wash print) → **~1p** from the live book; liquid items
-  unchanged. Valuation basis = lowest ask; no illiquidity discount (v1 decision).
+- Validated live: disruptor (had a 50000p wash print) → **~1p** from the live book; liquid items unchanged.
+
+### 4. Realizable (liquidation-adjusted) inventory value — Phases 1–3
+
+Driven by `CLAUDE_ECONOMIC_RESEARCH/` (the user's economics docs) + `.claude/plans/pricing-rework.md`.
+A market price is a *marginal* price, so `× qty` overvalues hoards (500 copies of a 3p mod that trades
+weekly is not worth 1,500p). Each holding is now valued by what it could actually realize.
+
+- **`inventory.rs::realizable_value`** liquidates a stack into the live **buy orders** best-bid-first
+  (`buy_orders` table, migration `0006`; fetched via `market.rs::fetch_order_book` → `store_order_book`),
+  then a volume-capped, discounted tail (`TAIL_FACTOR=0.35`, `WINDOW_DAYS=30`, `K=1`); units beyond
+  real demand ≈ 0. So commons with **zero online bids** collapse to ~nothing (metal_fiber 428 copies
+  1,284p → 40p). `Summary.realizable_plat` is the headline; `total_plat` is the "ceiling."
+- **Presentation (Phase 3):** inventory headline = hard-rounded estimate + range (`~6k · up to 29k at
+  market`, `fmtK`); a **"What's driving your value"** composition panel (top holdings by realizable);
+  per-item **confidence** (high/medium/low from volume + bids, riven→low) as a tile dot + drawer
+  "Confidence · basis"; drawer "Realizable · if sold gradually" with days-to-sell.
+- **New DTO fields** on `InventoryRow`/`ItemDetail`: `realizable_plat`, `daily_volume`, `liquidity`
+  (φ), `days_to_sell`, `confidence`; `Summary.realizable_plat`.
+- **Tuning knobs** if the total feels off: `TAIL_FACTOR` / `WINDOW_DAYS` in `inventory.rs`.
+- Validated on live inventory: market 28,757p → realizable ~6k (commons near-zero, demanded items keep
+  their bid value).
 
 ---
 
 ## Architecture pointers
 
 - **Migrations:** `0001_init` · `0002_ohlc` · `0003_game_import` (game_ref, last_scan_qty,
-  game_scan_state) · `0004_ranks` (max_rank, inventory_ranks, price_rank) · `0005_orders` (order_cache).
-- **Pricing path:** `market.rs` (`fetch_statistics` → robust per-rank medians; `fetch_sell_prices` →
-  robust live asks) → `db/prices.rs` (`upsert_many`, `store_sell_prices`, `effective_price`,
-  `rank_price`) → `db/inventory.rs` valuation (`value_plat`, blended per-unit display) → drawer.
+  game_scan_state) · `0004_ranks` (max_rank, inventory_ranks, price_rank) · `0005_orders` (order_cache)
+  · `0006_buy_orders` (the bid ladder).
+- **Pricing path:** `market.rs` (`fetch_statistics` → robust per-rank medians; `fetch_order_book` →
+  robust asks + the online bid ladder) → `db/prices.rs` (`upsert_many`, `store_order_book`,
+  `bid_ladder`, `effective_price`, `rank_price`) → `db/inventory.rs` (`row_value` market value;
+  `realizable_value`/`realizable_default` liquidation value; `confidence_of`; `total_realizable`) →
+  `Summary`/`InventoryRow`/`ItemDetail` → grid/drawer.
 - **Modules** (`src-tauri/src/`): `market.rs`, `worldstate.rs`, `wfm_account.rs`, `gamescan/`,
   `domain/`, `db/` (per-table), `commands.rs`, `lib.rs` (`AppState` + `launch_refresh`).
 
@@ -110,15 +134,17 @@ The recurring "price is wrong / 50000p" had **two** causes — both fixed:
   `pkill -x wfit` / `pkill -x node` (broad `pkill -f` self-kills the agent's shell).
 
 ## Known gaps / next steps
-- **Commit this session's work** (uncommitted — see top).
+- **Future UI tweaks** the user mentioned (unspecified) — capture + build when they're ready.
 - Pass B set composition (`sets_refresh` → `set_membership`) available but Sets/valuation still use the
   `set_slug` heuristic (`quantity_in_set` assumed 1).
 - Game scan: no auto-sync (manual "Scan now" only); macOS unsupported (SIP). Re-scan+apply to refresh
   the per-rank breakdown of already-imported mods (the diff flags breakdown-only changes).
 - Listings write actions (price edit / list-on-market) still v1-deferred (read-only).
 - macOS build not done (needs a Mac). Search covers the tradable catalog only.
-- Optional pricing follow-ups: store highest bid + show full spread/liquidity/source in the drawer;
-  illiquidity discount / midpoint marks.
+- Realizable valuation is a snapshot (doesn't model self-impact over time); per-rank tail uses headline
+  volume (per-rank volume isn't stored). Tune `TAIL_FACTOR`/`WINDOW_DAYS` if the headline feels off.
+- Confidence tiers are computed/displayed but **not** yet used to quarantine Level-3 items out of the
+  headline total (a Phase-3 doc idea left for later).
 
 ---
 

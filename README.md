@@ -19,6 +19,16 @@ Inventory (tile grid) · Sets (completion tracker) · Trends · Watchlist · Buy
 Listings (your warframe.market orders, read-only) · Ducats (conversion efficiency) ·
 Rotation (live world-state) · Sold History · Settings.
 
+### Honest ("realizable") inventory value
+
+A market price is a *marginal* price, so `price × quantity` wildly overvalues common hoards — 500
+copies of a mod that trades once a week is not worth 500 × its sticker price. WFIT instead values each
+holding by **liquidating it into the live buy orders** (the actual demand), then a small volume-capped
+tail; items nobody is bidding on collapse to near-zero. The Inventory headline shows this **realizable**
+estimate (with the optimistic `× qty` "ceiling" alongside), a *"what's driving your value"* breakdown,
+and per-item confidence + days-to-sell. Mods/arcanes are priced per rank. The economics behind it is in
+`CLAUDE_ECONOMIC_RESEARCH/`.
+
 ### Game inventory import (opt-in, beta)
 
 Settings → **Game inventory** can read your *real* owned counts directly from the running Warframe
@@ -75,10 +85,12 @@ src/                  React frontend
   lib/                api (invoke wrappers), types, format helpers
   theme.css           dense monochrome design tokens + component styles
 src-tauri/src/        Rust core
-  market.rs           warframe.market v2 client + global throttle
+  market.rs           warframe.market v2 client + global throttle (prices, orders, statistics)
   worldstate.rs       api.warframestat.us client (isolated)
   wfm_account.rs      market account / orders + JWT in OS keychain
+  gamescan/           opt-in game memory-scan inventory import (Linux; isolated)
   domain/             pure classify / part-name logic
+  db/inventory.rs     ownership + realizable (liquidation-adjusted) valuation
   db/                 one module per table, transactional writes
   commands.rs         the #[command] surface
   lib.rs              AppState + launch orchestration
@@ -91,8 +103,11 @@ inventory / sales / watchlist / buy-list is a rebuildable cache of the APIs.
 
 ## Docs
 
-- `CLAUDE.md` — working guidance and hard constraints.
-- `.claude/plans/i-just-added-the-noble-widget.md` — the implementation plan / build roadmap.
+- `HANDOFF.md` — **current-state handoff; read first.**
+- `CLAUDE.md` — working guidance, hard constraints, and the pricing/valuation model.
+- `CLAUDE_ECONOMIC_RESEARCH/` — the economics behind realizable valuation (liquidity, market impact,
+  honest presentation).
 - `DATA_SOURCING_MASTER_PLAN.md` — the warframe.market data contract.
+- `GAME_INVENTORY_IMPORT.md` — the game memory-scan import spec.
 - `GAMESTATE_WORLDSTATE.md` / `WFM_ACCOUNT_SIGNIN.md` — world-state and account-connect specs.
-- `HANDOFF.md` — first-implementation session notes.
+- `.claude/plans/` — historical design notes (game-inventory-import, pricing-rework, etc.).

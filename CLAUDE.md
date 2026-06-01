@@ -10,9 +10,12 @@ watchlist, sales, set completion, ducat conversion, your warframe.market sell or
 world-state (fissures/cycles/Baro). It is a rewrite of an old React+Supabase webapp — the entire
 cloud backend is being deleted in favor of one local binary. **No auth, no hosting, no deploy.**
 
-**Status: planning/reference only — no app code yet.** `src/` and `src-tauri/` are empty directory
-trees (no files yet); there is no root `package.json` or `Cargo.toml`. Git is initialized (default
-branch `main`, no commits yet). Build by following the plan, in order.
+**Status: implemented and working** (Tauri app builds, runs, and is installed; committed/pushed to
+`main` on the private repo `github.com/finneritter/WFIT`). All planned phases plus several features
+beyond the original plan are done — game inventory import, rank-aware mods/arcanes, robust order-book
+pricing, and liquidation-adjusted ("realizable") inventory valuation. `HANDOFF.md` is the current-state
+doc; read it first. The `.claude/plans/` and `CLAUDE_ECONOMIC_RESEARCH/` files are now historical
+design references, not a to-do list.
 
 ## Authoritative documents (read before coding)
 
@@ -55,11 +58,16 @@ update1). "Primely" is the old name of the app.
   except inventory/sales/watchlist/buy_list is a rebuildable cache of the APIs.
 - Domain transforms (partname/derive/parts) live **Rust-only**; the frontend gets finished objects.
 
-## Commands (once scaffolded — these apply AFTER Phase 1; no manifests exist yet)
+## Commands
 
-- `npm run tauri dev` — run the desktop app (Vite + Rust). `npm run dev` — frontend only.
-- `npm run build` — `tsc` typecheck + Vite build. `cargo build` (in `src-tauri/`) — Rust.
-- No test runner configured yet; "verify" = it builds and the app runs.
+- `npm run tauri:dev` — run the desktop app (bakes in the WebKitGTK/Wayland env vars; plain
+  `tauri dev` crashes on this box). `npm run dev` — frontend only. `scripts/install.sh` — build an
+  optimized release and install it as a launchable app (search "WFIT" in KRunner).
+- `npm run build` — `tsc` typecheck + Vite build. In `src-tauri/`: `cargo build` / `cargo clippy` /
+  `cargo test` (Rust unit tests exist — pricing/valuation/gamescan logic).
+- "Verify" = gates green (`cargo test`/`clippy`, `tsc`, `npm run build`, `biome`) AND it builds/runs.
+  Data-level bugs need a live-DB spot-check (`sqlite3 $DB`), not just the gates — most pricing bugs
+  this project hit were data/integration issues invisible to unit tests.
 - **Linting/formatting = Biome** (chosen) for the frontend — set up once the project is scaffolded
   (`npx @biomejs/biome init`); use `npx biome check --write` to format+lint. Rust uses `cargo fmt` / `cargo clippy`.
 - **Linux runtime prereq:** `webkit2gtk-4.1` must be installed (`sudo pacman -S webkit2gtk-4.1` on
@@ -74,3 +82,21 @@ Rust core in `src-tauri/src/`: `market.rs` (warframe.market v2 client + throttle
 `commands.rs` (the `#[command]` surface), `lib.rs` (`AppState{db,market}` + handler registry).
 Frontend in `src/`: React Query hooks calling `invoke()` (`lib/api.ts`), components/routes ported
 1:1 from `wireframe.jsx`, the wireframe's CSS lifted to `theme.css` (square/dense/mono, no radius).
+
+## Pricing & valuation (the most-iterated subsystem — read before touching it)
+
+Per-item **price** (`db/prices.rs::effective_price`): live lowest **ask** (`order_cache`, median of
+the cheapest 5 online sells) → per-rank trade median (`price_rank`) → headline median. Trade medians
+themselves are outlier-robust (`market.rs::robust_price` = winsorized, volume-weighted). Mods/arcanes
+are priced **per rank** (`mod_rank` from statistics; rank-0 vs max are different goods).
+
+**Realizable (liquidation-adjusted) value** (`db/inventory.rs::realizable_value`): a market price is a
+*marginal* price, so `× qty` overvalues hoards. Each holding is valued by liquidating it into the live
+**buy orders** (`buy_orders`, best-bid-first), then a volume-capped, discounted tail (`TAIL_FACTOR`,
+`WINDOW_DAYS`); units beyond real demand ≈ 0. `Summary.realizable_plat` is the honest headline,
+`total_plat` the optimistic "ceiling." Per-item `confidence` (high/medium/low) gates presentation.
+Rationale + the economics is in `CLAUDE_ECONOMIC_RESEARCH/` and `.claude/plans/pricing-rework.md`.
+
+**Auto-reprice:** bump `PRICING_VERSION` (`lib.rs`) whenever price/valuation derivation changes — on
+launch a mismatch wipes the derived price caches and recomputes, so fixes can't be stranded behind the
+6 h TTL. Do NOT rely on the TTL alone for logic changes.
