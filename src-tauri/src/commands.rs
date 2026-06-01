@@ -1,8 +1,10 @@
 use crate::db::wfm::{ImportApply, ListingMirror};
 use crate::db::{
-    buylist, catalog, inventory, meta, prices, sales, sets, settings, trends, watchlist, wfm,
+    buylist, catalog, gamescan as gamescan_db, inventory, meta, prices, sales, sets, settings,
+    trends, watchlist, wfm,
 };
 use crate::error::{AppError, AppResult};
+use crate::gamescan;
 use crate::types::*;
 use crate::wfm_account;
 use crate::AppState;
@@ -442,6 +444,11 @@ pub async fn prices_refresh(
         meta::KEY_LAST_PRICE_SYNC,
         &Utc::now().to_rfc3339(),
     )?;
+    // A forced refresh ("Refresh prices") also re-pulls live sell orders for
+    // illiquid owned items, so their value reflects real asks.
+    if force.unwrap_or(false) {
+        crate::refresh_owned_orders(state.inner(), true).await?;
+    }
     Ok(n)
 }
 
@@ -483,6 +490,48 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
         )?)
     })?;
 
+    // Rank breakdown (mods/arcanes) for the drawer: each owned rank with its
+    // exact-or-nearest per-rank market price.
+    let max_rank: Option<i64> = state.db.with(|c| {
+        Ok(c.query_row(
+            "SELECT max_rank FROM catalog_items WHERE slug = ?1",
+            rusqlite::params![slug],
+            |r| r.get(0),
+        )
+        .ok()
+        .flatten())
+    })?;
+    let ranks: Vec<OwnedRank> = state.db.with(|c| {
+        let mut stmt =
+            c.prepare("SELECT rank, qty FROM inventory_ranks WHERE slug = ?1 ORDER BY rank")?;
+        let raw: Vec<(i64, i64)> = stmt
+            .query_map(rusqlite::params![slug], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<Result<_, _>>()?;
+        let mut out = Vec::with_capacity(raw.len());
+        for (rank, qty) in raw {
+            let median = prices::effective_price(c, &slug, Some(rank))?; // live ask preferred
+            out.push(OwnedRank { rank, qty, median });
+        }
+        Ok(out)
+    })?;
+    // Value + displayed price prefer the live ask (effective_price): ranked → Σ
+    // per-rank; non-ranked owned → live-sell × owned; else the statistics median.
+    let (eff_median, value_plat): (Option<i64>, Option<i64>) = if !ranks.is_empty() {
+        let v: i64 = ranks.iter().map(|r| r.median.unwrap_or(0) * r.qty).sum();
+        // Blended per-unit so the headline price × owned == the stack value shown.
+        let per_unit = if owned_qty > 0 {
+            Some(v / owned_qty)
+        } else {
+            row.median_plat
+        };
+        (per_unit, Some(v))
+    } else if owned_qty > 0 {
+        let ep = state.db.with(|c| prices::effective_price(c, &slug, None))?;
+        (ep.or(row.median_plat), ep.map(|p| p * owned_qty))
+    } else {
+        (row.median_plat, None)
+    };
+
     Ok(ItemDetail {
         slug: row.slug,
         display_name: row.display_name,
@@ -490,7 +539,7 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
         category: row.category,
         set_slug: row.set_slug,
         ducats: row.ducats,
-        median_plat: row.median_plat,
+        median_plat: eff_median,
         trend: row.trend,
         delta_7d: row.delta_7d,
         volume_7d,
@@ -500,6 +549,9 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
         listed,
         realized_plat,
         sold_qty,
+        max_rank,
+        ranks,
+        value_plat,
         history,
     })
 }
@@ -724,4 +776,81 @@ pub async fn sets_refresh(state: State<'_, Arc<AppState>>) -> AppResult<usize> {
         }
     }
     Ok(written)
+}
+
+// ===========================================================================
+// Game inventory import (memory-scan). Opt-in, consent-gated, Linux-only.
+// Mirrors the wfm listings preview/apply split. ToS-prohibited / ban-risky —
+// see GAME_INVENTORY_IMPORT.md.
+// ===========================================================================
+
+/// Drive the Settings UI. Does NOT scan — only reads consent state + detects the
+/// game process (process listing, not memory).
+#[tauri::command]
+pub fn game_scan_status(state: State<'_, Arc<AppState>>) -> AppResult<GameScanStatus> {
+    let st = gamescan_db::get_state(&state.db)?;
+    Ok(GameScanStatus {
+        supported: gamescan::is_supported(),
+        consented: st.consent_at.is_some(),
+        warframe_running: gamescan::is_supported() && gamescan::warframe_running(),
+        auto_sync: st.auto_sync,
+        last_scan_at: st.last_scan_at,
+    })
+}
+
+/// Record risk acceptance — only on an exact match of the required phrase.
+#[tauri::command]
+pub fn game_scan_consent(state: State<'_, Arc<AppState>>, phrase: String) -> AppResult<()> {
+    if !gamescan::consent::validate(&phrase) {
+        return Err(AppError::Invalid(
+            "the acknowledgment phrase did not match exactly".into(),
+        ));
+    }
+    gamescan_db::set_consent(&state.db)
+}
+
+/// Revoke consent — restores the warning prompt. Does not touch inventory.
+#[tauri::command]
+pub fn game_scan_revoke(state: State<'_, Arc<AppState>>) -> AppResult<()> {
+    gamescan_db::clear_consent(&state.db)
+}
+
+/// Read-only preview: gated on consent + a running game, scan → map → diff.
+/// Writes nothing (other than last-scan bookkeeping).
+#[tauri::command]
+pub async fn game_scan_preview(
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<Vec<ScanDiffRow>> {
+    if !gamescan::is_supported() {
+        return Err(AppError::Invalid("game inventory scan is Linux-only".into()));
+    }
+    if !gamescan_db::is_consented(&state.db)? {
+        return Err(AppError::Invalid(
+            "game inventory scan requires consent first".into(),
+        ));
+    }
+    if !gamescan::warframe_running() {
+        return Err(AppError::NotConnected(
+            "Warframe does not appear to be running".into(),
+        ));
+    }
+    let raw = gamescan::scan().await?;
+    let map = gamescan_db::game_ref_to_slug(&state.db)?;
+    let resolved = gamescan::map::resolve(&raw.items, &map);
+    gamescan_db::record_scan(&state.db, raw.account_id.as_deref())?;
+    gamescan_db::diff(&state.db, &resolved)
+}
+
+/// Apply the user-confirmed subset of the diff. The only writer; transactional.
+#[tauri::command]
+pub fn game_scan_apply(
+    state: State<'_, Arc<AppState>>,
+    rows: Vec<ScanApply>,
+) -> AppResult<usize> {
+    if !gamescan_db::is_consented(&state.db)? {
+        return Err(AppError::Invalid(
+            "game inventory scan requires consent first".into(),
+        ));
+    }
+    gamescan_db::merge_from_scan(&state.db, &rows)
 }

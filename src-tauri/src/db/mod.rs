@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 pub mod buylist;
 pub mod catalog;
+pub mod gamescan;
 pub mod inventory;
 pub mod meta;
 pub mod prices;
@@ -23,6 +24,9 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
     Migrations::new(vec![
         M::up(include_str!("../../migrations/0001_init.sql")),
         M::up(include_str!("../../migrations/0002_ohlc.sql")),
+        M::up(include_str!("../../migrations/0003_game_import.sql")),
+        M::up(include_str!("../../migrations/0004_ranks.sql")),
+        M::up(include_str!("../../migrations/0005_orders.sql")),
     ])
 });
 

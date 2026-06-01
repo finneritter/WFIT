@@ -41,8 +41,12 @@ update1). "Primely" is the old name of the app.
 - **warframe.market is the sole source for items/prices/ducats/sets.** Headers on every request:
   `User-Agent: wfit-desktop/0.1`, `Language: en`, `Platform: pc`, `Accept: application/json`.
   Global throttle: **350ms min-gap (~3 req/s)** across ALL warframe.market calls — one chokepoint.
-- **No game-account (DE) auth, ever** — every path is dead (Akamai-blocked / decommissioned). The
-  only "sign-in" is to a *warframe.market* account, and only for reading your own orders.
+- **No programmatic DE login** — POSTing credentials to DE's auth endpoint is dead (Akamai-blocked /
+  decommissioned). The safe, default "sign-in" is to a *warframe.market* account, only for reading
+  your own orders. **Exception (opt-in):** real owned inventory is available via a consent-gated
+  **memory-scan** of the running game client (`gamescan` module — isolated from the market path,
+  Linux-only, off by default). It does NOT log in; it reuses the live session. **ToS-prohibited and
+  ban-risky.** See `GAME_INVENTORY_IMPORT.md` and `.claude/plans/game-inventory-import.md`.
 - Endpoint quirks: catalog = `GET /v2/items`; per-item detail = `GET /v2/items/<slug>` (plural;
   singular 404s); statistics = `GET /v1/items/<slug>/statistics` (v2 stats 404). Your orders =
   `GET /v2/orders/user/<name>`; public item orders = `GET /v2/orders/item/<slug>`. `vaulted` is
@@ -64,7 +68,8 @@ update1). "Primely" is the old name of the app.
 ## Architecture (target)
 
 Rust core in `src-tauri/src/`: `market.rs` (warframe.market v2 client + throttle), `worldstate.rs`
-(api.warframestat.us, isolated), `wfm_account.rs` (account/orders + keychain), `domain/`
+(api.warframestat.us, isolated), `wfm_account.rs` (account/orders + keychain), `gamescan/`
+(opt-in DE memory-scan inventory import — isolated like worldstate, Linux-only, off by default), `domain/`
 (classify/partname/parts — pure), `db/` (rusqlite modules per table, transactional writes),
 `commands.rs` (the `#[command]` surface), `lib.rs` (`AppState{db,market}` + handler registry).
 Frontend in `src/`: React Query hooks calling `invoke()` (`lib/api.ts`), components/routes ported

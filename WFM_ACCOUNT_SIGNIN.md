@@ -10,10 +10,12 @@
 > to warframe.market. So this feature seeds/suggests inventory from *listings*, clearly labeled as such —
 > it never claims to be your real inventory.
 >
-> **Why not real inventory sync:** there is no official Digital Extremes inventory API. The only routes
+> **Why not real inventory sync (here):** there is no official Digital Extremes inventory API. The only routes
 > are unofficial (the private mobile/Companion endpoint, with session tokens scraped from game memory) and
-> carry a documented ban risk. Out of scope, deliberately — see `DATA_SOURCING_MASTER_PLAN.md` ("no
-> game-account auth"). This feature stays entirely within warframe.market's public + authenticated API.
+> carry a documented ban risk. **Superseded for users who opt in** — that AlecaFrame-parity path is now
+> specced in `GAME_INVENTORY_IMPORT.md` (opt-in, consent-gated, Linux-only, off by default). This
+> *listings* feature stays entirely within warframe.market's public + authenticated API and remains the
+> zero-risk default recommendation; the game scan is the power-user lane.
 
 This refines `DESKTOP_REWRITE_PRD.md` (commands + schema) and reuses the rate limiter / client from
 `DATA_SOURCING_MASTER_PLAN.md`. It adds **one new external capability** (authenticated WFM calls) and

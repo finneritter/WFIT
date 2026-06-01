@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod domain;
 mod error;
+mod gamescan;
 mod market;
 mod types;
 mod wfm_account;
@@ -21,6 +22,10 @@ pub struct AppState {
 const CATALOG_STALE_HOURS: i64 = 24;
 const PRICE_TTL_HOURS: i64 = 6;
 const DRAIN_BATCH: i64 = 40;
+// Bump whenever the price-derivation logic changes. On launch a mismatch wipes the
+// derived price caches and recomputes them, so fixes take effect without a manual
+// "rebuild cache" and stale old-logic prices can't survive behind the TTL.
+const PRICING_VERSION: &str = "2";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -107,6 +112,12 @@ pub fn run() {
             commands::wfm_apply_import,
             // set composition (Pass B)
             commands::sets_refresh,
+            // game inventory import (memory-scan)
+            commands::game_scan_status,
+            commands::game_scan_consent,
+            commands::game_scan_revoke,
+            commands::game_scan_preview,
+            commands::game_scan_apply,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -118,10 +129,32 @@ pub fn run() {
 async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
     use db::{catalog, meta, prices};
 
+    // 0) If the pricing logic changed since these caches were built, wipe the
+    // DERIVED price caches (not raw history) so everything re-derives below with
+    // the current logic. Owned prices repopulate first, the rest via the drain.
+    if meta::get(&state.db, meta::KEY_PRICING_VERSION)?.as_deref() != Some(PRICING_VERSION) {
+        tracing::info!("pricing logic changed → clearing price caches for a clean reprice");
+        state.db.with(|c| {
+            c.execute_batch(
+                "DELETE FROM price_cache; DELETE FROM price_rank; DELETE FROM order_cache;",
+            )?;
+            Ok(())
+        })?;
+        meta::set(&state.db, meta::KEY_PRICING_VERSION, PRICING_VERSION)?;
+    }
+
     // 1) Catalog skeleton (1 call) if empty or older than the stale window.
     let need_catalog = {
         let count = catalog::count(&state.db)?;
         if count == 0 {
+            true
+        } else if catalog::missing_game_ref_count(&state.db)? > 0 {
+            // 0003 added game_ref; existing rows are NULL until one refetch backfills
+            // them from /v2/items `gameRef`. Needed for the game-inventory mapping.
+            true
+        } else if !catalog::has_any_max_rank(&state.db)? {
+            // 0004 added max_rank; one refetch backfills it from /v2/items `maxRank`
+            // (needed for rank-aware mod/arcane valuation + the drawer breakdown).
             true
         } else {
             match meta::get(&state.db, meta::KEY_LAST_CATALOG_SYNC)? {
@@ -160,6 +193,9 @@ async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
         )?;
     }
 
+    // Live sell orders for illiquid owned items (their stats are unreliable).
+    refresh_owned_orders(&state, false).await?;
+
     // 3) Background drain of everything else, oldest-first, batch by batch.
     loop {
         let batch = prices::stale_catalog_slugs(&state.db, DRAIN_BATCH)?;
@@ -196,5 +232,37 @@ async fn refresh_slugs(state: &Arc<AppState>, slugs: &[String]) -> error::AppRes
     if !updates.is_empty() {
         prices::upsert_many(&state.db, &updates, Duration::hours(PRICE_TTL_HOURS))?;
     }
+    Ok(())
+}
+
+/// Fetch + store live lowest-sell prices for illiquid owned items, so their value
+/// tracks real asks instead of sparse/gameable trade statistics. Throttled inside
+/// the market client. Bounded to the (usually small) illiquid-owned subset.
+pub(crate) async fn refresh_owned_orders(state: &Arc<AppState>, force: bool) -> error::AppResult<()> {
+    use db::prices;
+    // force → cutoff = now (nothing is fresher, so refetch all); else skip orders
+    // refreshed within the price TTL.
+    let cutoff = if force {
+        Utc::now().to_rfc3339()
+    } else {
+        (Utc::now() - Duration::hours(PRICE_TTL_HOURS)).to_rfc3339()
+    };
+    let slugs = prices::owned_order_slugs(&state.db, &cutoff)?;
+    if slugs.is_empty() {
+        return Ok(());
+    }
+    tracing::info!(n = slugs.len(), "refreshing live sell orders for owned items");
+    let mut priced = 0usize;
+    for slug in &slugs {
+        match state.market.fetch_sell_prices(slug).await {
+            Ok(prices) if !prices.is_empty() => {
+                prices::store_sell_prices(&state.db, slug, &prices)?;
+                priced += 1;
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!(slug, error = %e, "fetch_sell_prices failed"),
+        }
+    }
+    tracing::info!(priced, of = slugs.len(), "live sell orders refreshed");
     Ok(())
 }

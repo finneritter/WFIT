@@ -337,6 +337,17 @@ body.flat-deltas .pos, body.flat-deltas .neg { color: var(--soft) !important; }
 .statbox .d { font-size: 10.5px; margin-top: 1px; }
 .pos { color: var(--pos); } .neg { color: var(--neg); } .muted { color: var(--faint); }
 
+/* status pill (game-scan diff) + inline code (consent phrase) */
+.tag { display: inline-block; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 5px; border: 1px solid var(--line-2); color: var(--soft); }
+.tag.added { color: var(--pos); border-color: var(--pos); }
+.tag.removed { color: var(--neg); border-color: var(--neg); }
+code { font-family: var(--mono); font-size: 11px; color: var(--ink); background: var(--panel); padding: 1px 4px; border: 1px solid var(--line-2); }
+
+/* drawer rank breakdown (mods/arcanes) */
+.rankbox { margin: 12px 0; border: 1px solid var(--line-2); }
+.rankbox-h { font-size: 11px; color: var(--soft); padding: 6px 10px; border-bottom: 1px solid var(--line-2); text-transform: uppercase; letter-spacing: .04em; }
+.rankbox .dtable { margin: 0; }
+
 /* ---------------- filter strip ---------------- */
 .filters { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
 .chip { font-family: var(--sans); font-size: 11.5px; color: var(--soft); background: var(--panel); border: 1px solid var(--line-2); padding: 3px 10px; cursor: pointer; }

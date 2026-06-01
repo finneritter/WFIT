@@ -1,128 +1,135 @@
-# WFIT — Session Handoff (2026-05-31, polish + features)
+# WFIT — Session Handoff (2026-06-01)
 
-This supersedes the original first-implementation notes. WFIT went from "builds and runs" to a
-feature-rich, installed desktop app over this session. Everything below is committed and pushed to
-the **private GitHub repo `finneritter/WFIT`** (branch `main`), and the launchable app is installed.
+WFIT is a working, installed **Tauri 2 (Rust) + local SQLite + React/Vite** desktop app for tracking
+owned Warframe tradeables, warframe.market prices, sets, ducats, your sell orders, and live
+world-state. Read with `CLAUDE.md` (hard constraints). This handoff supersedes the earlier ones; the
+2026-05-31 "polish + features" session is condensed at the bottom.
 
-> Read with `CLAUDE.md` (hard constraints) and `.claude/plans/i-just-added-the-noble-widget.md`
-> (original roadmap). Newer plans: `.claude/plans/search-and-wiki.md`.
+## ⚠️ Status: everything below this session is UNCOMMITTED
 
----
+The 2026-05-31 work is committed/pushed to **github.com/finneritter/WFIT** (`main`). **All of this
+session's work — game inventory import (migrations 0003–0005), rank-aware + reliable pricing, the
+frontend changes, and the doc updates — is sitting in the working tree, not committed.** First
+decision next session: review `git status`/`git diff` and commit (suggest a feature branch off `main`).
 
-## Running it
-
-```bash
-npm run tauri:dev          # dev (bakes in the WebKitGTK/Wayland env vars; plain `tauri dev` crashes)
-scripts/install.sh         # build optimized release + install as a launchable app (search "WFIT" in KRunner)
-```
-
-- **Linux prereq:** `webkit2gtk-4.1`. The dev/installed launch needs
-  `WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1` (baked into both the
-  `tauri:dev` script and the installed `.desktop` Exec).
-- `scripts/install.sh` is the one-command update: rebuild + reinstall binary/icon/.desktop.
-
-## Verification gates (all currently pass)
-
-```bash
-npx tsc --noEmit
-npm run build
-cd src-tauri && cargo check    # also validates the Tauri capability ACL
-npx biome check .              # frontend lint/format (pre-existing a11y warnings on interactive divs are tolerated)
-```
+All gates pass: `cargo check`/`clippy` clean · `cargo test` **12 pass** · `tsc` · `npm run build` ·
+`biome` (pre-existing a11y warnings on interactive divs are tolerated).
 
 ---
 
-## What was built this session
+## Running / building
 
-**Window / shell**
-- Frameless window (`decorations:false`) with a custom in-app titlebar (drag region + min/max/close):
-  `src/components/TitleBar.tsx`, window ACL perms in `capabilities/default.json`.
-- App **icon** (cat monogram) generated via `tauri icon` from `src-tauri/icons/source.png`.
-- Sidebar brand panel removed (title now in the titlebar); syncbar/topbar seam aligned (both 42px).
+```fish
+pkill -x wfit; pkill -x node        # stop any running instance (exact-name kills only)
+npm run tauri:dev                   # dev; bakes in the WebKitGTK/Wayland env vars (plain `tauri dev` crashes)
+scripts/install.sh                  # build optimized release + install as a launchable app
+```
+- **Linux prereq:** `webkit2gtk-4.1`. Launch needs `WEBKIT_DISABLE_DMABUF_RENDERER=1
+  WEBKIT_DISABLE_COMPOSITING_MODE=1` (baked into the `tauri:dev` script + installed `.desktop`).
+- Live DB: `~/.local/share/dev.finn.wfit/wfit.sqlite`. Migrations `0001`–`0005` applied on launch.
 
-**Settings + theming** (`src/routes/Settings.tsx`, `src/lib/prefs.ts`)
-- New Settings screen (the sidebar footer used to mis-route to Listings). Sections: Appearance
-  (**Light/Dark theme**, density, flat-deltas), Data & cache (refresh prices/catalog, sync set
-  composition, **Rebuild cache**), Account, About.
-- **Light mode** = `body.light` palette override in `theme.css`; introduced `--accent-ink` so the
-  4 hardcoded on-accent text colors invert correctly. Prefs persist in localStorage, applied
-  pre-paint in `main.tsx`.
+---
 
-**Trends → decision surface** (`src/routes/Trends.tsx`, `src-tauri/src/db/trends.rs`)
-- Reframed: full-width **Prime Market hero** (big graph), Your-holdings band, then Sell signals /
-  Buy candidates / **Unusual moves** (z-score ranked) / Category heat.
-- Per-item signals computed from history: **z-score, range position, avg daily volume**.
-- **Prime Market index**: spans the **selected timeframe** (responds to 24h/7d/30d/90d) and is a
-  **consistent-membership, value-weighted basket** (only full-window items, summed, normalized);
-  the headline % is its start→end change. Replaces an earlier broken median/ragged-spark index.
-- **"Exclude outliers"** toggle (default on): winsorizes each series (median ± k·MAD, with a
-  `center·0.5` fallback when MAD≈0) so a 50k-plat troll print on a 1p mod can't pollute the index,
-  signals, or **Unusual moves** (and the displayed price uses the cleaned value).
+## What this session added
 
-**Item drawer — deep analytics** (`src/components/Drawer.tsx`, `src/components/charts.tsx`)
-- Real **candlestick** chart (OHLC) with MA7/MA30 overlays, volume bars, period hi/lo lines.
-  OHLC added via migration **`0002_ohlc.sql`** + `market.rs` parsing; backfills as prices drain.
-- Stats: range position, avg volume, **live spread/best buy-sell** (`get_item_orders` →
-  `/v2/orders/item`), ducat-efficiency verdict, owned stack, realized P&L from past sales.
-- **Resizable** (drag the left-edge grip; width remembered).
-- **Remove from inventory** button; **Wiki ↗** button (see below).
+### 1. Game inventory import (AlecaFrame-style memory-scan) — VERIFIED WORKING
 
-**Sets as parts** (`src-tauri/src/db/inventory.rs`, `sales.rs`, `catalog.rs`)
-- Adding a set adds its component parts; a complete set is **recognized and valued at the set
-  price** (not the part-sum). Inventory collapses complete sets into one set tile. Set-aware
-  `set_qty`/`remove`/`record_sale` (selling a set decrements one of each part). Composition from
-  the `catalog_items.set_slug` heuristic (Pass B available via `sets_refresh` but not required).
+Optional, opt-in, consent-gated, **Linux-only**, off by default. Reads the running Warframe client's
+memory for the live session (`accountId`+`nonce`), calls the DE mobile inventory endpoint, maps it to
+the catalog, and merges true owned counts. **ToS-prohibited / ban-risky** — see
+`GAME_INVENTORY_IMPORT.md` and `.claude/plans/game-inventory-import.md`. This is a deliberate reversal
+of the old "no DE auth ever" rule (it never logs in; it reuses the live session).
 
-**Rotation** (`src-tauri/src/worldstate.rs`, `src/routes/Rotation.tsx`)
-- Fixed (was dead): warframestat.us dropped the per-fissure `active` flag (we filtered all out)
-  and the void-trader string fields. Now surfaces ISO timestamps (cycle/fissure/Baro
-  `expiry`/`activation`) and a 1s `useNow` ticker drives **live countdowns**.
-- **Per-tier fissure refresh strip** with **Omnia highlighted** and a "⚡ Void Cascade" flag.
+- **Isolated `gamescan/` module** (like `worldstate.rs`): `process.rs` (find pid; `/proc` only),
+  `memory.rs` (scan writable-anon `/proc/<pid>/mem` for `accountId=<24hex>&nonce=<digits>`; never
+  logs/persists the nonce), `api.rs` (`mobile.warframe.com/api/inventory.php`; own HTTP client),
+  `map.rs` (uniqueName→slug via `catalog_items.game_ref`), `consent.rs` (typed-phrase gate). Plus
+  `db/gamescan.rs` (state + diff + `merge_from_scan`). Reimplemented from the public protocol — **no
+  upstream code copied** (`wf-auth-finder` is GPLv3; Sainan's is MIT+Commons-Clause).
+- **DE JSON arrays parsed** (`map.rs INVENTORY_ARRAYS`): `MiscItems` (prime parts/resources),
+  `Recipes` (blueprints), **`RawUpgrades`** (stacked unranked mods/arcanes — the real count; omitting
+  it was the original undercount bug), `Upgrades` (individual ranked instances + their `lvl`).
+- **Commands:** `game_scan_{status,consent,revoke,preview,apply}` (mirror the wfm preview/apply split).
+  UI: `components/GameScanPanel.tsx` in Settings (consent → Scan now → reviewable diff → apply).
+- **Caveat:** at the common `kernel.yama.ptrace_scope = 1` a sibling memory read may be denied;
+  `memory.rs` returns guidance (`sysctl -w kernel.yama.ptrace_scope=0` or `setcap cap_sys_ptrace+ep`).
+  Scope ≥2 is rejected up front. It worked on this box after that setup.
 
-**Icons + search + wiki**
-- Real **warframe.market item icons** everywhere (Glyph renders the thumbnail, monogram fallback);
-  threaded `thumbnail_url` through all row types (TrendRow/DucatRow/SaleRow/ListingRow + queries).
-- **Global search** (`src/components/SearchResults.tsx`): top-bar search is now a command palette
-  over the whole tradable catalog (`search_catalog`); results dropdown, click opens the drawer
-  (owned or not), `ininv:` prefix scopes to owned.
-- **In-app wiki**: `src/lib/wiki.ts` opens an item's `wiki.warframe.com` page in a dedicated reused
-  `WebviewWindow` (iframing is blocked by the wiki's `X-Frame-Options: DENY`). "Wiki ↗" on the
-  drawer. Perms: `core:webview:allow-create-webview-window`, `core:window:allow-set-focus`.
-  The window is **frameless** (`decorations:false`) — the native GTK titlebar was oversized and we
-  can't add a custom bar to a remote page — so it has no close/maximize/move; it **auto-closes on
-  blur** (guarded against the creation moment) — open → read → click back to WFIT to dismiss. If a
-  persistent/movable window is wanted instead, drop the frameless + blur-close and add an app-side
-  "✕ close wiki" control.
-- Add-items picker: shows **specific part names** ("Neuroptics Blueprint", not "Blueprint") and is
-  **target-aware** — on Watchlist/Buy List it adds to that list; catalog rows carry
-  `on_watchlist`/`buy_qty`.
+### 2. Rank-aware mods/arcanes
 
-## New backend surface (since first handoff)
-- Migrations: `0001_init.sql`, **`0002_ohlc.sql`** (adds open/high/low/close to price_history).
-- New commands: `rebuild_cache`, `get_item_orders`, plus `sets_refresh` now wired in Settings.
-- `total_value`/`owned_holdings` (set-aware valuation) in `db/inventory.rs`.
+warframe.market prices mods/arcanes **per rank** (rank-0 Arcane Energize ≈ 7p, rank-5 ≈ 100p).
+- Migration `0004_ranks.sql`: `catalog_items.max_rank`; `inventory_ranks(slug,rank,qty)` (per-rank
+  owned breakdown, scan-written, additive — `inventory_items` stays the total-per-slug truth);
+  `price_rank(slug,rank,median)`.
+- The scan reads each copy's rank; valuation is Σ qty_r × price(rank r); the drawer shows an **Owned
+  by rank** table. `fetch_statistics` parses `mod_rank` (headline/history from rank 0 only).
+
+### 3. Reliable pricing (the big one — see `.claude/plans/pricing-rework.md`)
+
+The recurring "price is wrong / 50000p" had **two** causes — both fixed:
+
+- **Formula:** trade statistics are sparse/gameable for illiquid mods. The **live order book is now
+  the primary price source** for all owned items: `prices::effective_price(slug, rank)` resolves
+  **live lowest ask (`order_cache`) → per-rank trade median → headline median**. The ask is robust
+  (`robust_low` = median of the cheapest 5 asks, online preferred), so one troll-low/high ask can't
+  move it. Trade medians themselves are also robust (`market.rs robust_price` = winsorized +
+  volume-weighted median over 45 days). Migration `0005_orders.sql` = `order_cache(slug,rank,sell)`.
+  Fetched for all owned items by `refresh_owned_orders` (background on launch; forced by Refresh prices).
+- **Refresh (the structural fix):** fixes never reached already-cached values because refresh is
+  TTL-gated. Now there's a **`PRICING_VERSION` const + `KEY_PRICING_VERSION` meta** — on launch a
+  mismatch wipes `price_cache`/`price_rank`/`order_cache` and recomputes. **➜ Bump `PRICING_VERSION`
+  (in `lib.rs`) whenever you change how prices are derived** so it auto-reprices on next launch instead
+  of stale values surviving. Currently `"2"`.
+- Chart fix (`charts.tsx CandleChart`): robust 4th–96th-percentile y-domain so one spike candle no
+  longer flattens the graph.
+- Validated live: disruptor (had a 50000p wash print) → **~1p** from the live book; liquid items
+  unchanged. Valuation basis = lowest ask; no illiquidity discount (v1 decision).
+
+---
+
+## Architecture pointers
+
+- **Migrations:** `0001_init` · `0002_ohlc` · `0003_game_import` (game_ref, last_scan_qty,
+  game_scan_state) · `0004_ranks` (max_rank, inventory_ranks, price_rank) · `0005_orders` (order_cache).
+- **Pricing path:** `market.rs` (`fetch_statistics` → robust per-rank medians; `fetch_sell_prices` →
+  robust live asks) → `db/prices.rs` (`upsert_many`, `store_sell_prices`, `effective_price`,
+  `rank_price`) → `db/inventory.rs` valuation (`value_plat`, blended per-unit display) → drawer.
+- **Modules** (`src-tauri/src/`): `market.rs`, `worldstate.rs`, `wfm_account.rs`, `gamescan/`,
+  `domain/`, `db/` (per-table), `commands.rs`, `lib.rs` (`AppState` + `launch_refresh`).
+
+## Key gotchas / lessons for next session
+- **When you change how a cached/derived value is computed, bump `PRICING_VERSION`** (or a similar
+  stamp) so it recomputes — don't rely on the TTL; stale old-logic values otherwise survive and look
+  like the fix didn't work. This caused several rounds of confusion this session.
+- `/proc/<pid>/comm` truncates to 15 chars (`Warframe.x64.exe` → `Warframe.x64.ex`) — match the
+  truncated form.
+- **UI not exhaustively click-tested** (no window-raise/input tool on this box — no wmctrl/ydotool).
+  Verified via build gates + querying the live SQLite DB. Game-scan + pricing WERE verified live with
+  the user this session; the 05-31 screens still want a click-test.
+- Shell stdout here can be unreliable — route to files / trust exit codes. Stop the dev server with
+  `pkill -x wfit` / `pkill -x node` (broad `pkill -f` self-kills the agent's shell).
 
 ## Known gaps / next steps
-- **Pass B set composition** (`sets_refresh` → `set_membership`) is available but Sets/valuation
-  still use the `set_slug` heuristic (`quantity_in_set` assumed 1). Wiring it in is a TODO.
-- **Listings write actions** (price edit / status / list-on-market) remain v1-deferred (read-only).
-- **Set-sale undo** re-adds against the set slug, not the member parts (edge case).
-- **Wiki page mapping** is heuristic (prime parts → "<X> Prime"); some items may land on a wiki
-  search page. Refine names case-by-case.
-- **macOS build** not done (needs a Mac).
-- **Search**: tradable catalog only (warframe.market). Non-tradable items aren't indexed.
+- **Commit this session's work** (uncommitted — see top).
+- Pass B set composition (`sets_refresh` → `set_membership`) available but Sets/valuation still use the
+  `set_slug` heuristic (`quantity_in_set` assumed 1).
+- Game scan: no auto-sync (manual "Scan now" only); macOS unsupported (SIP). Re-scan+apply to refresh
+  the per-rank breakdown of already-imported mods (the diff flags breakdown-only changes).
+- Listings write actions (price edit / list-on-market) still v1-deferred (read-only).
+- macOS build not done (needs a Mac). Search covers the tradable catalog only.
+- Optional pricing follow-ups: store highest bid + show full spread/liquidity/source in the drawer;
+  illiquidity discount / midpoint marks.
 
-## Environment gotchas (important for the next session)
-- **Could not visually verify most UI this session.** The dev window repeatedly got buried behind
-  the editor and there is no window-raise/input-injection tool on this box (no wmctrl/ydotool/
-  xdotool; only screenshot tools). Changes were verified via build gates + replicating logic
-  against the live SQLite DB. **Next session should click-test:** the Trends hero/timeframes, the
-  candle drawer + Wiki button (does the WebviewWindow actually open?), light mode across screens,
-  global search + `ininv:`, set tiles, and the Rotation strip.
-- Shell stdout on this box can be unreliable — route to temp files / trust exit codes.
-- Stop the dev server with exact-name kills (`pkill -x wfit`, `pkill -x node`).
-- Live DB: `~/.local/share/dev.finn.wfit/wfit.sqlite`.
+---
+
+## Appendix — 2026-05-31 "polish + features" session (committed/pushed)
+
+Frameless window + custom titlebar + app icon; Settings screen (Light/Dark theme, density, cache
+actions); Trends decision surface (Prime Market hero index, z-score signals, exclude-outliers
+winsorize); item drawer (OHLC candlestick + MA, live spread, resizable, Remove, Wiki ↗); sets-as-parts
+valuation; Rotation live countdowns; real wfm item icons; global catalog search (`ininv:` prefix);
+in-app wiki `WebviewWindow` (frameless, auto-closes on blur — `src/lib/wiki.ts`). Migration `0002`
+added OHLC. These screens were not click-tested that session.
 
 ## Repo
-- Private GitHub: **github.com/finneritter/WFIT**, branch `main` (origin set, `git push` works).
-- `src-tauri/gen/` is gitignored (regenerated each build).
+Private GitHub **github.com/finneritter/WFIT**, branch `main`. `src-tauri/gen/` is gitignored.

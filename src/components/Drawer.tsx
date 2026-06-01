@@ -117,7 +117,8 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
   const owned = item.owned_qty > 0;
   const delta = item.delta_7d ?? 0;
   const price = item.median_plat;
-  const stack = price != null ? price * item.owned_qty : null;
+  // Mods/arcanes carry a rank-aware stack value; otherwise median × owned.
+  const stack = item.value_plat ?? (price != null ? price * item.owned_qty : null);
 
   const spread =
     orders?.best_buy != null && orders?.best_sell != null
@@ -249,6 +250,41 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
             </div>
           </div>
         </div>
+
+        {item.ranks.length > 0 ? (
+          <div className="rankbox">
+            <div className="rankbox-h">
+              Owned by rank{item.max_rank != null ? ` (max ${item.max_rank})` : ""}
+            </div>
+            <table className="dtable">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th className="r">Qty</th>
+                  <th className="r">Price</th>
+                  <th className="r">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {item.ranks.map((rk) => (
+                  <tr key={rk.rank}>
+                    <td>
+                      Rank {rk.rank}
+                      {item.max_rank != null && rk.rank === item.max_rank ? (
+                        <span className="muted"> · max</span>
+                      ) : null}
+                    </td>
+                    <td className="r num">×{rk.qty}</td>
+                    <td className="r num">{rk.median != null ? `${fmt(rk.median)}p` : "—"}</td>
+                    <td className="r num">
+                      {rk.median != null ? `${fmt(rk.median * rk.qty)}p` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
 
         <div className="drawer-actions">
           {owned ? (

@@ -1,3 +1,4 @@
+use crate::db::prices;
 use crate::db::Db;
 use crate::error::{AppError, AppResult};
 use crate::types::InventoryRow;
@@ -179,19 +180,22 @@ pub fn remove(db: &Db, slug: &str) -> AppResult<()> {
 pub fn list_ranked(db: &Db) -> AppResult<Vec<InventoryRow>> {
     let mut out = owned_holdings(db)?;
     out.sort_by(|a, b| {
-        let av = a.median_plat.unwrap_or(0) * a.qty;
-        let bv = b.median_plat.unwrap_or(0) * b.qty;
-        bv.cmp(&av).then_with(|| a.display_name.cmp(&b.display_name))
+        row_value(b)
+            .cmp(&row_value(a))
+            .then_with(|| a.display_name.cmp(&b.display_name))
     });
     Ok(out)
 }
 
-/// Set-aware total plat value of the inventory (complete sets at set price).
+/// Set-aware total plat value of the inventory (complete sets at set price,
+/// mods/arcanes at their rank-aware value).
 pub fn total_value(db: &Db) -> AppResult<i64> {
-    Ok(owned_holdings(db)?
-        .iter()
-        .map(|r| r.median_plat.unwrap_or(0) * r.qty)
-        .sum())
+    Ok(owned_holdings(db)?.iter().map(row_value).sum())
+}
+
+/// The plat value of one owned row: rank-aware value when present, else median × qty.
+fn row_value(r: &InventoryRow) -> i64 {
+    r.value_plat.unwrap_or_else(|| r.median_plat.unwrap_or(0) * r.qty)
 }
 
 /// Number of complete sets currently owned (all member parts present).
@@ -254,10 +258,48 @@ fn fetch_owned(db: &Db) -> AppResult<Vec<InventoryRow>> {
                 volume_7d: r.get(11)?,
                 thumbnail_url: r.get(12)?,
                 last_modified_at: r.get(13)?,
+                value_plat: None,
             })
         })?;
-        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        let mut owned = rows.collect::<Result<Vec<_>, _>>()?;
+        // Second pass: rank-aware value for mods/arcanes; live-sell value for other
+        // illiquid items. Both prefer the live ask over the trade median (effective_price).
+        for row in &mut owned {
+            if let Some(v) = rank_aware_value(c, &row.slug)? {
+                // Ranked: value off per-rank effective price; show the blended
+                // per-unit price so price × qty == value in the grid/drawer.
+                row.value_plat = Some(v);
+                if row.qty > 0 {
+                    row.median_plat = Some(v / row.qty);
+                }
+            } else if let Some(ep) = prices::effective_price(c, &row.slug, None)? {
+                // Non-ranked: show the live-sell-preferred price and value off it.
+                row.median_plat = Some(ep);
+                row.value_plat = Some(ep * row.qty);
+            }
+        }
+        Ok(owned)
     })
+}
+
+/// Σ qty_r × effective per-rank price (live ask preferred over trade median) for a
+/// slug's rank breakdown. None when the slug has no breakdown (prime parts) —
+/// callers then fall back to the non-ranked effective price.
+fn rank_aware_value(c: &rusqlite::Connection, slug: &str) -> AppResult<Option<i64>> {
+    let breakdown: Vec<(i64, i64)> = {
+        let mut stmt = c.prepare("SELECT rank, qty FROM inventory_ranks WHERE slug = ?1")?;
+        let rows = stmt.query_map(params![slug], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+    if breakdown.is_empty() {
+        return Ok(None);
+    }
+    let mut total = 0i64;
+    for (rank, qty) in breakdown {
+        let price = prices::effective_price(c, slug, Some(rank))?.unwrap_or(0);
+        total += price * qty;
+    }
+    Ok(Some(total))
 }
 
 /// set_slug → its catalog/price row, used as the collapsed-set template.
@@ -286,6 +328,7 @@ fn set_templates(db: &Db) -> AppResult<HashMap<String, InventoryRow>> {
                 volume_7d: r.get(8)?,
                 thumbnail_url: r.get(9)?,
                 last_modified_at: String::new(),
+                value_plat: None,
             })
         })?;
         let mut m = HashMap::new();

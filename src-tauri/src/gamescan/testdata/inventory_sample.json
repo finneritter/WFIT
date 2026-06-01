@@ -1,0 +1,14 @@
+{
+  "AccountId": "abc123",
+  "MiscItems": [
+    { "ItemType": "/Lotus/Types/Recipes/Weapons/SomaPrimeBarrel", "ItemCount": 3 },
+    { "ItemType": "/Lotus/Types/Recipes/Weapons/SomaPrimeReceiver", "ItemCount": 1 },
+    { "ItemType": "/Lotus/Types/Items/MiscItems/Ferrite", "ItemCount": 4210 }
+  ],
+  "RawUpgrades": [
+    { "ItemType": "/Lotus/Upgrades/Mods/Pistol/WeaponCritChanceMod", "ItemCount": 9, "LastAdded": { "$oid": "deadbeef" } }
+  ],
+  "Upgrades": [
+    { "ItemType": "/Lotus/Upgrades/Mods/Pistol/WeaponCritChanceMod", "UpgradeFingerprint": "{\"lvl\":5}", "ItemId": { "$oid": "cafe" } }
+  ]
+}

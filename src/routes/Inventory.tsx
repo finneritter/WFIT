@@ -7,6 +7,10 @@ import type { InventoryRow } from "../lib/types";
 type SortKey = "value-desc" | "value-asc" | "trend" | "name";
 const CATS = ["warframe", "weapon", "set", "mod", "arcane"] as const;
 
+// Rank-aware row value: mods/arcanes carry a per-rank value_plat; everything else
+// is median × qty.
+const rowValue = (r: InventoryRow) => r.value_plat ?? (r.median_plat ?? 0) * r.qty;
+
 function Tile({ row, onOpen }: { row: InventoryRow; onOpen: (slug: string) => void }) {
   const plat = row.median_plat;
   return (
@@ -40,7 +44,7 @@ function Section({
   onOpen: (slug: string) => void;
 }) {
   const [open, setOpen] = useState(true);
-  const stack = rows.reduce((s, r) => s + (r.median_plat ?? 0) * r.qty, 0);
+  const stack = rows.reduce((s, r) => s + rowValue(r), 0);
   return (
     <div className="section">
       <div className="sec-h" onClick={() => setOpen((o) => !o)}>
@@ -83,13 +87,13 @@ export function Inventory({
     sorted.sort((a, b) => {
       switch (sort) {
         case "value-asc":
-          return (a.median_plat ?? 0) * a.qty - (b.median_plat ?? 0) * b.qty;
+          return rowValue(a) - rowValue(b);
         case "trend":
           return (b.delta_7d ?? 0) - (a.delta_7d ?? 0);
         case "name":
           return a.display_name.localeCompare(b.display_name);
         default:
-          return (b.median_plat ?? 0) * b.qty - (a.median_plat ?? 0) * a.qty;
+          return rowValue(b) - rowValue(a);
       }
     });
     return sorted;
