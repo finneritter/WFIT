@@ -41,6 +41,7 @@ export interface InventoryRow {
   daily_volume: number | null;
   liquidity: number | null; // φ 0..1
   days_to_sell: number | null;
+  confidence: "high" | "medium" | "low" | null;
 }
 
 export interface SaleRow {
@@ -200,6 +201,7 @@ export interface ItemDetail {
   daily_volume: number | null;
   liquidity: number | null;
   days_to_sell: number | null;
+  confidence: "high" | "medium" | "low" | null;
   history: HistoryPoint[];
 }
 

@@ -254,6 +254,31 @@ pub fn realizable_value(
     bid_value + tail_value
 }
 
+/// Per-item confidence in the value (Fair-Value-Hierarchy, ECONOMIC_DATA §1.4):
+/// 'high' = actively traded, 'medium' = trades occasionally or has live bids,
+/// 'low' = barely trades / no demand / riven. None when there's no price at all.
+pub fn confidence_of(
+    slug: &str,
+    has_price: bool,
+    volume_7d: Option<i64>,
+    has_bids: bool,
+) -> Option<&'static str> {
+    if !has_price {
+        return None;
+    }
+    if slug.contains("riven") {
+        return Some("low"); // roll-dependent, near-unique — never a confident point
+    }
+    let daily = volume_7d.unwrap_or(0).max(0) as f64 / 7.0;
+    Some(if daily >= 3.0 {
+        "high"
+    } else if daily >= 0.5 || has_bids {
+        "medium"
+    } else {
+        "low"
+    })
+}
+
 /// `realizable_value` with the app defaults, clamped to the market ceiling, plus
 /// φ = realizable / market.
 pub fn realizable_default(
@@ -338,6 +363,7 @@ fn fetch_owned(db: &Db) -> AppResult<Vec<InventoryRow>> {
                 daily_volume: None,
                 liquidity: None,
                 days_to_sell: None,
+                confidence: None,
             })
         })?;
         let mut owned = rows.collect::<Result<Vec<_>, _>>()?;
@@ -412,6 +438,7 @@ fn set_templates(db: &Db) -> AppResult<HashMap<String, InventoryRow>> {
                 daily_volume: None,
                 liquidity: None,
                 days_to_sell: None,
+                confidence: None,
             })
         })?;
         let mut m = HashMap::new();
@@ -488,6 +515,13 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
                 Some(v) if v > 0 => Some((row.qty as f64 / (v as f64 / 7.0)).round() as i64),
                 _ => None,
             };
+            row.confidence = confidence_of(
+                &row.slug,
+                row.median_plat.is_some(),
+                row.volume_7d,
+                !bids.is_empty(),
+            )
+            .map(String::from);
         }
         Ok(())
     })?;

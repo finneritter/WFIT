@@ -348,6 +348,27 @@ code { font-family: var(--mono); font-size: 11px; color: var(--ink); background:
 .liqbar { position: absolute; left: 0; right: 0; bottom: 13px; height: 3px; background: var(--line); z-index: 3; }
 .liqbar-fill { display: block; height: 100%; background: var(--soft); }
 
+/* confidence: dot on tiles, tag in the drawer. A perceptual ramp (filled→hollow),
+   NOT the gain/loss palette; low is hollow so it reads without relying on color. */
+.tile .vbar { justify-content: space-between; }
+.cf-dot { width: 6px; height: 6px; border-radius: 50%; align-self: center; flex: none; }
+.cf-dot.high { background: var(--accent); }
+.cf-dot.medium { background: var(--soft); }
+.cf-dot.low { background: transparent; border: 1px solid var(--faint); }
+.cf-tag { display: inline-block; text-transform: uppercase; font-size: 10px; letter-spacing: .04em; padding: 0 5px; border: 1px solid var(--line-2); }
+.cf-tag.high { color: var(--accent); border-color: var(--accent); }
+.cf-tag.medium { color: var(--soft); }
+.cf-tag.low { color: var(--faint); }
+
+/* composition — "what's driving your value" */
+.compo { margin-bottom: 12px; }
+.compo-row { display: grid; grid-template-columns: 1fr 84px auto; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: none; border-top: 1px solid var(--line); padding: 6px 14px; cursor: pointer; color: var(--ink); font: inherit; }
+.compo-row:hover { background: var(--hover); }
+.compo-name { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compo-bar { height: 5px; background: var(--line); }
+.compo-fill { display: block; height: 100%; background: var(--soft); }
+.compo-val { font-size: 12px; color: var(--soft); white-space: nowrap; }
+
 /* drawer rank breakdown (mods/arcanes) */
 .rankbox { margin: 12px 0; border: 1px solid var(--line-2); }
 .rankbox-h { font-size: 11px; color: var(--soft); padding: 6px 10px; border-bottom: 1px solid var(--line-2); text-transform: uppercase; letter-spacing: .04em; }

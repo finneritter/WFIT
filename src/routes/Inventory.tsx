@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { StatBox } from "../components/ui";
 import { useInventory, useSummary } from "../hooks/queries";
-import { CATEGORY_LABELS, clsx, fmt, glyph, pct, tier, trendOf } from "../lib/format";
+import { CATEGORY_LABELS, clsx, fmt, fmtK, glyph, pct, tier, trendOf } from "../lib/format";
 import type { InventoryRow } from "../lib/types";
 
 type SortKey = "value-desc" | "value-asc" | "trend" | "name";
@@ -30,6 +30,14 @@ function Tile({ row, onOpen }: { row: InventoryRow; onOpen: (slug: string) => vo
         <span className="glyph">{glyph(row.display_name)}</span>
       )}
       <div className="vbar">
+        {row.confidence ? (
+          <span
+            className={clsx("cf-dot", row.confidence)}
+            title={`${row.confidence} confidence in value`}
+          />
+        ) : (
+          <span />
+        )}
         <span className="pl num">{plat == null ? "—" : `${fmt(plat)}p`}</span>
       </div>
       {row.liquidity != null && row.liquidity < 0.95 ? (
@@ -44,6 +52,40 @@ function Tile({ row, onOpen }: { row: InventoryRow; onOpen: (slug: string) => vo
       ) : null}
       <span className={clsx("trend", trendOf(row.delta_7d))} />
     </button>
+  );
+}
+
+// "What's driving your value" — the few holdings that actually matter, so a
+// junk-heavy inventory shows where its real value lives (index-composition, §2.5).
+function Composition({ rows, onOpen }: { rows: InventoryRow[]; onOpen: (slug: string) => void }) {
+  const ranked = [...rows].sort((a, b) => realValue(b) - realValue(a));
+  const total = ranked.reduce((s, r) => s + realValue(r), 0);
+  const top = ranked.filter((r) => realValue(r) > 0).slice(0, 6);
+  if (total <= 0 || top.length === 0) return null;
+  return (
+    <div className="tpanel compo">
+      <div className="tpanel-h">
+        <h3>What's driving your value</h3>
+        <span className="meta">
+          top {top.length} of {ranked.length}
+        </span>
+      </div>
+      {top.map((r) => {
+        const v = realValue(r);
+        const share = Math.round((v / total) * 100);
+        return (
+          <button type="button" className="compo-row" key={r.slug} onClick={() => onOpen(r.slug)}>
+            <span className="compo-name">{r.display_name}</span>
+            <span className="compo-bar">
+              <span className="compo-fill" style={{ width: `${Math.max(2, share)}%` }} />
+            </span>
+            <span className="compo-val num">
+              {fmt(v)}p<span className="u"> · {share}%</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -135,9 +177,9 @@ export function Inventory({
       <div className="statband">
         <StatBox
           k="Realizable Platinum"
-          v={fmt(summary?.realizable_plat)}
+          v={`~${fmtK(summary?.realizable_plat)}`}
           unit="p"
-          d={`≈ ${fmt(summary?.total_plat)}p at market`}
+          d={`up to ${fmtK(summary?.total_plat)}p at market`}
           dcls="muted"
         />
         <StatBox k="Total Ducats" v={fmt(summary?.total_ducats)} unit="d" />
@@ -155,6 +197,8 @@ export function Inventory({
         <StatBox k="Hot" v={fmt(summary?.hot_count)} />
         <StatBox k="Sold · 7d" v={fmt(summary?.sold_7d)} unit="p" />
       </div>
+
+      {cat === "all" && !search.trim() ? <Composition rows={inv} onOpen={onOpen} /> : null}
 
       <div className="filters">
         {(["all", "hot", ...CATS] as const).map((c) => (

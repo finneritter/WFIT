@@ -239,7 +239,7 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
           </div>
           {item.realizable_plat != null && item.owned_qty > 0 ? (
             <div className="cell">
-              <div className="k">Realizable · liquidity</div>
+              <div className="k">Realizable · if sold gradually</div>
               <div className="v num">
                 {fmt(item.realizable_plat)}p
                 {item.liquidity != null ? (
@@ -247,6 +247,17 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
                 ) : null}
                 {item.days_to_sell != null ? (
                   <span className="u"> · ~{fmt(item.days_to_sell)}d to sell</span>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {item.confidence ? (
+            <div className="cell">
+              <div className="k">Confidence · basis</div>
+              <div className="v num">
+                <span className={clsx("cf-tag", item.confidence)}>{item.confidence}</span>
+                {item.volume_7d != null ? (
+                  <span className="u"> · {fmt(item.volume_7d)} trades/wk</span>
                 ) : null}
               </div>
             </div>

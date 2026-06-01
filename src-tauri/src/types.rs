@@ -53,6 +53,9 @@ pub struct InventoryRow {
     pub liquidity: Option<f64>,
     /// Estimated days to sell the whole stack at current volume (None if no volume).
     pub days_to_sell: Option<i64>,
+    /// Confidence in the value: 'high' (actively traded), 'medium', 'low' (thin /
+    /// barely trades / riven). Drives how the UI presents the number.
+    pub confidence: Option<String>,
 }
 
 /// A realized sale (Sold History).
@@ -266,6 +269,7 @@ pub struct ItemDetail {
     pub daily_volume: Option<f64>,    // avg units traded/day
     pub liquidity: Option<f64>,       // φ 0..1
     pub days_to_sell: Option<i64>,    // est. days to clear the stack
+    pub confidence: Option<String>,   // 'high' | 'medium' | 'low'
     pub history: Vec<HistoryPoint>,
 }
 
