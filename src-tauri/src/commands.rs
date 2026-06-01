@@ -537,7 +537,9 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
     // Liquidation-adjusted stack value + liquidity signals (mirrors the grid).
     let (realizable_plat, liquidity, daily_volume, days_to_sell) = if owned_qty > 0 {
         let market = value_plat.unwrap_or_else(|| eff_median.unwrap_or(0) * owned_qty);
-        let (rz, phi) = inventory::realizable_default(market, owned_qty, volume_7d);
+        let bids = state.db.with(|c| prices::bid_ladder(c, &slug))?;
+        let (rz, phi) =
+            inventory::realizable_default(eff_median.unwrap_or(0), owned_qty, market, volume_7d, &bids);
         let dv = volume_7d.map(|v| (v.max(0) as f64) / 7.0);
         let dts = match volume_7d {
             Some(v) if v > 0 => Some((owned_qty as f64 / (v as f64 / 7.0)).round() as i64),

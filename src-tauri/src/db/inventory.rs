@@ -210,39 +210,67 @@ fn row_value(r: &InventoryRow) -> i64 {
 
 // --- Liquidation-adjusted (realizable) valuation ---------------------------
 // A market price is a MARGINAL price; `× qty` falsely assumes it holds for the
-// whole stack. We haircut each holding by how much the market can actually
-// absorb: full value up to `K · daily_volume · WINDOW_DAYS` units, the excess
-// discounted to RESIDUAL. So 500 copies of a mod that trades ~weekly stops
-// counting as 500 × price. (See .claude/plans + CLAUDE_ECONOMIC_RESEARCH.)
-const WINDOW_DAYS: f64 = 30.0; // horizon you'd realistically take to sell
+// whole stack. We value each holding by LIQUIDATING it: fill the standing buy
+// orders (the demand curve) best-bid-first, then a volume-capped tail for what
+// off-book demand could absorb over the window (discounted), and anything beyond
+// that is worth ~0. So 500 copies of a mod nobody is bidding on ≈ nothing.
+// (See .claude/plans/pricing-rework + CLAUDE_ECONOMIC_RESEARCH.)
+const WINDOW_DAYS: f64 = 30.0; // horizon for off-book (volume-driven) sales
 const K: f64 = 1.0; // share of market volume you could capture
-const RESIDUAL: f64 = 0.05; // the un-sellable excess isn't worthless, but nearly
+const TAIL_FACTOR: f64 = 0.35; // off-book sales beyond live bids net ~a third of sticker
 
-/// Realizable plat for a stack worth `market` at full price, plus the liquidity
-/// factor φ = realizable/market (0..1). `volume_7d` None/0 ⇒ capacity 0 (only the
-/// residual tail counts). φ = 1 for liquid stacks (no visible change).
+/// Realizable plat for a stack: `bids` (price, qty) filled best-first, plus a
+/// volume-capped, discounted tail; units beyond both real bids and that capacity
+/// are worth ~0. `per_unit` is the reference price for the tail.
 pub fn realizable_value(
-    market: i64,
+    per_unit: i64,
     qty: i64,
     volume_7d: Option<i64>,
+    bids: &[(i64, i64)],
     window_days: f64,
     k: f64,
-    residual: f64,
-) -> (i64, f64) {
-    if qty <= 0 || market <= 0 {
-        return (market.max(0), 1.0);
+    tail_factor: f64,
+) -> i64 {
+    if qty <= 0 {
+        return 0;
     }
+    // 1) liquidate into the standing demand, best bid first.
+    let mut remaining = qty;
+    let mut bid_value = 0i64;
+    for &(price, q) in bids {
+        if remaining == 0 {
+            break;
+        }
+        let take = remaining.min(q.max(0));
+        bid_value += take * price.max(0);
+        remaining -= take;
+    }
+    let filled = qty - remaining;
+    // 2) volume-capped tail beyond the bids — off-book demand at a discount.
     let daily = volume_7d.unwrap_or(0).max(0) as f64 / 7.0;
     let capacity = (k * daily * window_days).floor() as i64;
-    let sellable = qty.min(capacity);
-    let excess = (qty - sellable).max(0);
-    let phi = (sellable as f64 + excess as f64 * residual) / qty as f64;
-    ((market as f64 * phi).round() as i64, phi)
+    let tail_units = (capacity - filled).max(0).min(remaining);
+    let tail_value = (tail_units as f64 * per_unit.max(0) as f64 * tail_factor).round() as i64;
+    bid_value + tail_value
 }
 
-/// `realizable_value` with the app's default WINDOW_DAYS / K / RESIDUAL.
-pub fn realizable_default(market: i64, qty: i64, volume_7d: Option<i64>) -> (i64, f64) {
-    realizable_value(market, qty, volume_7d, WINDOW_DAYS, K, RESIDUAL)
+/// `realizable_value` with the app defaults, clamped to the market ceiling, plus
+/// φ = realizable / market.
+pub fn realizable_default(
+    per_unit: i64,
+    qty: i64,
+    market: i64,
+    volume_7d: Option<i64>,
+    bids: &[(i64, i64)],
+) -> (i64, f64) {
+    let rz = realizable_value(per_unit, qty, volume_7d, bids, WINDOW_DAYS, K, TAIL_FACTOR)
+        .min(market.max(0));
+    let phi = if market > 0 {
+        rz as f64 / market as f64
+    } else {
+        1.0
+    };
+    (rz, phi)
 }
 
 /// Number of complete sets currently owned (all member parts present).
@@ -445,19 +473,24 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
         }
     }
 
-    // Liquidity-adjusted (realizable) value + signals for every row (sets included).
-    for row in &mut out {
-        let market = row_value(row);
-        let (realizable, phi) =
-            realizable_value(market, row.qty, row.volume_7d, WINDOW_DAYS, K, RESIDUAL);
-        row.realizable_plat = Some(realizable);
-        row.liquidity = Some(phi);
-        row.daily_volume = row.volume_7d.map(|v| (v.max(0) as f64) / 7.0);
-        row.days_to_sell = match row.volume_7d {
-            Some(v) if v > 0 => Some((row.qty as f64 / (v as f64 / 7.0)).round() as i64),
-            _ => None,
-        };
-    }
+    // Liquidity-adjusted (realizable) value + signals for every row (sets included):
+    // liquidate into the live bid ladder, then a volume-capped tail.
+    db.with(|c| {
+        for row in &mut out {
+            let market = row_value(row);
+            let bids = prices::bid_ladder(c, &row.slug)?;
+            let (realizable, phi) =
+                realizable_default(row.median_plat.unwrap_or(0), row.qty, market, row.volume_7d, &bids);
+            row.realizable_plat = Some(realizable);
+            row.liquidity = Some(phi);
+            row.daily_volume = row.volume_7d.map(|v| (v.max(0) as f64) / 7.0);
+            row.days_to_sell = match row.volume_7d {
+                Some(v) if v > 0 => Some((row.qty as f64 / (v as f64 / 7.0)).round() as i64),
+                _ => None,
+            };
+        }
+        Ok(())
+    })?;
     Ok(out)
 }
 
@@ -476,49 +509,45 @@ pub fn owned_slugs(db: &Db) -> AppResult<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::realizable_value;
+    use super::{realizable_default, realizable_value};
 
-    // Defaults under test (mirror the consts).
     const W: f64 = 30.0;
     const K: f64 = 1.0;
-    const R: f64 = 0.05;
+    const T: f64 = 0.35;
 
     #[test]
-    fn hoard_in_a_thin_market_is_heavily_discounted() {
-        // 500 copies, market 1500p, ~1 sale/week (volume_7d≈1): capacity ≈ 4 units.
-        let (rz, phi) = realizable_value(1500, 500, Some(1), W, K, R);
-        assert!(rz < 150, "expected a heavy haircut, got {rz}");
-        assert!(phi < 0.1);
+    fn no_bids_and_thin_volume_is_nearly_worthless() {
+        // 500 copies at 3p, ~1 sale/week, ZERO buy orders: only a tiny volume tail.
+        let rz = realizable_value(3, 500, Some(1), &[], W, K, T);
+        assert!(rz < 20, "expected ~nothing, got {rz}");
     }
 
     #[test]
-    fn liquid_stack_is_unchanged() {
-        // 5 copies, daily volume ~60 (volume_7d 420): capacity ≫ qty → φ = 1.
-        let (rz, phi) = realizable_value(325, 5, Some(420), W, K, R);
-        assert_eq!(rz, 325);
-        assert_eq!(phi, 1.0);
+    fn fills_standing_bids_best_first() {
+        // No volume tail; liquidate 5 into bids 55×2, 50×1 → 110 + 50, 2 unsold.
+        let rz = realizable_value(50, 5, Some(0), &[(55, 2), (50, 1)], W, K, T);
+        assert_eq!(rz, 160);
     }
 
     #[test]
-    fn no_volume_data_keeps_only_the_residual_tail() {
-        let (rz, phi) = realizable_value(1000, 100, None, W, K, R);
-        assert_eq!(rz, 50); // 1000 × 0.05
-        assert!((phi - 0.05).abs() < 1e-9);
+    fn no_volume_no_bids_is_zero() {
+        assert_eq!(realizable_value(10, 100, None, &[], W, K, T), 0);
     }
 
     #[test]
-    fn zero_market_or_qty_does_not_panic() {
-        assert_eq!(realizable_value(0, 100, Some(7), W, K, R), (0, 1.0));
-        assert_eq!(realizable_value(500, 0, Some(7), W, K, R), (500, 1.0));
+    fn zero_qty_does_not_panic() {
+        assert_eq!(realizable_value(5, 0, Some(7), &[(4, 3)], W, K, T), 0);
     }
 
     #[test]
-    fn realizable_never_exceeds_market() {
-        for &q in &[1, 10, 500, 5000] {
-            for &v in &[0, 1, 50, 1000] {
-                let (rz, _) = realizable_value(1000, q, Some(v), W, K, R);
-                assert!(rz <= 1000, "qty {q} vol {v} -> {rz} > market");
-            }
-        }
+    fn default_clamps_to_market_and_reports_phi() {
+        // ammo_drum-like: 236 @ 5p (market 1180), vol 9, no bids → heavy haircut.
+        let (rz, phi) = realizable_default(5, 236, 1180, Some(9), &[]);
+        assert!(rz < 120 && rz > 0, "got {rz}");
+        assert!(phi < 0.12);
+        // bids above market can't push realizable past the ceiling.
+        let (rz2, phi2) = realizable_default(5, 3, 15, Some(0), &[(99, 10)]);
+        assert_eq!(rz2, 15);
+        assert_eq!(phi2, 1.0);
     }
 }

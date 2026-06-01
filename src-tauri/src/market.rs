@@ -393,13 +393,12 @@ impl Market {
         Ok(out)
     }
 
-    /// Robust lowest live SELL price per rank from `/v2/orders/item` — the real
-    /// market signal for illiquid items, where trade statistics are sparse/gameable.
-    /// We value off asks (sell listings), NOT buy orders. Online (ingame/online)
-    /// sellers are preferred when there are enough of them, else all sellers are
-    /// used so an illiquid item still gets a price. Returns (rank, sell) pairs;
-    /// rank -1 means a non-ranked item.
-    pub async fn fetch_sell_prices(&self, slug: &str) -> AppResult<Vec<(i64, i64)>> {
+    /// The live order book for one item from `/v2/orders/item`:
+    /// - `sells`: robust lowest ask per rank (median of cheapest 5; online preferred)
+    ///   — the reference for buying / for items with no bids.
+    /// - `bids`: the online BUY ladder (rank, price, qty) — the actual demand curve
+    ///   we liquidate holdings into. rank -1 = a non-ranked item.
+    pub async fn fetch_order_book(&self, slug: &str) -> AppResult<OrderBook> {
         self.throttled().await;
 
         #[derive(Deserialize)]
@@ -412,6 +411,7 @@ impl Market {
             #[serde(rename = "type")]
             order_type: String,
             platinum: Option<i64>,
+            quantity: Option<i64>,
             rank: Option<i64>,
             user: Option<OrderUser>,
         }
@@ -423,41 +423,49 @@ impl Market {
         let url = format!("{API_V2}/orders/item/{slug}");
         let r = self.http.get(url).send().await?;
         if !r.status().is_success() {
-            return Ok(Vec::new());
+            return Ok(OrderBook::default());
         }
         let resp: Resp = r.json().await?;
 
         use std::collections::BTreeMap;
-        let mut online: BTreeMap<i64, Vec<i64>> = BTreeMap::new();
-        let mut all: BTreeMap<i64, Vec<i64>> = BTreeMap::new();
+        let mut online_sells: BTreeMap<i64, Vec<i64>> = BTreeMap::new();
+        let mut all_sells: BTreeMap<i64, Vec<i64>> = BTreeMap::new();
+        // online buy qty aggregated per (rank, price)
+        let mut bids: BTreeMap<(i64, i64), i64> = BTreeMap::new();
         for o in &resp.data {
-            if o.order_type != "sell" {
-                continue; // value off sell listings, not buy orders
-            }
             let Some(p) = o.platinum else { continue };
             let rk = o.rank.unwrap_or(-1);
-            all.entry(rk).or_default().push(p);
             let is_online = o
                 .user
                 .as_ref()
                 .and_then(|u| u.status.as_deref())
                 .is_some_and(|s| s == "ingame" || s == "online");
-            if is_online {
-                online.entry(rk).or_default().push(p);
+            match o.order_type.as_str() {
+                "sell" => {
+                    all_sells.entry(rk).or_default().push(p);
+                    if is_online {
+                        online_sells.entry(rk).or_default().push(p);
+                    }
+                }
+                "buy" if is_online => {
+                    *bids.entry((rk, p)).or_insert(0) += o.quantity.unwrap_or(1).max(1);
+                }
+                _ => {}
             }
         }
 
-        let mut out = Vec::new();
-        for (rk, all_sells) in &all {
-            let source = match online.get(rk) {
+        let mut sells = Vec::new();
+        for (rk, all_s) in &all_sells {
+            let source = match online_sells.get(rk) {
                 Some(v) if v.len() >= 5 => v,
-                _ => all_sells,
+                _ => all_s,
             };
             if let Some(price) = robust_low(source) {
-                out.push((*rk, price));
+                sells.push((*rk, price));
             }
         }
-        Ok(out)
+        let bids = bids.into_iter().map(|((rk, p), q)| (rk, p, q)).collect();
+        Ok(OrderBook { sells, bids })
     }
 
     /// Tier 1 (public): a user's visible orders. Auth header optional (Tier 2).
@@ -490,6 +498,13 @@ impl Market {
         let resp: Resp = r.json().await?;
         Ok(resp.payload.sell_orders)
     }
+}
+
+/// The live order book for one item: robust asks per rank + the online bid ladder.
+#[derive(Debug, Clone, Default)]
+pub struct OrderBook {
+    pub sells: Vec<(i64, i64)>,      // (rank, robust lowest ask)
+    pub bids: Vec<(i64, i64, i64)>,  // (rank, price, qty) — online buy orders
 }
 
 /// Raw set-composition fields from the detail endpoint (ids, not slugs).

@@ -25,7 +25,7 @@ const DRAIN_BATCH: i64 = 40;
 // Bump whenever the price-derivation logic changes. On launch a mismatch wipes the
 // derived price caches and recomputes them, so fixes take effect without a manual
 // "rebuild cache" and stale old-logic prices can't survive behind the TTL.
-const PRICING_VERSION: &str = "2";
+const PRICING_VERSION: &str = "3";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -136,7 +136,7 @@ async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
         tracing::info!("pricing logic changed → clearing price caches for a clean reprice");
         state.db.with(|c| {
             c.execute_batch(
-                "DELETE FROM price_cache; DELETE FROM price_rank; DELETE FROM order_cache;",
+                "DELETE FROM price_cache; DELETE FROM price_rank; DELETE FROM order_cache; DELETE FROM buy_orders;",
             )?;
             Ok(())
         })?;
@@ -259,13 +259,13 @@ pub(crate) async fn refresh_owned_orders(state: &Arc<AppState>, force: bool) -> 
     tracing::info!(n = slugs.len(), "refreshing live sell orders for owned items");
     let mut priced = 0usize;
     for slug in &slugs {
-        match state.market.fetch_sell_prices(slug).await {
-            Ok(prices) if !prices.is_empty() => {
-                prices::store_sell_prices(&state.db, slug, &prices)?;
+        match state.market.fetch_order_book(slug).await {
+            Ok(book) if !book.sells.is_empty() || !book.bids.is_empty() => {
+                prices::store_order_book(&state.db, slug, &book.sells, &book.bids)?;
                 priced += 1;
             }
             Ok(_) => {}
-            Err(e) => tracing::warn!(slug, error = %e, "fetch_sell_prices failed"),
+            Err(e) => tracing::warn!(slug, error = %e, "fetch_order_book failed"),
         }
     }
     tracing::info!(priced, of = slugs.len(), "live sell orders refreshed");

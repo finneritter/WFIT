@@ -45,21 +45,44 @@ pub fn effective_price(c: &Connection, slug: &str, rank: Option<i64>) -> AppResu
     }
 }
 
-/// Replace the cached live-sell prices for a slug (per rank).
-pub fn store_sell_prices(db: &Db, slug: &str, prices: &[(i64, i64)]) -> AppResult<()> {
+/// Replace the cached order book for a slug: robust asks (`order_cache`) + the
+/// online bid ladder (`buy_orders`).
+pub fn store_order_book(
+    db: &Db,
+    slug: &str,
+    sells: &[(i64, i64)],
+    bids: &[(i64, i64, i64)],
+) -> AppResult<()> {
     db.with_mut(|conn| {
         let tx = conn.transaction()?;
-        tx.execute("DELETE FROM order_cache WHERE slug = ?1", params![slug])?;
         let now = Utc::now().to_rfc3339();
-        for (rank, sell) in prices {
+        tx.execute("DELETE FROM order_cache WHERE slug = ?1", params![slug])?;
+        tx.execute("DELETE FROM buy_orders WHERE slug = ?1", params![slug])?;
+        for (rank, sell) in sells {
             tx.execute(
                 "INSERT INTO order_cache (slug, rank, sell, fetched_at) VALUES (?1, ?2, ?3, ?4)",
                 params![slug, rank, sell, now],
             )?;
         }
+        for (rank, price, qty) in bids {
+            tx.execute(
+                "INSERT INTO buy_orders (slug, rank, price, qty, fetched_at) VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(slug, rank, price) DO UPDATE SET qty = excluded.qty",
+                params![slug, rank, price, qty, now],
+            )?;
+        }
         tx.commit()?;
         Ok(())
     })
+}
+
+/// The online bid ladder for a slug (all ranks), best price first — the demand
+/// curve a holding is liquidated into.
+pub fn bid_ladder(c: &Connection, slug: &str) -> AppResult<Vec<(i64, i64)>> {
+    let mut stmt =
+        c.prepare("SELECT price, qty FROM buy_orders WHERE slug = ?1 ORDER BY price DESC")?;
+    let rows = stmt.query_map(params![slug], |r| Ok((r.get(0)?, r.get(1)?)))?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 /// Owned slugs to fetch live sell orders for. The live order book is the reliable
