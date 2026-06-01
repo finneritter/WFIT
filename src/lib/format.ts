@@ -1,10 +1,19 @@
 // Presentation helpers ported from the wireframe.
 
-export const clsx = (...a: (string | false | null | undefined)[]) =>
-  a.filter(Boolean).join(" ");
+export const clsx = (...a: (string | false | null | undefined)[]) => a.filter(Boolean).join(" ");
 
 export const fmt = (n: number | null | undefined): string =>
   n == null ? "—" : new Intl.NumberFormat("en-US").format(Math.round(n));
+
+// Hard-rounded plat for headline/aggregate numbers — never imply false precision.
+// 980 → "980", 6177 → "6.2k", 28757 → "29k".
+export const fmtK = (n: number | null | undefined): string => {
+  if (n == null) return "—";
+  const v = Math.round(n);
+  if (v < 1000) return String(v);
+  const k = v / 1000;
+  return `${k < 10 ? k.toFixed(1) : Math.round(k)}k`;
+};
 
 export const pct = (n: number): string => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
 

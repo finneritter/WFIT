@@ -2,6 +2,7 @@
 // keys so the UI updates live across screens.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "../lib/api";
+import type { ScanApply } from "../lib/types";
 
 export const keys = {
   inventory: ["inventory"] as const,
@@ -18,6 +19,7 @@ export const keys = {
   worldstate: ["worldstate"] as const,
   wfmAccount: ["wfmAccount"] as const,
   listings: ["listings"] as const,
+  gameScan: ["gameScan"] as const,
 };
 
 // Anything that touches inventory ripples into these derived views.
@@ -287,6 +289,38 @@ export function useWfmApplyImport() {
     mutationFn: (rows: { slug: string; qty: number }[]) => api.wfmApplyImport(rows),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.wfmAccount });
+      invalidateInventoryDerived(qc);
+    },
+  });
+}
+
+// ---- game inventory import (memory-scan) ----
+export const useGameScanStatus = () =>
+  useQuery({ queryKey: keys.gameScan, queryFn: api.gameScanStatus });
+
+export function useGameScanConsent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (phrase: string) => api.gameScanConsent(phrase),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.gameScan }),
+  });
+}
+export function useGameScanRevoke() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.gameScanRevoke(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.gameScan }),
+  });
+}
+export function useGameScanPreview() {
+  return useMutation({ mutationFn: () => api.gameScanPreview() });
+}
+export function useGameScanApply() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rows: ScanApply[]) => api.gameScanApply(rows),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.gameScan });
       invalidateInventoryDerived(qc);
     },
   });

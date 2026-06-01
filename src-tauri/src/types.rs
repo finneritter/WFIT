@@ -41,6 +41,21 @@ pub struct InventoryRow {
     pub volume_7d: Option<i64>,
     pub thumbnail_url: Option<String>,
     pub last_modified_at: String,
+    /// Rank-aware total value of this row (Σ qty_r × per-rank price). Some only for
+    /// owned mods/arcanes with a rank breakdown; None means use median_plat × qty.
+    pub value_plat: Option<i64>,
+    /// Liquidation-adjusted value (market value haircut by how much the market can
+    /// absorb). The honest per-row worth; always ≤ the market value.
+    pub realizable_plat: Option<i64>,
+    /// Avg units traded per day (volume_7d / 7) — the demand/liquidity signal.
+    pub daily_volume: Option<f64>,
+    /// Liquidity factor φ = realizable / market value, 0..1 (1 = fully liquid).
+    pub liquidity: Option<f64>,
+    /// Estimated days to sell the whole stack at current volume (None if no volume).
+    pub days_to_sell: Option<i64>,
+    /// Confidence in the value: 'high' (actively traded), 'medium', 'low' (thin /
+    /// barely trades / riven). Drives how the UI presents the number.
+    pub confidence: Option<String>,
 }
 
 /// A realized sale (Sold History).
@@ -61,7 +76,8 @@ pub struct SaleRow {
 /// Inventory stat band + sidebar quick-read figures.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Summary {
-    pub total_plat: i64,
+    pub total_plat: i64,           // full market value (the optimistic "ceiling")
+    pub realizable_plat: i64,      // liquidation-adjusted value (the honest headline)
     pub total_ducats: i64,
     pub part_count: i64,     // total units owned (excluding sets)
     pub distinct_count: i64, // distinct owned slugs
@@ -219,6 +235,15 @@ pub struct ItemOrders {
     pub sellers: i64,
 }
 
+/// One rank you own of a mod/arcane, with that rank's market price (exact or
+/// nearest). Powers the drawer's rank breakdown.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OwnedRank {
+    pub rank: i64,
+    pub qty: i64,
+    pub median: Option<i64>, // per-rank market median (plat)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ItemDetail {
     pub slug: String,
@@ -237,6 +262,14 @@ pub struct ItemDetail {
     pub listed: bool,
     pub realized_plat: i64, // total plat from past sales of this item
     pub sold_qty: i64,      // units sold historically
+    pub max_rank: Option<i64>,    // rank ceiling (mods/arcanes)
+    pub ranks: Vec<OwnedRank>,    // owned rank breakdown (empty for prime parts)
+    pub value_plat: Option<i64>,  // rank-aware total value of the owned stack (market)
+    pub realizable_plat: Option<i64>, // liquidation-adjusted stack value
+    pub daily_volume: Option<f64>,    // avg units traded/day
+    pub liquidity: Option<f64>,       // φ 0..1
+    pub days_to_sell: Option<i64>,    // est. days to clear the stack
+    pub confidence: Option<String>,   // 'high' | 'medium' | 'low'
     pub history: Vec<HistoryPoint>,
 }
 
@@ -278,4 +311,50 @@ pub struct ImportRow {
     pub listed_qty: i64,
     pub your_price: Option<i64>,
     pub current_qty: i64, // what inventory already has (conflict surface)
+}
+
+// ---------------------------------------------------------------------------
+// Game inventory import (memory-scan). Opt-in, consent-gated, Linux-only.
+// See GAME_INVENTORY_IMPORT.md / .claude/plans/game-inventory-import.md.
+// ---------------------------------------------------------------------------
+
+/// Drives the Settings "Game inventory" section. No scan happens to compute this.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameScanStatus {
+    pub supported: bool,         // false on non-Linux (macOS/Windows)
+    pub consented: bool,         // typed-phrase risk acceptance recorded
+    pub warframe_running: bool,  // the game process was detected
+    pub auto_sync: bool,         // reserved; not built in v1
+    pub last_scan_at: Option<String>,
+}
+
+/// A (rank, qty) pair within an owned mod/arcane rank breakdown.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RankQty {
+    pub rank: i64,
+    pub qty: i64,
+}
+
+/// One row of the reviewable scan diff (added / changed / removed vs current
+/// inventory). Nothing is written until the user confirms these into `game_scan_apply`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanDiffRow {
+    pub slug: String,
+    pub display_name: String,
+    pub part_type: String,
+    pub status: String,   // 'added' | 'changed' | 'removed'
+    pub scan_qty: i64,    // total quantity the scan reports (0 for 'removed')
+    pub current_qty: i64, // quantity inventory currently holds
+    pub source: String,   // current row provenance: 'manual' | 'wfm_import' | 'de_scan' | ''
+    pub ranks: Vec<RankQty>, // per-rank breakdown (mods/arcanes); empty for prime parts
+}
+
+/// A confirmed scan row to merge (the user-approved subset of the diff). Carries
+/// the rank breakdown back so apply can persist it to inventory_ranks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanApply {
+    pub slug: String,
+    pub scan_qty: i64,
+    #[serde(default)]
+    pub ranks: Vec<RankQty>,
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { GameScanPanel } from "../components/GameScanPanel";
 import type { ScreenId } from "../components/Sidebar";
 import {
   useCatalogRefresh,
@@ -172,6 +173,8 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
           </button>
         </Row>
       </section>
+
+      <GameScanPanel />
 
       <section className="tpanel">
         <div className="tpanel-h">

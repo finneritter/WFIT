@@ -36,6 +36,12 @@ export interface InventoryRow {
   volume_7d: number | null;
   thumbnail_url: string | null;
   last_modified_at: string;
+  value_plat: number | null; // rank-aware total value (mods/arcanes); else use median×qty
+  realizable_plat: number | null; // liquidation-adjusted value (≤ market value)
+  daily_volume: number | null;
+  liquidity: number | null; // φ 0..1
+  days_to_sell: number | null;
+  confidence: "high" | "medium" | "low" | null;
 }
 
 export interface SaleRow {
@@ -53,6 +59,7 @@ export interface SaleRow {
 
 export interface Summary {
   total_plat: number;
+  realizable_plat: number;
   total_ducats: number;
   part_count: number;
   distinct_count: number;
@@ -187,7 +194,21 @@ export interface ItemDetail {
   listed: boolean;
   realized_plat: number;
   sold_qty: number;
+  max_rank: number | null;
+  ranks: OwnedRank[];
+  value_plat: number | null;
+  realizable_plat: number | null;
+  daily_volume: number | null;
+  liquidity: number | null;
+  days_to_sell: number | null;
+  confidence: "high" | "medium" | "low" | null;
   history: HistoryPoint[];
+}
+
+export interface OwnedRank {
+  rank: number;
+  qty: number;
+  median: number | null;
 }
 
 export interface ItemOrders {
@@ -226,6 +247,34 @@ export interface ImportRow {
   listed_qty: number;
   your_price: number | null;
   current_qty: number;
+}
+
+// Game inventory import (memory-scan) — opt-in, consent-gated, Linux-only.
+export interface GameScanStatus {
+  supported: boolean;
+  consented: boolean;
+  warframe_running: boolean;
+  auto_sync: boolean;
+  last_scan_at: string | null;
+}
+export interface RankQty {
+  rank: number;
+  qty: number;
+}
+export interface ScanDiffRow {
+  slug: string;
+  display_name: string;
+  part_type: string;
+  status: "added" | "changed" | "removed";
+  scan_qty: number;
+  current_qty: number;
+  source: string;
+  ranks: RankQty[];
+}
+export interface ScanApply {
+  slug: string;
+  scan_qty: number;
+  ranks: RankQty[];
 }
 
 // Worldstate (Rotation)

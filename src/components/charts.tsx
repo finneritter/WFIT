@@ -105,7 +105,11 @@ function movingAvg(closes: number[], period: number): (number | null)[] {
 
 /** Candlestick chart with volume bars, MA(7)/MA(30) overlays and period hi/lo
  *  reference lines. Driven by real OHLC from warframe.market statistics. */
-export function CandleChart({ candles, w = 560, h = 240 }: { candles: Candle[]; w?: number; h?: number }) {
+export function CandleChart({
+  candles,
+  w = 560,
+  h = 240,
+}: { candles: Candle[]; w?: number; h?: number }) {
   if (!candles || candles.length < 2) {
     return <div className="muted">No price history yet — refreshing in the background.</div>;
   }
@@ -113,8 +117,24 @@ export function CandleChart({ candles, w = 560, h = 240 }: { candles: Candle[]; 
   const volTop = priceH + 10;
   const volH = h - volTop;
 
-  const lo = Math.min(...candles.map((c) => c.l));
-  const hi = Math.max(...candles.map((c) => c.h));
+  // Robust price domain: a lone troll spike (e.g. 1000p on a 2p mod) must not
+  // flatten the chart. Scale to the 4th–96th percentile of all OHLC values, padded;
+  // values outside clip to the edges rather than blowing out the axis.
+  const vals = candles
+    .flatMap((c) => [c.l, c.h, c.o, c.c])
+    .filter((v) => Number.isFinite(v))
+    .sort((a, b) => a - b);
+  const q = (p: number) =>
+    vals[Math.min(vals.length - 1, Math.max(0, Math.round(p * (vals.length - 1))))];
+  let lo = q(0.04);
+  let hi = q(0.96);
+  if (!(hi > lo)) {
+    lo = vals[0] ?? 0;
+    hi = vals[vals.length - 1] ?? lo + 1;
+  }
+  const padB = (hi - lo) * 0.08 || 1;
+  lo = Math.max(0, lo - padB);
+  hi = hi + padB;
   const span = hi - lo || 1;
   const vmax = Math.max(1, ...candles.map((c) => c.v));
   const n = candles.length;
@@ -122,7 +142,8 @@ export function CandleChart({ candles, w = 560, h = 240 }: { candles: Candle[]; 
   const step = (w - pad * 2) / n;
   const bodyW = Math.max(1, step * 0.62);
 
-  const yP = (p: number) => 1 + (priceH - 2) * (1 - (p - lo) / span);
+  const clampP = (p: number) => Math.max(lo, Math.min(hi, p));
+  const yP = (p: number) => 1 + (priceH - 2) * (1 - (clampP(p) - lo) / span);
   const cx = (i: number) => pad + step * i + step / 2;
 
   const closes = candles.map((c) => c.c);

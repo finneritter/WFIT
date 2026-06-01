@@ -15,6 +15,8 @@ pub struct CatalogUpsert {
     pub category: String, // 'warframe'|'weapon'|'set'|'mod'|'arcane'
     pub set_slug: Option<String>,
     pub ducats: Option<i64>,
+    pub game_ref: Option<String>, // DE internal `uniqueName` path (joins to game inventory)
+    pub max_rank: Option<i64>,    // rank ceiling (mods/arcanes); null for prime parts
     pub is_vaulted: bool,
     pub is_tradeable: bool,
     pub thumbnail_url: Option<String>,
@@ -24,6 +26,33 @@ pub fn count(db: &Db) -> AppResult<i64> {
     db.with(|c| {
         let n: i64 = c.query_row("SELECT COUNT(*) FROM catalog_items", [], |r| r.get(0))?;
         Ok(n)
+    })
+}
+
+/// Count catalog rows still missing the `game_ref` join key. Non-zero after the
+/// 0003 migration until a catalog refetch backfills them (the API supplies it).
+pub fn missing_game_ref_count(db: &Db) -> AppResult<i64> {
+    db.with(|c| {
+        let n: i64 = c.query_row(
+            "SELECT COUNT(*) FROM catalog_items WHERE game_ref IS NULL",
+            [],
+            |r| r.get(0),
+        )?;
+        Ok(n)
+    })
+}
+
+/// True once any catalog row carries `max_rank` — i.e. a post-0004 refresh has run.
+/// Prime parts legitimately have null max_rank, so we can't check "all"; "any"
+/// non-null means the backfill happened. Used to trigger that one-time refetch.
+pub fn has_any_max_rank(db: &Db) -> AppResult<bool> {
+    db.with(|c| {
+        let n: i64 = c.query_row(
+            "SELECT COUNT(*) FROM catalog_items WHERE max_rank IS NOT NULL",
+            [],
+            |r| r.get(0),
+        )?;
+        Ok(n > 0)
     })
 }
 
@@ -37,8 +66,8 @@ pub fn upsert_many(db: &Db, items: &[CatalogUpsert]) -> AppResult<usize> {
             let mut stmt = tx.prepare(
                 "INSERT INTO catalog_items
                     (slug, wfm_id, display_name, part_type, category, set_slug,
-                     ducats, is_vaulted, is_tradeable, thumbnail_url, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                     ducats, game_ref, max_rank, is_vaulted, is_tradeable, thumbnail_url, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
                  ON CONFLICT(slug) DO UPDATE SET
                     wfm_id        = COALESCE(excluded.wfm_id, catalog_items.wfm_id),
                     display_name  = excluded.display_name,
@@ -46,6 +75,8 @@ pub fn upsert_many(db: &Db, items: &[CatalogUpsert]) -> AppResult<usize> {
                     category      = excluded.category,
                     set_slug      = excluded.set_slug,
                     ducats        = COALESCE(excluded.ducats, catalog_items.ducats),
+                    game_ref      = COALESCE(excluded.game_ref, catalog_items.game_ref),
+                    max_rank      = COALESCE(excluded.max_rank, catalog_items.max_rank),
                     is_vaulted    = excluded.is_vaulted,
                     is_tradeable  = excluded.is_tradeable,
                     thumbnail_url = COALESCE(excluded.thumbnail_url, catalog_items.thumbnail_url),
@@ -60,6 +91,8 @@ pub fn upsert_many(db: &Db, items: &[CatalogUpsert]) -> AppResult<usize> {
                     it.category,
                     it.set_slug,
                     it.ducats,
+                    it.game_ref,
+                    it.max_rank,
                     it.is_vaulted as i64,
                     it.is_tradeable as i64,
                     it.thumbnail_url,

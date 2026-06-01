@@ -17,7 +17,17 @@ favor of **one binary + one local SQLite file**. No auth, no hosting, no deploy.
 
 Inventory (tile grid) · Sets (completion tracker) · Trends · Watchlist · Buy List (cart + budget) ·
 Listings (your warframe.market orders, read-only) · Ducats (conversion efficiency) ·
-Rotation (live world-state) · Sold History.
+Rotation (live world-state) · Sold History · Settings.
+
+### Game inventory import (opt-in, beta)
+
+Settings → **Game inventory** can read your *real* owned counts directly from the running Warframe
+client (memory-scan → DE mobile inventory endpoint), the one thing warframe.market listings can't
+give. **This violates DE's Terms of Service and could get your account banned** — it is opt-in,
+consent-gated behind a typed acknowledgment, Linux-only, and off by default. It never logs in (it
+reuses the live game session). The full path (memory scan → DE inventory endpoint → mapped diff) is
+implemented and verified against a real client. On a locked-down kernel, `kernel.yama.ptrace_scope`
+may need to be `0` for the memory read to work. See `GAME_INVENTORY_IMPORT.md`.
 
 ## Develop
 

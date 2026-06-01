@@ -5,12 +5,15 @@ import type {
   BuyRow,
   CatalogRow,
   DucatRow,
+  GameScanStatus,
   ImportRow,
   InventoryRow,
   ItemDetail,
   ItemOrders,
   ListingRow,
   SaleRow,
+  ScanApply,
+  ScanDiffRow,
   SetRow,
   Summary,
   TrendsData,
@@ -92,3 +95,10 @@ export const wfmGetListings = () => invoke<ListingRow[]>("wfm_get_listings");
 export const wfmFetchListings = () => invoke<ImportRow[]>("wfm_fetch_listings");
 export const wfmApplyImport = (rows: { slug: string; qty: number }[]) =>
   invoke<number>("wfm_apply_import", { rows });
+
+// game inventory import (memory-scan) — opt-in, consent-gated, Linux-only
+export const gameScanStatus = () => invoke<GameScanStatus>("game_scan_status");
+export const gameScanConsent = (phrase: string) => invoke<void>("game_scan_consent", { phrase });
+export const gameScanRevoke = () => invoke<void>("game_scan_revoke");
+export const gameScanPreview = () => invoke<ScanDiffRow[]>("game_scan_preview");
+export const gameScanApply = (rows: ScanApply[]) => invoke<number>("game_scan_apply", { rows });

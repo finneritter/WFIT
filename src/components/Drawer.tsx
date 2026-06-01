@@ -117,7 +117,8 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
   const owned = item.owned_qty > 0;
   const delta = item.delta_7d ?? 0;
   const price = item.median_plat;
-  const stack = price != null ? price * item.owned_qty : null;
+  // Mods/arcanes carry a rank-aware stack value; otherwise median × owned.
+  const stack = item.value_plat ?? (price != null ? price * item.owned_qty : null);
 
   const spread =
     orders?.best_buy != null && orders?.best_sell != null
@@ -230,12 +231,37 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
             </div>
           </div>
           <div className="cell">
-            <div className="k">You own · stack</div>
+            <div className="k">You own · at market</div>
             <div className="v num">
               ×{item.owned_qty}
               {stack != null ? <span className="u"> · {fmt(stack)}p</span> : null}
             </div>
           </div>
+          {item.realizable_plat != null && item.owned_qty > 0 ? (
+            <div className="cell">
+              <div className="k">Realizable · if sold gradually</div>
+              <div className="v num">
+                {fmt(item.realizable_plat)}p
+                {item.liquidity != null ? (
+                  <span className="u"> · {Math.round(item.liquidity * 100)}% liq</span>
+                ) : null}
+                {item.days_to_sell != null ? (
+                  <span className="u"> · ~{fmt(item.days_to_sell)}d to sell</span>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {item.confidence ? (
+            <div className="cell">
+              <div className="k">Confidence · basis</div>
+              <div className="v num">
+                <span className={clsx("cf-tag", item.confidence)}>{item.confidence}</span>
+                {item.volume_7d != null ? (
+                  <span className="u"> · {fmt(item.volume_7d)} trades/wk</span>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <div className="cell">
             <div className="k">Realized (sold)</div>
             <div className="v num">
@@ -249,6 +275,41 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
             </div>
           </div>
         </div>
+
+        {item.ranks.length > 0 ? (
+          <div className="rankbox">
+            <div className="rankbox-h">
+              Owned by rank{item.max_rank != null ? ` (max ${item.max_rank})` : ""}
+            </div>
+            <table className="dtable">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th className="r">Qty</th>
+                  <th className="r">Price</th>
+                  <th className="r">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {item.ranks.map((rk) => (
+                  <tr key={rk.rank}>
+                    <td>
+                      Rank {rk.rank}
+                      {item.max_rank != null && rk.rank === item.max_rank ? (
+                        <span className="muted"> · max</span>
+                      ) : null}
+                    </td>
+                    <td className="r num">×{rk.qty}</td>
+                    <td className="r num">{rk.median != null ? `${fmt(rk.median)}p` : "—"}</td>
+                    <td className="r num">
+                      {rk.median != null ? `${fmt(rk.median * rk.qty)}p` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
 
         <div className="drawer-actions">
           {owned ? (
