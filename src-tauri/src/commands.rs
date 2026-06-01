@@ -121,6 +121,7 @@ pub fn get_summary(state: State<'_, Arc<AppState>>) -> AppResult<Summary> {
     let sold_7d = sales::earned_since(&state.db, 7)?;
     // Set-aware: complete sets are valued at the set price, not the sum of parts.
     let total_plat = inventory::total_value(&state.db)?;
+    let realizable_plat = inventory::total_realizable(&state.db)?;
     state.db.with(|c| {
         let total_ducats: i64 = c.query_row(
             "SELECT COALESCE(SUM(COALESCE(ci.ducats, 0) * ii.qty), 0)
@@ -183,6 +184,7 @@ pub fn get_summary(state: State<'_, Arc<AppState>>) -> AppResult<Summary> {
 
         Ok(Summary {
             total_plat,
+            realizable_plat,
             total_ducats,
             part_count,
             distinct_count,
@@ -532,6 +534,20 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
         (row.median_plat, None)
     };
 
+    // Liquidation-adjusted stack value + liquidity signals (mirrors the grid).
+    let (realizable_plat, liquidity, daily_volume, days_to_sell) = if owned_qty > 0 {
+        let market = value_plat.unwrap_or_else(|| eff_median.unwrap_or(0) * owned_qty);
+        let (rz, phi) = inventory::realizable_default(market, owned_qty, volume_7d);
+        let dv = volume_7d.map(|v| (v.max(0) as f64) / 7.0);
+        let dts = match volume_7d {
+            Some(v) if v > 0 => Some((owned_qty as f64 / (v as f64 / 7.0)).round() as i64),
+            _ => None,
+        };
+        (Some(rz), Some(phi), dv, dts)
+    } else {
+        (None, None, None, None)
+    };
+
     Ok(ItemDetail {
         slug: row.slug,
         display_name: row.display_name,
@@ -552,6 +568,10 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
         max_rank,
         ranks,
         value_plat,
+        realizable_plat,
+        daily_volume,
+        liquidity,
+        days_to_sell,
         history,
     })
 }

@@ -187,15 +187,62 @@ pub fn list_ranked(db: &Db) -> AppResult<Vec<InventoryRow>> {
     Ok(out)
 }
 
-/// Set-aware total plat value of the inventory (complete sets at set price,
-/// mods/arcanes at their rank-aware value).
+/// Set-aware total plat value of the inventory at full market price — the
+/// optimistic "ceiling" (complete sets at set price, mods/arcanes rank-aware).
 pub fn total_value(db: &Db) -> AppResult<i64> {
     Ok(owned_holdings(db)?.iter().map(row_value).sum())
+}
+
+/// Liquidation-adjusted total — what the inventory could realistically realize,
+/// each holding haircut by its market depth. This is the honest headline; it is
+/// always ≤ `total_value`.
+pub fn total_realizable(db: &Db) -> AppResult<i64> {
+    Ok(owned_holdings(db)?
+        .iter()
+        .map(|r| r.realizable_plat.unwrap_or_else(|| row_value(r)))
+        .sum())
 }
 
 /// The plat value of one owned row: rank-aware value when present, else median × qty.
 fn row_value(r: &InventoryRow) -> i64 {
     r.value_plat.unwrap_or_else(|| r.median_plat.unwrap_or(0) * r.qty)
+}
+
+// --- Liquidation-adjusted (realizable) valuation ---------------------------
+// A market price is a MARGINAL price; `× qty` falsely assumes it holds for the
+// whole stack. We haircut each holding by how much the market can actually
+// absorb: full value up to `K · daily_volume · WINDOW_DAYS` units, the excess
+// discounted to RESIDUAL. So 500 copies of a mod that trades ~weekly stops
+// counting as 500 × price. (See .claude/plans + CLAUDE_ECONOMIC_RESEARCH.)
+const WINDOW_DAYS: f64 = 30.0; // horizon you'd realistically take to sell
+const K: f64 = 1.0; // share of market volume you could capture
+const RESIDUAL: f64 = 0.05; // the un-sellable excess isn't worthless, but nearly
+
+/// Realizable plat for a stack worth `market` at full price, plus the liquidity
+/// factor φ = realizable/market (0..1). `volume_7d` None/0 ⇒ capacity 0 (only the
+/// residual tail counts). φ = 1 for liquid stacks (no visible change).
+pub fn realizable_value(
+    market: i64,
+    qty: i64,
+    volume_7d: Option<i64>,
+    window_days: f64,
+    k: f64,
+    residual: f64,
+) -> (i64, f64) {
+    if qty <= 0 || market <= 0 {
+        return (market.max(0), 1.0);
+    }
+    let daily = volume_7d.unwrap_or(0).max(0) as f64 / 7.0;
+    let capacity = (k * daily * window_days).floor() as i64;
+    let sellable = qty.min(capacity);
+    let excess = (qty - sellable).max(0);
+    let phi = (sellable as f64 + excess as f64 * residual) / qty as f64;
+    ((market as f64 * phi).round() as i64, phi)
+}
+
+/// `realizable_value` with the app's default WINDOW_DAYS / K / RESIDUAL.
+pub fn realizable_default(market: i64, qty: i64, volume_7d: Option<i64>) -> (i64, f64) {
+    realizable_value(market, qty, volume_7d, WINDOW_DAYS, K, RESIDUAL)
 }
 
 /// Number of complete sets currently owned (all member parts present).
@@ -259,6 +306,10 @@ fn fetch_owned(db: &Db) -> AppResult<Vec<InventoryRow>> {
                 thumbnail_url: r.get(12)?,
                 last_modified_at: r.get(13)?,
                 value_plat: None,
+                realizable_plat: None,
+                daily_volume: None,
+                liquidity: None,
+                days_to_sell: None,
             })
         })?;
         let mut owned = rows.collect::<Result<Vec<_>, _>>()?;
@@ -329,6 +380,10 @@ fn set_templates(db: &Db) -> AppResult<HashMap<String, InventoryRow>> {
                 thumbnail_url: r.get(9)?,
                 last_modified_at: String::new(),
                 value_plat: None,
+                realizable_plat: None,
+                daily_volume: None,
+                liquidity: None,
+                days_to_sell: None,
             })
         })?;
         let mut m = HashMap::new();
@@ -383,8 +438,25 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
         if left > 0 {
             let mut row = r.clone();
             row.qty = left;
+            // value_plat was computed for the full qty; for a partial leftover it
+            // no longer applies (these are non-ranked parts) — fall back to median × left.
+            row.value_plat = None;
             out.push(row);
         }
+    }
+
+    // Liquidity-adjusted (realizable) value + signals for every row (sets included).
+    for row in &mut out {
+        let market = row_value(row);
+        let (realizable, phi) =
+            realizable_value(market, row.qty, row.volume_7d, WINDOW_DAYS, K, RESIDUAL);
+        row.realizable_plat = Some(realizable);
+        row.liquidity = Some(phi);
+        row.daily_volume = row.volume_7d.map(|v| (v.max(0) as f64) / 7.0);
+        row.days_to_sell = match row.volume_7d {
+            Some(v) if v > 0 => Some((row.qty as f64 / (v as f64 / 7.0)).round() as i64),
+            _ => None,
+        };
     }
     Ok(out)
 }
@@ -400,4 +472,53 @@ pub fn owned_slugs(db: &Db) -> AppResult<Vec<String>> {
         }
         Ok(out)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::realizable_value;
+
+    // Defaults under test (mirror the consts).
+    const W: f64 = 30.0;
+    const K: f64 = 1.0;
+    const R: f64 = 0.05;
+
+    #[test]
+    fn hoard_in_a_thin_market_is_heavily_discounted() {
+        // 500 copies, market 1500p, ~1 sale/week (volume_7d≈1): capacity ≈ 4 units.
+        let (rz, phi) = realizable_value(1500, 500, Some(1), W, K, R);
+        assert!(rz < 150, "expected a heavy haircut, got {rz}");
+        assert!(phi < 0.1);
+    }
+
+    #[test]
+    fn liquid_stack_is_unchanged() {
+        // 5 copies, daily volume ~60 (volume_7d 420): capacity ≫ qty → φ = 1.
+        let (rz, phi) = realizable_value(325, 5, Some(420), W, K, R);
+        assert_eq!(rz, 325);
+        assert_eq!(phi, 1.0);
+    }
+
+    #[test]
+    fn no_volume_data_keeps_only_the_residual_tail() {
+        let (rz, phi) = realizable_value(1000, 100, None, W, K, R);
+        assert_eq!(rz, 50); // 1000 × 0.05
+        assert!((phi - 0.05).abs() < 1e-9);
+    }
+
+    #[test]
+    fn zero_market_or_qty_does_not_panic() {
+        assert_eq!(realizable_value(0, 100, Some(7), W, K, R), (0, 1.0));
+        assert_eq!(realizable_value(500, 0, Some(7), W, K, R), (500, 1.0));
+    }
+
+    #[test]
+    fn realizable_never_exceeds_market() {
+        for &q in &[1, 10, 500, 5000] {
+            for &v in &[0, 1, 50, 1000] {
+                let (rz, _) = realizable_value(1000, q, Some(v), W, K, R);
+                assert!(rz <= 1000, "qty {q} vol {v} -> {rz} > market");
+            }
+        }
+    }
 }

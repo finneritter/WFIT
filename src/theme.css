@@ -343,6 +343,11 @@ body.flat-deltas .pos, body.flat-deltas .neg { color: var(--soft) !important; }
 .tag.removed { color: var(--neg); border-color: var(--neg); }
 code { font-family: var(--mono); font-size: 11px; color: var(--ink); background: var(--panel); padding: 1px 4px; border: 1px solid var(--line-2); }
 
+/* per-tile liquidity bar: realizable / market value (φ). Sits just above the
+   value bar; hidden when the item is liquid. */
+.liqbar { position: absolute; left: 0; right: 0; bottom: 13px; height: 3px; background: var(--line); z-index: 3; }
+.liqbar-fill { display: block; height: 100%; background: var(--soft); }
+
 /* drawer rank breakdown (mods/arcanes) */
 .rankbox { margin: 12px 0; border: 1px solid var(--line-2); }
 .rankbox-h { font-size: 11px; color: var(--soft); padding: 6px 10px; border-bottom: 1px solid var(--line-2); text-transform: uppercase; letter-spacing: .04em; }

@@ -37,6 +37,10 @@ export interface InventoryRow {
   thumbnail_url: string | null;
   last_modified_at: string;
   value_plat: number | null; // rank-aware total value (mods/arcanes); else use median×qty
+  realizable_plat: number | null; // liquidation-adjusted value (≤ market value)
+  daily_volume: number | null;
+  liquidity: number | null; // φ 0..1
+  days_to_sell: number | null;
 }
 
 export interface SaleRow {
@@ -54,6 +58,7 @@ export interface SaleRow {
 
 export interface Summary {
   total_plat: number;
+  realizable_plat: number;
   total_ducats: number;
   part_count: number;
   distinct_count: number;
@@ -191,6 +196,10 @@ export interface ItemDetail {
   max_rank: number | null;
   ranks: OwnedRank[];
   value_plat: number | null;
+  realizable_plat: number | null;
+  daily_volume: number | null;
+  liquidity: number | null;
+  days_to_sell: number | null;
   history: HistoryPoint[];
 }
 

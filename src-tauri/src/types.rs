@@ -44,6 +44,15 @@ pub struct InventoryRow {
     /// Rank-aware total value of this row (Σ qty_r × per-rank price). Some only for
     /// owned mods/arcanes with a rank breakdown; None means use median_plat × qty.
     pub value_plat: Option<i64>,
+    /// Liquidation-adjusted value (market value haircut by how much the market can
+    /// absorb). The honest per-row worth; always ≤ the market value.
+    pub realizable_plat: Option<i64>,
+    /// Avg units traded per day (volume_7d / 7) — the demand/liquidity signal.
+    pub daily_volume: Option<f64>,
+    /// Liquidity factor φ = realizable / market value, 0..1 (1 = fully liquid).
+    pub liquidity: Option<f64>,
+    /// Estimated days to sell the whole stack at current volume (None if no volume).
+    pub days_to_sell: Option<i64>,
 }
 
 /// A realized sale (Sold History).
@@ -64,7 +73,8 @@ pub struct SaleRow {
 /// Inventory stat band + sidebar quick-read figures.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Summary {
-    pub total_plat: i64,
+    pub total_plat: i64,           // full market value (the optimistic "ceiling")
+    pub realizable_plat: i64,      // liquidation-adjusted value (the honest headline)
     pub total_ducats: i64,
     pub part_count: i64,     // total units owned (excluding sets)
     pub distinct_count: i64, // distinct owned slugs
@@ -251,7 +261,11 @@ pub struct ItemDetail {
     pub sold_qty: i64,      // units sold historically
     pub max_rank: Option<i64>,    // rank ceiling (mods/arcanes)
     pub ranks: Vec<OwnedRank>,    // owned rank breakdown (empty for prime parts)
-    pub value_plat: Option<i64>,  // rank-aware total value of the owned stack
+    pub value_plat: Option<i64>,  // rank-aware total value of the owned stack (market)
+    pub realizable_plat: Option<i64>, // liquidation-adjusted stack value
+    pub daily_volume: Option<f64>,    // avg units traded/day
+    pub liquidity: Option<f64>,       // φ 0..1
+    pub days_to_sell: Option<i64>,    // est. days to clear the stack
     pub history: Vec<HistoryPoint>,
 }
 

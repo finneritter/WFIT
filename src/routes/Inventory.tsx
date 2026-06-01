@@ -7,9 +7,12 @@ import type { InventoryRow } from "../lib/types";
 type SortKey = "value-desc" | "value-asc" | "trend" | "name";
 const CATS = ["warframe", "weapon", "set", "mod", "arcane"] as const;
 
-// Rank-aware row value: mods/arcanes carry a per-rank value_plat; everything else
-// is median × qty.
+// Full market value of a row (the optimistic "ceiling"): rank-aware value_plat for
+// mods/arcanes, else median × qty.
 const rowValue = (r: InventoryRow) => r.value_plat ?? (r.median_plat ?? 0) * r.qty;
+// Liquidation-adjusted value — the honest worth. Drives totals + sort so illiquid
+// hoards sink instead of inflating the inventory.
+const realValue = (r: InventoryRow) => r.realizable_plat ?? rowValue(r);
 
 function Tile({ row, onOpen }: { row: InventoryRow; onOpen: (slug: string) => void }) {
   const plat = row.median_plat;
@@ -29,6 +32,16 @@ function Tile({ row, onOpen }: { row: InventoryRow; onOpen: (slug: string) => vo
       <div className="vbar">
         <span className="pl num">{plat == null ? "—" : `${fmt(plat)}p`}</span>
       </div>
+      {row.liquidity != null && row.liquidity < 0.95 ? (
+        <span
+          className="liqbar"
+          title={`realizable ${fmt(row.realizable_plat)}p of ${fmt(rowValue(row))}p · ${Math.round(
+            row.liquidity * 100,
+          )}% liquid${row.days_to_sell != null ? ` · ~${fmt(row.days_to_sell)}d to sell` : ""}`}
+        >
+          <span className="liqbar-fill" style={{ width: `${Math.max(4, row.liquidity * 100)}%` }} />
+        </span>
+      ) : null}
       <span className={clsx("trend", trendOf(row.delta_7d))} />
     </button>
   );
@@ -44,7 +57,7 @@ function Section({
   onOpen: (slug: string) => void;
 }) {
   const [open, setOpen] = useState(true);
-  const stack = rows.reduce((s, r) => s + rowValue(r), 0);
+  const stack = rows.reduce((s, r) => s + realValue(r), 0);
   return (
     <div className="section">
       <div className="sec-h" onClick={() => setOpen((o) => !o)}>
@@ -87,13 +100,13 @@ export function Inventory({
     sorted.sort((a, b) => {
       switch (sort) {
         case "value-asc":
-          return rowValue(a) - rowValue(b);
+          return realValue(a) - realValue(b);
         case "trend":
           return (b.delta_7d ?? 0) - (a.delta_7d ?? 0);
         case "name":
           return a.display_name.localeCompare(b.display_name);
         default:
-          return rowValue(b) - rowValue(a);
+          return realValue(b) - realValue(a);
       }
     });
     return sorted;
@@ -120,7 +133,13 @@ export function Inventory({
   return (
     <>
       <div className="statband">
-        <StatBox k="Total Platinum" v={fmt(summary?.total_plat)} unit="p" />
+        <StatBox
+          k="Realizable Platinum"
+          v={fmt(summary?.realizable_plat)}
+          unit="p"
+          d={`≈ ${fmt(summary?.total_plat)}p at market`}
+          dcls="muted"
+        />
         <StatBox k="Total Ducats" v={fmt(summary?.total_ducats)} unit="d" />
         <StatBox
           k="Parts"

@@ -231,12 +231,26 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
             </div>
           </div>
           <div className="cell">
-            <div className="k">You own · stack</div>
+            <div className="k">You own · at market</div>
             <div className="v num">
               ×{item.owned_qty}
               {stack != null ? <span className="u"> · {fmt(stack)}p</span> : null}
             </div>
           </div>
+          {item.realizable_plat != null && item.owned_qty > 0 ? (
+            <div className="cell">
+              <div className="k">Realizable · liquidity</div>
+              <div className="v num">
+                {fmt(item.realizable_plat)}p
+                {item.liquidity != null ? (
+                  <span className="u"> · {Math.round(item.liquidity * 100)}% liq</span>
+                ) : null}
+                {item.days_to_sell != null ? (
+                  <span className="u"> · ~{fmt(item.days_to_sell)}d to sell</span>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <div className="cell">
             <div className="k">Realized (sold)</div>
             <div className="v num">
