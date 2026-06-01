@@ -177,7 +177,15 @@ async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
         )?;
     }
 
-    // 2) Foreground-priority prices: owned, then watchlist.
+    // 2) Live sell orders for owned items FIRST — they are the primary price
+    // source, so they must populate before the slower statistics pass (which is
+    // only the fallback + the drawer chart). With hundreds of owned items the
+    // throttled refresh takes minutes; ordering this first means the price-critical
+    // data lands soonest and isn't starved if the app is closed early.
+    refresh_owned_orders(&state, false).await?;
+
+    // 3) Foreground-priority statistics: owned, then watchlist (chart/trend + the
+    // price fallback for items with no live sell orders).
     let mut priority = prices::stale_inventory_slugs(&state.db)?;
     for s in prices::stale_watchlist_slugs(&state.db)? {
         if !priority.contains(&s) {
@@ -193,10 +201,7 @@ async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
         )?;
     }
 
-    // Live sell orders for illiquid owned items (their stats are unreliable).
-    refresh_owned_orders(&state, false).await?;
-
-    // 3) Background drain of everything else, oldest-first, batch by batch.
+    // 4) Background drain of everything else, oldest-first, batch by batch.
     loop {
         let batch = prices::stale_catalog_slugs(&state.db, DRAIN_BATCH)?;
         if batch.is_empty() {

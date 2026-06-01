@@ -644,4 +644,19 @@ mod tests {
         let series: Vec<(f64, f64)> = (0..30).map(|_| (65.0, 60.0)).collect();
         assert_eq!(robust_price(&series), Some(65));
     }
+
+    #[test]
+    fn robust_low_is_the_median_of_the_cheapest_five() {
+        // A troll-low (1) and troll-high (9999) ask both sit outside the cheapest
+        // five [8,9,9,10,10] → median 9, unaffected.
+        let asks = [9999, 10, 9, 8, 50, 10, 9, 1];
+        assert_eq!(robust_low(&asks), Some(9));
+    }
+
+    #[test]
+    fn robust_low_handles_few_and_empty() {
+        assert_eq!(robust_low(&[]), None);
+        assert_eq!(robust_low(&[5]), Some(5));
+        assert_eq!(robust_low(&[1, 1, 1, 1]), Some(1)); // disruptor-style 1p floor
+    }
 }
