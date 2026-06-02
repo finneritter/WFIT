@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useDeferredValue, useState } from "react";
+import { useCallback, useDeferredValue, useState } from "react";
 import { AddItems } from "./components/AddItems";
 import { Drawer } from "./components/Drawer";
 import { Icon } from "./components/Icon";
@@ -7,21 +7,19 @@ import { type ScreenId, Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { usePricesRefresh, usePricingProgress, useSummary } from "./hooks/queries";
 import { clsx } from "./lib/format";
-
-// Routes are code-split: only the active screen's module is parsed/evaluated, so
-// startup and per-screen cost drop (the inventory grid is the heaviest by far).
-const Inventory = lazy(() => import("./routes/Inventory").then((m) => ({ default: m.Inventory })));
-const Sets = lazy(() => import("./routes/Sets").then((m) => ({ default: m.Sets })));
-const Trends = lazy(() => import("./routes/Trends").then((m) => ({ default: m.Trends })));
-const Watchlist = lazy(() => import("./routes/Watchlist").then((m) => ({ default: m.Watchlist })));
-const BuyList = lazy(() => import("./routes/BuyList").then((m) => ({ default: m.BuyList })));
-const Listings = lazy(() => import("./routes/Listings").then((m) => ({ default: m.Listings })));
-const Ducats = lazy(() => import("./routes/Ducats").then((m) => ({ default: m.Ducats })));
-const Rotation = lazy(() => import("./routes/Rotation").then((m) => ({ default: m.Rotation })));
-const SoldHistory = lazy(() =>
-  import("./routes/SoldHistory").then((m) => ({ default: m.SoldHistory })),
-);
-const Settings = lazy(() => import("./routes/Settings").then((m) => ({ default: m.Settings })));
+// Routes are imported eagerly. This is a local desktop app — the bundle loads
+// from disk, so code-splitting saves nothing at startup and only adds a chunk-
+// fetch delay (and a Suspense flash) when navigating to a screen.
+import { BuyList } from "./routes/BuyList";
+import { Ducats } from "./routes/Ducats";
+import { Inventory } from "./routes/Inventory";
+import { Listings } from "./routes/Listings";
+import { Rotation } from "./routes/Rotation";
+import { Sets } from "./routes/Sets";
+import { Settings } from "./routes/Settings";
+import { SoldHistory } from "./routes/SoldHistory";
+import { Trends } from "./routes/Trends";
+import { Watchlist } from "./routes/Watchlist";
 
 const TITLES: Record<ScreenId, string> = {
   inventory: "Inventory",
@@ -122,25 +120,28 @@ export default function App() {
           </div>
 
           <div className="content">
-            <Suspense fallback={<div className="empty">Loading…</div>}>
-              {screen === "inventory" && <Inventory onOpen={open} search={deferredSearch} />}
-              {screen === "sets" && <Sets onOpen={open} />}
-              {screen === "trends" && <Trends onOpen={open} />}
-              {screen === "watchlist" && <Watchlist onOpen={open} />}
-              {screen === "buy" && <BuyList onOpen={open} />}
-              {screen === "listings" && <Listings onOpen={open} />}
-              {screen === "ducats" && <Ducats onOpen={open} />}
-              {screen === "rotation" && <Rotation />}
-              {screen === "sold" && <SoldHistory onOpen={open} />}
-              {screen === "settings" && (
-                <Settings
-                  onNavigate={(s) => {
-                    setScreen(s);
-                    setSearch("");
-                  }}
-                />
-              )}
-            </Suspense>
+            {/* Inventory stays mounted and is just hidden when inactive — its
+                ~800-tile grid is expensive to mount, so re-creating it on every
+                navigation caused a visible freeze. Hidden → instant show. */}
+            <div style={screen === "inventory" ? undefined : { display: "none" }}>
+              <Inventory onOpen={open} search={deferredSearch} />
+            </div>
+            {screen === "sets" && <Sets onOpen={open} />}
+            {screen === "trends" && <Trends onOpen={open} />}
+            {screen === "watchlist" && <Watchlist onOpen={open} />}
+            {screen === "buy" && <BuyList onOpen={open} />}
+            {screen === "listings" && <Listings onOpen={open} />}
+            {screen === "ducats" && <Ducats onOpen={open} />}
+            {screen === "rotation" && <Rotation />}
+            {screen === "sold" && <SoldHistory onOpen={open} />}
+            {screen === "settings" && (
+              <Settings
+                onNavigate={(s) => {
+                  setScreen(s);
+                  setSearch("");
+                }}
+              />
+            )}
           </div>
         </main>
 
