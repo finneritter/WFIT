@@ -588,7 +588,7 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
     };
     let history = prices::history(&state.db, &slug, HISTORY_DRAWER_DAYS)?;
     let on_watchlist = watchlist::is_watched(&state.db, &slug)?;
-    let listed: bool = state.db.with(|c| {
+    let listed: bool = state.db.read(|c| {
         let n: i64 = c.query_row(
             "SELECT COUNT(*) FROM market_listings WHERE slug = ?1 AND order_type = 'sell'",
             rusqlite::params![slug],
@@ -596,7 +596,7 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
         )?;
         Ok(n > 0)
     })?;
-    let volume_7d: Option<i64> = state.db.with(|c| {
+    let volume_7d: Option<i64> = state.db.read(|c| {
         Ok(c.query_row(
             "SELECT volume_7d FROM price_cache WHERE slug = ?1",
             rusqlite::params![slug],
@@ -605,7 +605,7 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
         .ok()
         .flatten())
     })?;
-    let (realized_plat, sold_qty): (i64, i64) = state.db.with(|c| {
+    let (realized_plat, sold_qty): (i64, i64) = state.db.read(|c| {
         Ok(c.query_row(
             "SELECT COALESCE(SUM(qty * plat_per_unit), 0), COALESCE(SUM(qty), 0)
              FROM sale_events WHERE slug = ?1",
@@ -616,7 +616,7 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
 
     // Rank breakdown (mods/arcanes) for the drawer: each owned rank with its
     // exact-or-nearest per-rank market price.
-    let max_rank: Option<i64> = state.db.with(|c| {
+    let max_rank: Option<i64> = state.db.read(|c| {
         Ok(c.query_row(
             "SELECT max_rank FROM catalog_items WHERE slug = ?1",
             rusqlite::params![slug],
@@ -625,7 +625,7 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
         .ok()
         .flatten())
     })?;
-    let ranks: Vec<OwnedRank> = state.db.with(|c| {
+    let ranks: Vec<OwnedRank> = state.db.read(|c| {
         let mut stmt =
             c.prepare("SELECT rank, qty FROM inventory_ranks WHERE slug = ?1 ORDER BY rank")?;
         let raw: Vec<(i64, i64)> = stmt
@@ -650,14 +650,14 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
         };
         (per_unit, Some(v))
     } else if owned_qty > 0 {
-        let ep = state.db.with(|c| prices::effective_price(c, &slug, None))?;
+        let ep = state.db.read(|c| prices::effective_price(c, &slug, None))?;
         (ep.or(row.median_plat), ep.map(|p| p * owned_qty))
     } else {
         (row.median_plat, None)
     };
 
     // Liquidation-adjusted stack value + liquidity signals (mirrors the grid).
-    let bids = state.db.with(|c| prices::bid_ladder(c, &slug))?;
+    let bids = state.db.read(|c| prices::bid_ladder(c, &slug))?;
     let (realizable_plat, liquidity, daily_volume, days_to_sell) = if owned_qty > 0 {
         let market = value_plat.unwrap_or_else(|| eff_median.unwrap_or(0) * owned_qty);
         let (rz, phi) = inventory::realizable_default(

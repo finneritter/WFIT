@@ -1,4 +1,6 @@
 // Inline SVG icons, ported verbatim from the wireframe's Icon component.
+import { memo } from "react";
+
 const PATHS: Record<string, string> = {
   inventory: "M3 7l9-4 9 4-9 4-9-4zm0 5l9 4 9-4M3 17l9 4 9-4",
   sets: "M4 4h7v7H4zM13 13h7v7h-7zM13 4h7v7h-7zM4 13h7v7H4z",
@@ -26,10 +28,10 @@ const PATHS: Record<string, string> = {
   lock: "M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z",
 };
 
-export function Icon({ name }: { name: string }) {
+export const Icon = memo(function Icon({ name }: { name: string }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d={PATHS[name] ?? PATHS.box} />
     </svg>
   );
-}
+});

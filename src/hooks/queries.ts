@@ -2,7 +2,18 @@
 // keys so the UI updates live across screens.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "../lib/api";
-import type { ScanApply } from "../lib/types";
+import type { CatalogRow, ScanApply } from "../lib/types";
+
+type QC = ReturnType<typeof useQueryClient>;
+
+// Patch one slug's row across every cached catalog category in place. Lets the
+// Add-items grid reflect ownership instantly without refetching all five columns;
+// the eventual (refetchType: "none") staleness reconciles any edge cases on reopen.
+function patchCatalogRow(qc: QC, slug: string, update: (r: CatalogRow) => CatalogRow) {
+  qc.setQueriesData<CatalogRow[]>({ queryKey: ["catalog"] }, (rows) =>
+    rows?.map((r) => (r.slug === slug ? update(r) : r)),
+  );
+}
 
 export const keys = {
   inventory: ["inventory"] as const,
@@ -26,7 +37,7 @@ export const keys = {
 };
 
 // Anything that touches inventory ripples into these derived views.
-function invalidateInventoryDerived(qc: ReturnType<typeof useQueryClient>) {
+function invalidateInventoryDerived(qc: QC) {
   for (const k of [
     keys.inventory,
     keys.summary,
@@ -38,9 +49,11 @@ function invalidateInventoryDerived(qc: ReturnType<typeof useQueryClient>) {
     qc.invalidateQueries({ queryKey: k });
   }
   qc.invalidateQueries({ queryKey: ["trends"] });
-  // Catalog rows carry owned_qty (joined from inventory), so the Add-items grid
-  // checkboxes/steppers track ownership — refresh it after any inventory change.
-  qc.invalidateQueries({ queryKey: ["catalog"] });
+  // Catalog rows carry owned_qty (joined from inventory). Mark stale but DON'T
+  // force-refetch all five category queries on every edit — the open Add-items
+  // grid is patched optimistically (patchCatalogRow); inactive catalog queries
+  // refetch lazily on next mount.
+  qc.invalidateQueries({ queryKey: ["catalog"], refetchType: "none" });
 }
 
 // ---- reads ----
@@ -97,7 +110,10 @@ export function useAddToInventory() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ slug, qty }: { slug: string; qty?: number }) => api.addToInventory(slug, qty),
-    onSuccess: () => invalidateInventoryDerived(qc),
+    onSuccess: (_data, { slug, qty }) => {
+      patchCatalogRow(qc, slug, (r) => ({ ...r, owned_qty: r.owned_qty + (qty ?? 1) }));
+      invalidateInventoryDerived(qc);
+    },
   });
 }
 
@@ -105,7 +121,10 @@ export function useSetQty() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ slug, qty }: { slug: string; qty: number }) => api.setQty(slug, qty),
-    onSuccess: () => invalidateInventoryDerived(qc),
+    onSuccess: (_data, { slug, qty }) => {
+      patchCatalogRow(qc, slug, (r) => ({ ...r, owned_qty: qty }));
+      invalidateInventoryDerived(qc);
+    },
   });
 }
 
@@ -113,7 +132,10 @@ export function useRemoveItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (slug: string) => api.removeItem(slug),
-    onSuccess: () => invalidateInventoryDerived(qc),
+    onSuccess: (_data, slug) => {
+      patchCatalogRow(qc, slug, (r) => ({ ...r, owned_qty: 0 }));
+      invalidateInventoryDerived(qc);
+    },
   });
 }
 
@@ -146,10 +168,11 @@ export function useAddWatch() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (a: { slug: string; target?: number }) => api.addWatch(a.slug, a.target),
-    onSuccess: () => {
+    onSuccess: (_data, { slug }) => {
+      patchCatalogRow(qc, slug, (r) => ({ ...r, on_watchlist: true }));
       qc.invalidateQueries({ queryKey: keys.watchlist });
       qc.invalidateQueries({ queryKey: keys.summary });
-      qc.invalidateQueries({ queryKey: ["catalog"] });
+      qc.invalidateQueries({ queryKey: ["catalog"], refetchType: "none" });
     },
   });
 }
@@ -157,10 +180,11 @@ export function useRemoveWatch() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (slug: string) => api.removeWatch(slug),
-    onSuccess: () => {
+    onSuccess: (_data, slug) => {
+      patchCatalogRow(qc, slug, (r) => ({ ...r, on_watchlist: false }));
       qc.invalidateQueries({ queryKey: keys.watchlist });
       qc.invalidateQueries({ queryKey: keys.summary });
-      qc.invalidateQueries({ queryKey: ["catalog"] });
+      qc.invalidateQueries({ queryKey: ["catalog"], refetchType: "none" });
     },
   });
 }
@@ -180,9 +204,10 @@ export function useAddToBuyList() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (a: { slug: string; qty?: number }) => api.addToBuyList(a.slug, a.qty),
-    onSuccess: () => {
+    onSuccess: (_data, { slug, qty }) => {
+      patchCatalogRow(qc, slug, (r) => ({ ...r, buy_qty: qty ?? 1 }));
       qc.invalidateQueries({ queryKey: keys.buyList });
-      qc.invalidateQueries({ queryKey: ["catalog"] });
+      qc.invalidateQueries({ queryKey: ["catalog"], refetchType: "none" });
     },
   });
 }
@@ -190,9 +215,10 @@ export function useSetBuyQty() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (a: { slug: string; qty: number }) => api.setBuyQty(a.slug, a.qty),
-    onSuccess: () => {
+    onSuccess: (_data, { slug, qty }) => {
+      patchCatalogRow(qc, slug, (r) => ({ ...r, buy_qty: qty }));
       qc.invalidateQueries({ queryKey: keys.buyList });
-      qc.invalidateQueries({ queryKey: ["catalog"] });
+      qc.invalidateQueries({ queryKey: ["catalog"], refetchType: "none" });
     },
   });
 }
@@ -200,9 +226,10 @@ export function useRemoveBuy() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (slug: string) => api.removeBuy(slug),
-    onSuccess: () => {
+    onSuccess: (_data, slug) => {
+      patchCatalogRow(qc, slug, (r) => ({ ...r, buy_qty: 0 }));
       qc.invalidateQueries({ queryKey: keys.buyList });
-      qc.invalidateQueries({ queryKey: ["catalog"] });
+      qc.invalidateQueries({ queryKey: ["catalog"], refetchType: "none" });
     },
   });
 }
@@ -256,8 +283,7 @@ export function usePricesRefresh() {
     mutationFn: (a: { slugs?: string[]; force?: boolean } = {}) =>
       api.pricesRefresh(a.slugs, a.force),
     onSuccess: () => {
-      invalidateInventoryDerived(qc);
-      qc.invalidateQueries({ queryKey: ["catalog"] });
+      invalidateInventoryDerived(qc); // already marks catalog stale (refetchType: none)
     },
   });
 }

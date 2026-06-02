@@ -1,9 +1,10 @@
 // Small shared presentational primitives used across screens.
+import { memo } from "react";
 import { clsx, glyph, tier } from "../lib/format";
 
 /** The tier-edged item chip: the real warframe.market icon when available,
  *  falling back to a 2-letter monogram. */
-export function Glyph({
+export const Glyph = memo(function Glyph({
   name,
   plat,
   thumb,
@@ -17,7 +18,7 @@ export function Glyph({
       {thumb ? <img src={thumb} alt="" loading="lazy" /> : glyph(name)}
     </span>
   );
-}
+});
 
 export function StatBox({
   k,

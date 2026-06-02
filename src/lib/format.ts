@@ -2,8 +2,12 @@
 
 export const clsx = (...a: (string | false | null | undefined)[]) => a.filter(Boolean).join(" ");
 
+// One shared formatter instance — constructing Intl.NumberFormat per call is
+// surprisingly costly when `fmt` runs hundreds of times per render (big grids).
+const NUM_FMT = new Intl.NumberFormat("en-US");
+
 export const fmt = (n: number | null | undefined): string =>
-  n == null ? "—" : new Intl.NumberFormat("en-US").format(Math.round(n));
+  n == null ? "—" : NUM_FMT.format(Math.round(n));
 
 // Hard-rounded plat for headline/aggregate numbers — never imply false precision.
 // 980 → "980", 6177 → "6.2k", 28757 → "29k".

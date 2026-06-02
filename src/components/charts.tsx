@@ -1,5 +1,6 @@
 // Minimal SVG charts (sparkline, mini area, big chart) driven by real series.
 // No deps — just polylines, matching the wireframe's monochrome look.
+import { memo, useMemo } from "react";
 
 function points(data: number[], w: number, h: number, pad = 1): string {
   if (data.length === 0) return "";
@@ -16,7 +17,15 @@ function points(data: number[], w: number, h: number, pad = 1): string {
     .join(" ");
 }
 
-export function Spark({ data, w = 60, h = 18 }: { data: number[]; w?: number; h?: number }) {
+export const Spark = memo(function Spark({
+  data,
+  w = 60,
+  h = 18,
+}: {
+  data: number[];
+  w?: number;
+  h?: number;
+}) {
   if (!data || data.length < 2) return <svg width={w} height={h} />;
   const up = data[data.length - 1] >= data[0];
   return (
@@ -29,7 +38,7 @@ export function Spark({ data, w = 60, h = 18 }: { data: number[]; w?: number; h?
       />
     </svg>
   );
-}
+});
 
 export function MiniArea({
   data,
@@ -105,92 +114,116 @@ function movingAvg(closes: number[], period: number): (number | null)[] {
 
 /** Candlestick chart with volume bars, MA(7)/MA(30) overlays and period hi/lo
  *  reference lines. Driven by real OHLC from warframe.market statistics. */
-export function CandleChart({
+export const CandleChart = memo(function CandleChart({
   candles,
   w = 560,
   h = 240,
 }: { candles: Candle[]; w?: number; h?: number }) {
-  if (!candles || candles.length < 2) {
+  // All geometry (percentile domain, MA(7)/MA(30), candle/volume rects) is derived
+  // once per candles/size change instead of on every parent render (timeframe
+  // clicks, hover state, etc.).
+  const geo = useMemo(() => {
+    if (!candles || candles.length < 2) return null;
+    const priceH = Math.round(h * 0.72);
+    const volTop = priceH + 10;
+    const volH = h - volTop;
+
+    // Robust price domain: a lone troll spike (e.g. 1000p on a 2p mod) must not
+    // flatten the chart. Scale to the 4th–96th percentile of all OHLC values, padded;
+    // values outside clip to the edges rather than blowing out the axis.
+    const vals = candles
+      .flatMap((c) => [c.l, c.h, c.o, c.c])
+      .filter((v) => Number.isFinite(v))
+      .sort((a, b) => a - b);
+    const q = (p: number) =>
+      vals[Math.min(vals.length - 1, Math.max(0, Math.round(p * (vals.length - 1))))];
+    let lo = q(0.04);
+    let hi = q(0.96);
+    if (!(hi > lo)) {
+      lo = vals[0] ?? 0;
+      hi = vals[vals.length - 1] ?? lo + 1;
+    }
+    const padB = (hi - lo) * 0.08 || 1;
+    lo = Math.max(0, lo - padB);
+    hi = hi + padB;
+    const span = hi - lo || 1;
+    const vmax = Math.max(1, ...candles.map((c) => c.v));
+    const n = candles.length;
+    const pad = 3;
+    const step = (w - pad * 2) / n;
+    const bodyW = Math.max(1, step * 0.62);
+
+    const clampP = (p: number) => Math.max(lo, Math.min(hi, p));
+    const yP = (p: number) => 1 + (priceH - 2) * (1 - (clampP(p) - lo) / span);
+    const cx = (i: number) => pad + step * i + step / 2;
+
+    const closes = candles.map((c) => c.c);
+    const ma7 = movingAvg(closes, 7);
+    const ma30 = movingAvg(closes, 30);
+    const maLine = (ma: (number | null)[]) =>
+      ma
+        .map((v, i) => (v == null ? null : `${cx(i).toFixed(1)},${yP(v).toFixed(1)}`))
+        .filter((p): p is string => p != null)
+        .join(" ");
+
+    const candleRects = candles.map((c, i) => {
+      const up = c.c >= c.o;
+      const x = cx(i);
+      return {
+        key: i,
+        color: up ? "var(--pos)" : "var(--neg)",
+        x,
+        hy: yP(c.h),
+        ly: yP(c.l),
+        bodyTop: yP(Math.max(c.o, c.c)),
+        bodyH: Math.max(1, Math.abs(yP(c.o) - yP(c.c))),
+      };
+    });
+    const volRects = candles.map((c, i) => {
+      const bh = Math.round((c.v / vmax) * volH);
+      return { key: `v${i}`, x: cx(i) - bodyW / 2, y: h - bh, bh };
+    });
+
+    return {
+      hiY: yP(hi),
+      loY: yP(lo),
+      bodyW,
+      ma7Line: maLine(ma7),
+      ma30Line: maLine(ma30),
+      candleRects,
+      volRects,
+    };
+  }, [candles, w, h]);
+
+  if (!geo) {
     return <div className="muted">No price history yet — refreshing in the background.</div>;
   }
-  const priceH = Math.round(h * 0.72);
-  const volTop = priceH + 10;
-  const volH = h - volTop;
-
-  // Robust price domain: a lone troll spike (e.g. 1000p on a 2p mod) must not
-  // flatten the chart. Scale to the 4th–96th percentile of all OHLC values, padded;
-  // values outside clip to the edges rather than blowing out the axis.
-  const vals = candles
-    .flatMap((c) => [c.l, c.h, c.o, c.c])
-    .filter((v) => Number.isFinite(v))
-    .sort((a, b) => a - b);
-  const q = (p: number) =>
-    vals[Math.min(vals.length - 1, Math.max(0, Math.round(p * (vals.length - 1))))];
-  let lo = q(0.04);
-  let hi = q(0.96);
-  if (!(hi > lo)) {
-    lo = vals[0] ?? 0;
-    hi = vals[vals.length - 1] ?? lo + 1;
-  }
-  const padB = (hi - lo) * 0.08 || 1;
-  lo = Math.max(0, lo - padB);
-  hi = hi + padB;
-  const span = hi - lo || 1;
-  const vmax = Math.max(1, ...candles.map((c) => c.v));
-  const n = candles.length;
-  const pad = 3;
-  const step = (w - pad * 2) / n;
-  const bodyW = Math.max(1, step * 0.62);
-
-  const clampP = (p: number) => Math.max(lo, Math.min(hi, p));
-  const yP = (p: number) => 1 + (priceH - 2) * (1 - (clampP(p) - lo) / span);
-  const cx = (i: number) => pad + step * i + step / 2;
-
-  const closes = candles.map((c) => c.c);
-  const ma7 = movingAvg(closes, 7);
-  const ma30 = movingAvg(closes, 30);
-  const maLine = (ma: (number | null)[]) =>
-    ma
-      .map((v, i) => (v == null ? null : `${cx(i).toFixed(1)},${yP(v).toFixed(1)}`))
-      .filter((p): p is string => p != null)
-      .join(" ");
 
   return (
     <svg className="candle" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
       {/* period hi/lo reference lines */}
-      <line x1="0" y1={yP(hi)} x2={w} y2={yP(hi)} className="cref" />
-      <line x1="0" y1={yP(lo)} x2={w} y2={yP(lo)} className="cref" />
+      <line x1="0" y1={geo.hiY} x2={w} y2={geo.hiY} className="cref" />
+      <line x1="0" y1={geo.loY} x2={w} y2={geo.loY} className="cref" />
       {/* candles */}
-      {candles.map((c, i) => {
-        const up = c.c >= c.o;
-        const color = up ? "var(--pos)" : "var(--neg)";
-        const x = cx(i);
-        const bodyTop = yP(Math.max(c.o, c.c));
-        const bodyH = Math.max(1, Math.abs(yP(c.o) - yP(c.c)));
-        return (
-          <g key={i} stroke={color} fill={color}>
-            <line x1={x} y1={yP(c.h)} x2={x} y2={yP(c.l)} strokeWidth="1" />
-            <rect x={x - bodyW / 2} y={bodyTop} width={bodyW} height={bodyH} strokeWidth="0" />
-          </g>
-        );
-      })}
-      {/* moving averages */}
-      <polyline points={maLine(ma7)} className="ma ma7" />
-      <polyline points={maLine(ma30)} className="ma ma30" />
-      {/* volume */}
-      {candles.map((c, i) => {
-        const bh = Math.round((c.v / vmax) * volH);
-        return (
+      {geo.candleRects.map((c) => (
+        <g key={c.key} stroke={c.color} fill={c.color}>
+          <line x1={c.x} y1={c.hy} x2={c.x} y2={c.ly} strokeWidth="1" />
           <rect
-            key={`v${i}`}
-            x={cx(i) - bodyW / 2}
-            y={h - bh}
-            width={bodyW}
-            height={bh}
-            className="cvol"
+            x={c.x - geo.bodyW / 2}
+            y={c.bodyTop}
+            width={geo.bodyW}
+            height={c.bodyH}
+            strokeWidth="0"
           />
-        );
-      })}
+        </g>
+      ))}
+      {/* moving averages */}
+      <polyline points={geo.ma7Line} className="ma ma7" />
+      <polyline points={geo.ma30Line} className="ma ma30" />
+      {/* volume */}
+      {geo.volRects.map((v) => (
+        <rect key={v.key} x={v.x} y={v.y} width={geo.bodyW} height={v.bh} className="cvol" />
+      ))}
     </svg>
   );
-}
+});

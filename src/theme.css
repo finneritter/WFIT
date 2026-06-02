@@ -397,7 +397,9 @@ code { font-family: var(--mono); font-size: 11px; color: var(--ink); background:
 .grid { display: flex; flex-wrap: wrap; gap: 4px; padding: 9px 0 2px; }
 
 /* ---------------- tile ---------------- */
-.tile { width: var(--tile); height: var(--tile); position: relative; cursor: pointer; border: 1px solid var(--line-2); border-top: 2px solid var(--t-basic); overflow: hidden; background: var(--panel-2); transition: transform .09s ease, box-shadow .09s ease; }
+/* content-visibility lets the browser skip layout/paint for off-screen tiles —
+   native windowing for the large grids without changing the wrapping layout. */
+.tile { width: var(--tile); height: var(--tile); position: relative; cursor: pointer; border: 1px solid var(--line-2); border-top: 2px solid var(--t-basic); overflow: hidden; background: var(--panel-2); transition: transform .09s ease, box-shadow .09s ease; content-visibility: auto; contain-intrinsic-size: var(--tile) var(--tile); }
 .tile.t-exotic { border-top-color: var(--t-exotic); }
 .tile.t-legend { border-top-color: var(--t-legend); }
 .tile.t-rare   { border-top-color: var(--t-rare); }
@@ -465,7 +467,7 @@ code { font-family: var(--mono); font-size: 11px; color: var(--ink); background:
 
 /* Chips view */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 9px 0 2px; }
-.chip-it { width: 188px; height: 50px; display: flex; align-items: center; gap: 9px; padding: 0 10px 0 9px; background: var(--panel-2); border: 1px solid var(--line-2); border-left: 3px solid var(--t-basic); cursor: pointer; }
+.chip-it { width: 188px; height: 50px; display: flex; align-items: center; gap: 9px; padding: 0 10px 0 9px; background: var(--panel-2); border: 1px solid var(--line-2); border-left: 3px solid var(--t-basic); cursor: pointer; content-visibility: auto; contain-intrinsic-size: 188px 50px; }
 .chip-it.t-exotic { border-left-color: var(--t-exotic); } .chip-it.t-legend { border-left-color: var(--t-legend); }
 .chip-it.t-rare { border-left-color: var(--t-rare); } .chip-it.t-basic { border-left-color: var(--t-basic); }
 .chip-it:hover { background: var(--hover); outline: 1px solid var(--line-2); }

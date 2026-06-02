@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { Dropdown, type DropdownOption } from "../components/Dropdown";
 import { Icon } from "../components/Icon";
 import { Spark } from "../components/charts";
@@ -50,7 +50,13 @@ function usePersisted<T extends string>(key: string, fallback: T): [T, (v: T) =>
   return [v, setV];
 }
 
-function Tile({ row, onOpen }: { row: InventoryRow; onOpen: (slug: string) => void }) {
+const Tile = memo(function Tile({
+  row,
+  onOpen,
+}: {
+  row: InventoryRow;
+  onOpen: (slug: string) => void;
+}) {
   const plat = row.median_plat;
   return (
     <button
@@ -95,10 +101,16 @@ function Tile({ row, onOpen }: { row: InventoryRow; onOpen: (slug: string) => vo
       <span className={clsx("trend", trendOf(row.delta_7d))} />
     </button>
   );
-}
+});
 
 // Chips view: a wider row card — full item name (ellipsis), part, price + 7d move.
-function ChipItem({ row, onOpen }: { row: InventoryRow; onOpen: (slug: string) => void }) {
+const ChipItem = memo(function ChipItem({
+  row,
+  onOpen,
+}: {
+  row: InventoryRow;
+  onOpen: (slug: string) => void;
+}) {
   const plat = row.median_plat;
   const d = row.delta_7d ?? 0;
   const up = d >= 0;
@@ -147,10 +159,16 @@ function ChipItem({ row, onOpen }: { row: InventoryRow; onOpen: (slug: string) =
       </span>
     </button>
   );
-}
+});
 
 // List view: the shared data table — Item | 7d (spark + %) | Qty | Unit | Stack.
-function InvTable({ rows, onOpen }: { rows: InventoryRow[]; onOpen: (slug: string) => void }) {
+const InvTable = memo(function InvTable({
+  rows,
+  onOpen,
+}: {
+  rows: InventoryRow[];
+  onOpen: (slug: string) => void;
+}) {
   return (
     <table className="dtable inv-tbl">
       <thead>
@@ -205,7 +223,7 @@ function InvTable({ rows, onOpen }: { rows: InventoryRow[]; onOpen: (slug: strin
       </tbody>
     </table>
   );
-}
+});
 
 // "What's driving your value" — the few holdings that actually matter, so a
 // junk-heavy inventory shows where its real value lives (index-composition, §2.5).
@@ -251,7 +269,7 @@ function Composition({ rows, onOpen }: { rows: InventoryRow[]; onOpen: (slug: st
   );
 }
 
-function Section({
+const Section = memo(function Section({
   title,
   rows,
   onOpen,
@@ -295,7 +313,7 @@ function Section({
       ) : null}
     </div>
   );
-}
+});
 
 // View-options popover (sliders icon): tile size, label density, magnify toggle.
 function ViewOptions({
@@ -396,14 +414,16 @@ export function Inventory({
   // While the throttled refresh is in flight, the portfolio value climbs as items
   // re-price. Show a "pricing…" note and pull fresh totals so it updates live.
   const pricing = !!progress?.active && progress.priced < progress.total;
+  // The progress query already polls (2s active); piggyback off its updates to
+  // refresh totals as items get priced and once when the sync ends — no extra
+  // timer double-polling on top of it.
+  const priced = progress?.priced ?? 0;
+  const active = !!progress?.active;
   useEffect(() => {
-    if (!pricing) return;
-    const id = setInterval(() => {
-      qc.invalidateQueries({ queryKey: ["summary"] });
-      qc.invalidateQueries({ queryKey: ["inventory"] });
-    }, 5000);
-    return () => clearInterval(id);
-  }, [pricing, qc]);
+    if (!active && priced === 0) return; // no sync has happened this session
+    qc.invalidateQueries({ queryKey: ["summary"] });
+    qc.invalidateQueries({ queryKey: ["inventory"] });
+  }, [priced, active, qc]);
   const [cat, setCat] = useState<string>("all");
   const [hot, setHot] = useState(false);
   const [vaulted, setVaulted] = useState(false);

@@ -48,7 +48,7 @@ struct Metrics {
 pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<TrendsData> {
     let days = window_days(timeframe);
 
-    let mut items: Vec<Item> = db.with(|c| {
+    let mut items: Vec<Item> = db.read(|c| {
         let watched: HashSet<String> = {
             let mut stmt = c.prepare("SELECT slug FROM watchlist")?;
             let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
@@ -80,7 +80,7 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
     })?;
 
     // Pull the daily (median, volume) history once and bucket by slug.
-    let (med_hist, vol_hist) = db.with(|c| {
+    let (med_hist, vol_hist) = db.read(|c| {
         let mut stmt = c.prepare(
             "SELECT slug, median, COALESCE(volume, 0) FROM price_history
              WHERE median IS NOT NULL ORDER BY slug, day ASC",

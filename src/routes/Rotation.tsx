@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useWorldstate } from "../hooks/queries";
 import { clsx, countdown, msUntil } from "../lib/format";
 
@@ -7,22 +7,46 @@ const TIERS = ["All", "Lith", "Meso", "Neo", "Axi", "Requiem", "Omnia"] as const
 // rotating Zariman type, the only place to crack relics in Void Cascade.
 const FISSURE_TIERS = ["Lith", "Meso", "Neo", "Axi", "Requiem", "Omnia"] as const;
 
-/** Re-render every `ms` so countdowns tick live. */
-function useNow(ms = 1000): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), ms);
-    return () => clearInterval(id);
-  }, [ms]);
-  return now;
+// One shared 1s interval drives every live countdown; leaves subscribe so only
+// the timer cells re-render each second — not the whole fissure table + summary.
+const tickListeners = new Set<() => void>();
+let tickTimer: ReturnType<typeof setInterval> | undefined;
+function subscribeTick(fn: () => void): () => void {
+  tickListeners.add(fn);
+  if (tickTimer === undefined) {
+    tickTimer = setInterval(() => {
+      for (const l of tickListeners) l();
+    }, 1000);
+  }
+  return () => {
+    tickListeners.delete(fn);
+    if (tickListeners.size === 0 && tickTimer !== undefined) {
+      clearInterval(tickTimer);
+      tickTimer = undefined;
+    }
+  };
 }
+
+/** A self-ticking countdown leaf — re-renders itself each second, in isolation. */
+const Countdown = memo(function Countdown({
+  iso,
+  fallback = "—",
+}: {
+  iso: string | null | undefined;
+  fallback?: string;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => subscribeTick(() => setNow(Date.now())), []);
+  return <>{iso ? countdown(iso, now) : fallback}</>;
+});
 
 export function Rotation() {
   const { data: ws, isLoading, isError } = useWorldstate();
-  const now = useNow();
   const [tier, setTier] = useState<string>("All");
   const [steelPath, setSteelPath] = useState(false);
 
+  // Filtered/sorted only when the data or filters change (not every second);
+  // expired fissures fall off on the next worldstate refetch (~45s).
   const fissures = useMemo(() => {
     if (!ws) return [];
     return ws.fissures
@@ -33,9 +57,7 @@ export function Rotation() {
           (!steelPath || f.is_hard),
       )
       .sort((a, b) => msUntil(a.expiry) - msUntil(b.expiry));
-    // re-derived each tick so expired fissures fall off live
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ws, tier, steelPath, now]);
+  }, [ws, tier, steelPath]);
 
   // Per-tier refresh summary: how soon each fissure type next rotates, plus the
   // mission types currently up (the point of Omnia).
@@ -54,8 +76,7 @@ export function Rotation() {
         cascade: of.some((f) => /cascade/i.test(f.mission_type)),
       };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ws, now]);
+  }, [ws]);
 
   if (isLoading) return <div className="empty">Loading world-state…</div>;
   if (isError || !ws)
@@ -88,7 +109,7 @@ export function Rotation() {
             <div className="cyc-st">{c.state}</div>
             <div className="cyc-pl">{c.name}</div>
             <div className="cyc-end num">
-              {c.expiry ? countdown(c.expiry, now) : (c.time_left ?? "—")}
+              <Countdown iso={c.expiry} fallback={c.time_left ?? "—"} />
             </div>
           </div>
         ))}
@@ -105,7 +126,7 @@ export function Rotation() {
               <span className="ft-name">{s.tier}</span>
               <span className="ft-n num">{s.count}</span>
             </div>
-            <div className="ft-timer num">{s.count ? countdown(s.nextExpiry, now) : "—"}</div>
+            <div className="ft-timer num">{s.count ? <Countdown iso={s.nextExpiry} /> : "—"}</div>
             {s.tier === "Omnia" && s.count ? (
               <div className="ft-missions">
                 {s.cascade ? <b>⚡ Void Cascade</b> : (s.missions[0] ?? "—")}
@@ -173,7 +194,9 @@ export function Rotation() {
                   <td>{f.mission_type}</td>
                   <td>{f.node}</td>
                   <td>{f.is_hard ? <span className="badge sp">SP</span> : ""}</td>
-                  <td className="r when num">{countdown(f.expiry, now)}</td>
+                  <td className="r when num">
+                    <Countdown iso={f.expiry} />
+                  </td>
                 </tr>
               ))
             )}
@@ -190,9 +213,7 @@ export function Rotation() {
             <div className="baro">
               <div className="baro-cd">
                 <span className="num">
-                  {ws.baro.active
-                    ? countdown(ws.baro.expiry, now)
-                    : countdown(ws.baro.activation, now)}
+                  <Countdown iso={ws.baro.active ? ws.baro.expiry : ws.baro.activation} />
                 </span>
                 <span className="bl">{ws.baro.active ? "until departure" : "until arrival"}</span>
               </div>

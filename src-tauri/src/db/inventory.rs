@@ -330,106 +330,88 @@ pub fn set_members(db: &Db, set_slug: &str) -> AppResult<Vec<String>> {
     })
 }
 
-/// Raw owned rows joined with catalog + price (no set collapsing).
-fn fetch_owned(db: &Db) -> AppResult<Vec<InventoryRow>> {
-    db.with(|c| {
-        let mut stmt = c.prepare(
-            "SELECT
-                ci.slug, ci.display_name, ci.part_type, ci.category, ci.set_slug,
-                ii.qty, ci.ducats, ci.is_vaulted,
-                pc.median_plat, pc.trend, pc.delta_7d, pc.volume_7d,
-                ci.thumbnail_url, ii.last_modified_at, ci.mod_rarity
-             FROM inventory_items ii
-             JOIN catalog_items ci ON ci.slug = ii.slug
-             LEFT JOIN price_cache pc ON pc.slug = ii.slug
-             WHERE ii.qty > 0",
-        )?;
+/// Raw owned rows joined with catalog + price (no set collapsing). Values each
+/// row from preloaded `PriceMaps` + owned rank breakdowns — no per-item queries.
+fn fetch_owned(c: &rusqlite::Connection) -> AppResult<Vec<InventoryRow>> {
+    let maps = prices::load_owned_price_maps(c)?;
+    // Owned per-rank breakdowns for every slug, in one query.
+    let mut breakdowns: HashMap<String, Vec<(i64, i64)>> = HashMap::new();
+    {
+        let mut stmt = c.prepare("SELECT slug, rank, qty FROM inventory_ranks")?;
         let rows = stmt.query_map([], |r| {
-            Ok(InventoryRow {
-                slug: r.get(0)?,
-                display_name: r.get(1)?,
-                part_type: r.get(2)?,
-                category: r.get(3)?,
-                set_slug: r.get(4)?,
-                qty: r.get(5)?,
-                ducats: r.get(6)?,
-                is_vaulted: r.get::<_, i64>(7)? != 0,
-                median_plat: r.get(8)?,
-                trend: r.get(9)?,
-                delta_7d: r.get(10)?,
-                volume_7d: r.get(11)?,
-                thumbnail_url: r.get(12)?,
-                last_modified_at: r.get(13)?,
-                value_plat: None,
-                realizable_plat: None,
-                daily_volume: None,
-                liquidity: None,
-                days_to_sell: None,
-                confidence: None,
-                spark: Vec::new(),
-                mod_rarity: r.get(14)?,
-                excluded: false,
-            })
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, i64>(2)?,
+            ))
         })?;
-        let mut owned = rows.collect::<Result<Vec<_>, _>>()?;
-        // Second pass: rank-aware value for mods/arcanes; live-sell value for other
-        // illiquid items. Both prefer the live ask over the trade median (effective_price).
-        for row in &mut owned {
-            if let Some(v) = rank_aware_value(c, &row.slug)? {
-                // Ranked: value off per-rank effective price; show the blended
-                // per-unit price so price × qty == value in the grid/drawer.
-                row.value_plat = Some(v);
-                if row.qty > 0 {
-                    row.median_plat = Some(v / row.qty);
-                }
-            } else if let Some(ep) = prices::effective_price(c, &row.slug, None)? {
-                // Non-ranked: show the live-sell-preferred price and value off it.
-                row.median_plat = Some(ep);
-                row.value_plat = Some(ep * row.qty);
-            }
+        for row in rows {
+            let (slug, rank, qty) = row?;
+            breakdowns.entry(slug).or_default().push((rank, qty));
         }
-        Ok(owned)
-    })
-}
-
-/// Recent daily medians (≤12 points, chronological) for a row's List-view sparkline.
-/// Display-only — reads price_history directly and never touches valuation.
-fn recent_medians(c: &rusqlite::Connection, slug: &str) -> AppResult<Vec<i64>> {
+    }
     let mut stmt = c.prepare(
-        "SELECT median FROM price_history
-         WHERE slug = ?1 AND median IS NOT NULL AND median > 0
-         ORDER BY day DESC LIMIT 12",
+        "SELECT
+            ci.slug, ci.display_name, ci.part_type, ci.category, ci.set_slug,
+            ii.qty, ci.ducats, ci.is_vaulted,
+            pc.median_plat, pc.trend, pc.delta_7d, pc.volume_7d,
+            ci.thumbnail_url, ii.last_modified_at, ci.mod_rarity
+         FROM inventory_items ii
+         JOIN catalog_items ci ON ci.slug = ii.slug
+         LEFT JOIN price_cache pc ON pc.slug = ii.slug
+         WHERE ii.qty > 0",
     )?;
-    let mut series = stmt
-        .query_map(params![slug], |r| r.get::<_, i64>(0))?
-        .collect::<Result<Vec<_>, _>>()?;
-    series.reverse(); // DESC fetch → chronological
-    Ok(series)
-}
-
-/// Σ qty_r × effective per-rank price (live ask preferred over trade median) for a
-/// slug's rank breakdown. None when the slug has no breakdown (prime parts) —
-/// callers then fall back to the non-ranked effective price.
-fn rank_aware_value(c: &rusqlite::Connection, slug: &str) -> AppResult<Option<i64>> {
-    let breakdown: Vec<(i64, i64)> = {
-        let mut stmt = c.prepare("SELECT rank, qty FROM inventory_ranks WHERE slug = ?1")?;
-        let rows = stmt.query_map(params![slug], |r| Ok((r.get(0)?, r.get(1)?)))?;
-        rows.collect::<Result<Vec<_>, _>>()?
-    };
-    if breakdown.is_empty() {
-        return Ok(None);
+    let rows = stmt.query_map([], |r| {
+        Ok(InventoryRow {
+            slug: r.get(0)?,
+            display_name: r.get(1)?,
+            part_type: r.get(2)?,
+            category: r.get(3)?,
+            set_slug: r.get(4)?,
+            qty: r.get(5)?,
+            ducats: r.get(6)?,
+            is_vaulted: r.get::<_, i64>(7)? != 0,
+            median_plat: r.get(8)?,
+            trend: r.get(9)?,
+            delta_7d: r.get(10)?,
+            volume_7d: r.get(11)?,
+            thumbnail_url: r.get(12)?,
+            last_modified_at: r.get(13)?,
+            value_plat: None,
+            realizable_plat: None,
+            daily_volume: None,
+            liquidity: None,
+            days_to_sell: None,
+            confidence: None,
+            spark: Vec::new(),
+            mod_rarity: r.get(14)?,
+            excluded: false,
+        })
+    })?;
+    let mut owned = rows.collect::<Result<Vec<_>, _>>()?;
+    // Second pass: rank-aware value for mods/arcanes; live-sell value for other
+    // illiquid items. Both prefer the live ask over the trade median.
+    for row in &mut owned {
+        let breakdown = breakdowns.get(&row.slug).map(Vec::as_slice).unwrap_or(&[]);
+        if let Some(v) = prices::rank_aware_value_from(&maps, &row.slug, breakdown) {
+            // Ranked: value off per-rank effective price; show the blended
+            // per-unit price so price × qty == value in the grid/drawer.
+            row.value_plat = Some(v);
+            if row.qty > 0 {
+                row.median_plat = Some(v / row.qty);
+            }
+        } else if let Some(ep) = prices::effective_price_from(&maps, &row.slug, None) {
+            // Non-ranked: show the live-sell-preferred price and value off it.
+            row.median_plat = Some(ep);
+            row.value_plat = Some(ep * row.qty);
+        }
     }
-    let mut total = 0i64;
-    for (rank, qty) in breakdown {
-        let price = prices::effective_price(c, slug, Some(rank))?.unwrap_or(0);
-        total += price * qty;
-    }
-    Ok(Some(total))
+    Ok(owned)
 }
 
 /// set_slug → its catalog/price row, used as the collapsed-set template.
-fn set_templates(db: &Db) -> AppResult<HashMap<String, InventoryRow>> {
-    db.with(|c| {
+fn set_templates(c: &rusqlite::Connection) -> AppResult<HashMap<String, InventoryRow>> {
+    {
         let mut stmt = c.prepare(
             "SELECT ci.slug, ci.display_name, ci.part_type, ci.ducats, ci.is_vaulted,
                     pc.median_plat, pc.trend, pc.delta_7d, pc.volume_7d, ci.thumbnail_url
@@ -470,78 +452,113 @@ fn set_templates(db: &Db) -> AppResult<HashMap<String, InventoryRow>> {
             m.insert(row.slug.clone(), row);
         }
         Ok(m)
-    })
+    }
+}
+
+/// Full catalog membership for many sets in one query: set_slug → [part slugs].
+/// Batched replacement for calling `set_members` per set inside a loop.
+fn memberships(
+    c: &rusqlite::Connection,
+    set_slugs: &[String],
+) -> AppResult<HashMap<String, Vec<String>>> {
+    let mut out: HashMap<String, Vec<String>> = HashMap::new();
+    if set_slugs.is_empty() {
+        return Ok(out);
+    }
+    let ph = std::iter::repeat("?")
+        .take(set_slugs.len())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!("SELECT set_slug, slug FROM catalog_items WHERE set_slug IN ({ph})");
+    let mut stmt = c.prepare(&sql)?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(set_slugs.iter()), |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })?;
+    for row in rows {
+        let (set_slug, slug) = row?;
+        out.entry(set_slug).or_default().push(slug);
+    }
+    Ok(out)
 }
 
 fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
-    let owned = fetch_owned(db)?;
-    let templates = set_templates(db)?;
-
-    // member part slugs per set, plus the qty each owned part contributes.
-    let owned_qty: HashMap<&str, i64> = owned.iter().map(|r| (r.slug.as_str(), r.qty)).collect();
-    let mut members: HashMap<String, Vec<String>> = HashMap::new();
-    for r in &owned {
-        if let Some(set) = &r.set_slug {
-            members.entry(set.clone()).or_default().push(r.slug.clone());
-        }
-    }
-    // A set is complete only if EVERY catalog member is owned, so pull the full
-    // membership (not just owned parts) to detect missing ones.
-    let mut consumed: HashMap<String, i64> = HashMap::new();
-    let mut out: Vec<InventoryRow> = Vec::new();
-    for set_slug in members.keys() {
-        let Some(tmpl) = templates.get(set_slug) else {
-            continue;
-        };
-        if tmpl.median_plat.is_none() {
-            continue; // no set price → don't collapse, value parts individually
-        }
-        let all_members = set_members(db, set_slug)?;
-        let complete = all_members
-            .iter()
-            .map(|m| *owned_qty.get(m.as_str()).unwrap_or(&0))
-            .min()
-            .unwrap_or(0);
-        if complete > 0 {
-            let mut row = tmpl.clone();
-            row.qty = complete;
-            out.push(row);
-            for m in &all_members {
-                *consumed.entry(m.clone()).or_insert(0) += complete;
-            }
-        }
-    }
-
-    for r in &owned {
-        let used = *consumed.get(&r.slug).unwrap_or(&0);
-        let left = r.qty - used;
-        if left > 0 {
-            let mut row = r.clone();
-            row.qty = left;
-            // value_plat was computed for the full qty; for a partial leftover it
-            // no longer applies (these are non-ranked parts) — fall back to median × left.
-            row.value_plat = None;
-            out.push(row);
-        }
-    }
-
-    // Mod rarities the user excludes from the portfolio total (read once), plus the
-    // optional value floor that spares the pricier mods of those rarities.
+    // Exclusion settings read on the writer first (separate lock), then the whole
+    // valuation runs on a single pooled read connection — no writer contention.
     let excluded = settings::excluded_rarities(db)?;
     let min_plat = settings::excluded_min_plat(db)?;
 
-    // Liquidity-adjusted (realizable) value + signals for every row (sets included):
-    // liquidate into the live bid ladder, then a volume-capped tail.
-    db.with(|c| {
+    db.read(|c| {
+        let owned = fetch_owned(c)?;
+        let templates = set_templates(c)?;
+
+        // member part slugs per set, plus the qty each owned part contributes.
+        let owned_qty: HashMap<&str, i64> =
+            owned.iter().map(|r| (r.slug.as_str(), r.qty)).collect();
+        let mut members: HashMap<String, Vec<String>> = HashMap::new();
+        for r in &owned {
+            if let Some(set) = &r.set_slug {
+                members.entry(set.clone()).or_default().push(r.slug.clone());
+            }
+        }
+        // A set is complete only if EVERY catalog member is owned, so pull the full
+        // membership (not just owned parts) to detect missing ones — batched.
+        let set_slugs: Vec<String> = members.keys().cloned().collect();
+        let membership = memberships(c, &set_slugs)?;
+        let mut consumed: HashMap<String, i64> = HashMap::new();
+        let mut out: Vec<InventoryRow> = Vec::new();
+        for set_slug in members.keys() {
+            let Some(tmpl) = templates.get(set_slug) else {
+                continue;
+            };
+            if tmpl.median_plat.is_none() {
+                continue; // no set price → don't collapse, value parts individually
+            }
+            let empty = Vec::new();
+            let all_members = membership.get(set_slug).unwrap_or(&empty);
+            let complete = all_members
+                .iter()
+                .map(|m| *owned_qty.get(m.as_str()).unwrap_or(&0))
+                .min()
+                .unwrap_or(0);
+            if complete > 0 {
+                let mut row = tmpl.clone();
+                row.qty = complete;
+                out.push(row);
+                for m in all_members {
+                    *consumed.entry(m.clone()).or_insert(0) += complete;
+                }
+            }
+        }
+
+        for r in &owned {
+            let used = *consumed.get(&r.slug).unwrap_or(&0);
+            let left = r.qty - used;
+            if left > 0 {
+                let mut row = r.clone();
+                row.qty = left;
+                // value_plat was computed for the full qty; for a partial leftover it
+                // no longer applies (these are non-ranked parts) — fall back to median × left.
+                row.value_plat = None;
+                out.push(row);
+            }
+        }
+
+        // Liquidity-adjusted (realizable) value + signals for every row (sets included):
+        // liquidate into the live bid ladder, then a volume-capped tail. Bid ladders and
+        // sparklines are batch-loaded for all rows at once (was one query per row).
+        let out_slugs: Vec<String> = out.iter().map(|r| r.slug.clone()).collect();
+        let bid_map = prices::bid_ladders_for(c, &out_slugs)?;
+        let spark_map = prices::recent_medians_for(c, &out_slugs)?;
+        let no_bids: Vec<(i64, i64)> = Vec::new();
         for row in &mut out {
             let market = row_value(row);
-            let bids = prices::bid_ladder(c, &row.slug)?;
+            let bids = bid_map.get(&row.slug).unwrap_or(&no_bids);
             let (realizable, phi) = realizable_default(
                 row.median_plat.unwrap_or(0),
                 row.qty,
                 market,
                 row.volume_7d,
-                &bids,
+                bids,
             );
             row.realizable_plat = Some(realizable);
             row.liquidity = Some(phi);
@@ -558,7 +575,7 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
             )
             .map(String::from);
             // Display-only sparkline for the List view (sets + parts), independent of pricing.
-            row.spark = recent_medians(c, &row.slug)?;
+            row.spark = spark_map.get(&row.slug).cloned().unwrap_or_default();
             // Exclude this row's value from the portfolio total when its mod rarity
             // is on the user's exclusion list. Zeroing value/realizable makes the
             // totals (and summary/trends, which sum these) drop it automatically; the
@@ -574,14 +591,13 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
                 }
             }
         }
-        Ok(())
-    })?;
-    Ok(out)
+        Ok(out)
+    })
 }
 
 /// Owned slugs with qty > 0 — the priority set for price refresh.
 pub fn owned_slugs(db: &Db) -> AppResult<Vec<String>> {
-    db.with(|c| {
+    db.read(|c| {
         let mut stmt = c.prepare("SELECT slug FROM inventory_items WHERE qty > 0")?;
         let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
         let mut out = Vec::new();
@@ -634,5 +650,44 @@ mod tests {
         let (rz2, phi2) = realizable_default(5, 3, 15, Some(0), &[(99, 10)]);
         assert_eq!(rz2, 15);
         assert_eq!(phi2, 1.0);
+    }
+
+    // Order-independent fingerprint of the whole valuation over a real DB copy.
+    // Run on both branches (`WFIT_PROBE_DB=… cargo test -- --ignored --nocapture
+    // probe_real_db`) to prove the read-pool + batching change is value-preserving.
+    #[test]
+    #[ignore]
+    fn probe_real_db() {
+        let path = std::env::var("WFIT_PROBE_DB").expect("set WFIT_PROBE_DB");
+        let db = crate::db::Db::open(std::path::Path::new(&path)).unwrap();
+        let rows = super::list_ranked(&db).unwrap();
+        let tv = super::total_value(&db).unwrap();
+        let tr = super::total_realizable(&db).unwrap();
+        let mut fp: Vec<String> = rows
+            .iter()
+            .map(|r| {
+                format!(
+                    "{}|{}|{}|{}|{}|{:?}",
+                    r.slug,
+                    r.qty,
+                    r.value_plat.unwrap_or(-1),
+                    r.realizable_plat.unwrap_or(-1),
+                    r.median_plat.unwrap_or(-1),
+                    r.spark
+                )
+            })
+            .collect();
+        fp.sort();
+        let mut h: u64 = 1469598103934665603;
+        for s in &fp {
+            for b in s.bytes() {
+                h ^= b as u64;
+                h = h.wrapping_mul(1099511628211);
+            }
+        }
+        println!(
+            "PROBE rows={} total_value={tv} total_realizable={tr} fp_hash={h:016x}",
+            rows.len()
+        );
     }
 }

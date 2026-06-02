@@ -18,7 +18,7 @@ pub fn list(db: &Db) -> AppResult<Vec<SetRow>> {
         owned_qty: i64,
     }
     // 1) Every component part that points at a set.
-    let parts: Vec<PartRow> = db.with(|c| {
+    let parts: Vec<PartRow> = db.read(|c| {
         let mut stmt = c.prepare(
             "SELECT p.slug, p.display_name, p.part_type, p.category, p.set_slug,
                     pc.median_plat, COALESCE(ii.qty, 0)
@@ -50,7 +50,7 @@ pub fn list(db: &Db) -> AppResult<Vec<SetRow>> {
         display_name: String,
         median_plat: Option<i64>,
     }
-    let set_items: HashMap<String, SetItem> = db.with(|c| {
+    let set_items: HashMap<String, SetItem> = db.read(|c| {
         let mut stmt = c.prepare(
             "SELECT s.slug, s.display_name, pc.median_plat
              FROM catalog_items s

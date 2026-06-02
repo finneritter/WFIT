@@ -24,7 +24,7 @@ pub struct CatalogUpsert {
 }
 
 pub fn count(db: &Db) -> AppResult<i64> {
-    db.with(|c| {
+    db.read(|c| {
         let n: i64 = c.query_row("SELECT COUNT(*) FROM catalog_items", [], |r| r.get(0))?;
         Ok(n)
     })
@@ -33,7 +33,7 @@ pub fn count(db: &Db) -> AppResult<i64> {
 /// Count catalog rows still missing the `game_ref` join key. Non-zero after the
 /// 0003 migration until a catalog refetch backfills them (the API supplies it).
 pub fn missing_game_ref_count(db: &Db) -> AppResult<i64> {
-    db.with(|c| {
+    db.read(|c| {
         let n: i64 = c.query_row(
             "SELECT COUNT(*) FROM catalog_items WHERE game_ref IS NULL",
             [],
@@ -47,7 +47,7 @@ pub fn missing_game_ref_count(db: &Db) -> AppResult<i64> {
 /// Prime parts legitimately have null max_rank, so we can't check "all"; "any"
 /// non-null means the backfill happened. Used to trigger that one-time refetch.
 pub fn has_any_max_rank(db: &Db) -> AppResult<bool> {
-    db.with(|c| {
+    db.read(|c| {
         let n: i64 = c.query_row(
             "SELECT COUNT(*) FROM catalog_items WHERE max_rank IS NOT NULL",
             [],
@@ -158,7 +158,7 @@ pub fn backfill_mod_rarity(db: &Db) -> AppResult<usize> {
 
 /// Build the warframe.market id -> slug map (for resolving setParts ids in Pass B).
 pub fn id_slug_map(db: &Db) -> AppResult<HashMap<String, String>> {
-    db.with(|c| {
+    db.read(|c| {
         let mut stmt =
             c.prepare("SELECT wfm_id, slug FROM catalog_items WHERE wfm_id IS NOT NULL")?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
@@ -210,7 +210,7 @@ fn map_catalog_row(r: &rusqlite::Row) -> rusqlite::Result<CatalogRow> {
 
 /// List the catalog, optionally filtered to one category. Used by the Add Items modal.
 pub fn list(db: &Db, category: Option<&str>) -> AppResult<Vec<CatalogRow>> {
-    db.with(|c| {
+    db.read(|c| {
         let mut out = Vec::new();
         match category {
             Some(cat) => {
@@ -237,7 +237,7 @@ pub fn list(db: &Db, category: Option<&str>) -> AppResult<Vec<CatalogRow>> {
 
 /// Search the catalog by display name (case-insensitive substring).
 pub fn search(db: &Db, q: &str, limit: i64) -> AppResult<Vec<CatalogRow>> {
-    db.with(|c| {
+    db.read(|c| {
         let like = format!("%{}%", q.replace('%', "\\%").replace('_', "\\_"));
         let sql = format!(
             "{CATALOG_SELECT} WHERE ci.display_name LIKE ?1 ESCAPE '\\'
@@ -255,7 +255,7 @@ pub fn search(db: &Db, q: &str, limit: i64) -> AppResult<Vec<CatalogRow>> {
 
 /// One catalog row by slug (for the Drawer when an item isn't owned).
 pub fn get(db: &Db, slug: &str) -> AppResult<Option<CatalogRow>> {
-    db.with(|c| {
+    db.read(|c| {
         let sql = format!("{CATALOG_SELECT} WHERE ci.slug = ?1");
         let row = c.query_row(&sql, params![slug], map_catalog_row).ok();
         Ok(row)
