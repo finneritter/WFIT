@@ -13,6 +13,7 @@ import {
   useSummary,
   useWfmAccount,
 } from "../hooks/queries";
+import { wipeApp } from "../lib/api";
 import { syncedAgo } from "../lib/format";
 import { type Prefs, type Theme, loadPrefs, savePrefs } from "../lib/prefs";
 
@@ -62,6 +63,71 @@ function Seg({
   );
 }
 
+// Dev-only factory reset, behind a two-step confirm (the spec wants warning screens).
+function DangerZone() {
+  const [armed, setArmed] = useState(false);
+  const [confirm, setConfirm] = useState("");
+  const [wiping, setWiping] = useState(false);
+  const doWipe = async () => {
+    setWiping(true);
+    try {
+      await wipeApp(); // erases everything + restarts the app; this call won't resolve
+    } catch {
+      setWiping(false);
+    }
+  };
+  if (!armed) {
+    return (
+      <Row
+        label="Wipe all app data"
+        hint="Factory reset: erase inventory, sales, watchlist, settings and every cache, then restart as a fresh install. To test the new-user experience. Cannot be undone."
+      >
+        <button type="button" className="btn warn" onClick={() => setArmed(true)}>
+          Wipe…
+        </button>
+      </Row>
+    );
+  }
+  return (
+    <div className="wipe-confirm">
+      <div className="wipe-warn">
+        ⚠ This permanently erases <b>everything</b> — your whole inventory, sales history,
+        watchlist, buy list, settings, and all cached prices — and restarts the app empty. There is
+        no undo.
+      </div>
+      <div className="wipe-act">
+        <input
+          type="text"
+          placeholder="type ERASE to confirm"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          spellCheck={false}
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          className="btn warn"
+          disabled={confirm !== "ERASE" || wiping}
+          onClick={doWipe}
+        >
+          {wiping ? "Erasing…" : "Erase everything & restart"}
+        </button>
+        <button
+          type="button"
+          className="btn"
+          disabled={wiping}
+          onClick={() => {
+            setArmed(false);
+            setConfirm("");
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void }) {
   const [prefs, setPrefs] = useState<Prefs>(() => loadPrefs());
   const { data: summary } = useSummary();
@@ -78,6 +144,21 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
   useEffect(() => {
     setMinInput(excludedMinPlat ? String(excludedMinPlat) : "");
   }, [excludedMinPlat]);
+  const [dev, setDevState] = useState(() => {
+    try {
+      return localStorage.getItem("wfit-dev") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setDev = (v: boolean) => {
+    setDevState(v);
+    try {
+      localStorage.setItem("wfit-dev", v ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  };
 
   const toggleRarity = (r: string) =>
     setExcluded.mutate(excluded.includes(r) ? excluded.filter((x) => x !== r) : [...excluded, r]);
@@ -271,7 +352,26 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
         <Row label="Database" hint="$APPDATA/dev.finn.wfit/wfit.sqlite — local, single user">
           <span />
         </Row>
+        <Row label="Developer mode" hint="Reveals testing tools, including a full app wipe">
+          <Seg
+            value={dev ? "on" : "off"}
+            options={[
+              ["off", "Off"],
+              ["on", "On"],
+            ]}
+            onChange={(v) => setDev(v === "on")}
+          />
+        </Row>
       </section>
+
+      {dev ? (
+        <section className="tpanel danger">
+          <div className="tpanel-h">
+            <h3>Developer · danger zone</h3>
+          </div>
+          <DangerZone />
+        </section>
+      ) : null}
     </div>
   );
 }

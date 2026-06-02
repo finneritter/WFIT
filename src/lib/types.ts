@@ -305,6 +305,12 @@ export interface Baro {
   location: string | null;
   character: string | null;
 }
+export interface PricingProgress {
+  active: boolean;
+  priced: number;
+  total: number;
+}
+
 export interface Worldstate {
   cycles: Cycle[];
   fissures: Fissure[];

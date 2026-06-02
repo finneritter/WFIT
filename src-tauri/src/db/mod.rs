@@ -16,6 +16,7 @@ pub mod sales;
 pub mod sets;
 pub mod settings;
 pub mod trends;
+pub mod vault;
 pub mod watchlist;
 pub mod wfm;
 
@@ -29,6 +30,7 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         M::up(include_str!("../../migrations/0005_orders.sql")),
         M::up(include_str!("../../migrations/0006_buy_orders.sql")),
         M::up(include_str!("../../migrations/0007_mod_rarity.sql")),
+        M::up(include_str!("../../migrations/0008_vault_status.sql")),
     ])
 });
 

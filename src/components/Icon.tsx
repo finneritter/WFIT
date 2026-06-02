@@ -23,6 +23,7 @@ const PATHS: Record<string, string> = {
   sort: "M5 7h14M5 12h9M5 17h5",
   sliders:
     "M3 8h13M20 8h1M3 16h5M12 16h9M16 8a2 2 0 1 0 4 0 2 2 0 1 0 -4 0M8 16a2 2 0 1 0 4 0 2 2 0 1 0 -4 0",
+  lock: "M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z",
 };
 
 export function Icon({ name }: { name: string }) {

@@ -28,6 +28,8 @@ pub fn set(db: &Db, key: &str, value: &str) -> AppResult<()> {
 
 pub const KEY_LAST_CATALOG_SYNC: &str = "last_catalog_sync";
 pub const KEY_LAST_PRICE_SYNC: &str = "last_price_sync";
+/// Stamp of the last vault-status sync from warframe-items (long TTL).
+pub const KEY_LAST_VAULT_SYNC: &str = "last_vault_sync";
 /// Stamp of the pricing logic that produced the cached prices. When the code's
 /// PRICING_VERSION differs, the derived price caches are wiped and recomputed —
 /// so changes to how prices are derived take effect on the next launch without a

@@ -19,6 +19,7 @@ export const keys = {
   trends: (tf: string, excludeOutliers: boolean) => ["trends", tf, excludeOutliers] as const,
   itemDetail: (slug: string) => ["itemDetail", slug] as const,
   worldstate: ["worldstate"] as const,
+  pricingProgress: ["pricingProgress"] as const,
   wfmAccount: ["wfmAccount"] as const,
   listings: ["listings"] as const,
   gameScan: ["gameScan"] as const,
@@ -80,6 +81,13 @@ export const useItemOrders = (slug: string | null) =>
   });
 export const useWorldstate = () =>
   useQuery({ queryKey: keys.worldstate, queryFn: api.getWorldstate, refetchInterval: 45_000 });
+// Poll fast while a refresh is in flight, slow otherwise (to notice it starting).
+export const usePricingProgress = () =>
+  useQuery({
+    queryKey: keys.pricingProgress,
+    queryFn: api.getPricingProgress,
+    refetchInterval: (q) => (q.state.data?.active ? 2000 : 7000),
+  });
 export const useWfmAccount = () =>
   useQuery({ queryKey: keys.wfmAccount, queryFn: api.getWfmAccount });
 export const useListings = () => useQuery({ queryKey: keys.listings, queryFn: api.wfmGetListings });

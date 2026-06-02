@@ -79,7 +79,8 @@ pub fn upsert_many(db: &Db, items: &[CatalogUpsert]) -> AppResult<usize> {
                     ducats        = COALESCE(excluded.ducats, catalog_items.ducats),
                     game_ref      = COALESCE(excluded.game_ref, catalog_items.game_ref),
                     max_rank      = COALESCE(excluded.max_rank, catalog_items.max_rank),
-                    is_vaulted    = excluded.is_vaulted,
+                    -- is_vaulted is owned by db::vault::apply (warframe-items), not the
+                    -- catalog API (which has no vault data) — don't clobber it on refresh.
                     is_tradeable  = excluded.is_tradeable,
                     thumbnail_url = COALESCE(excluded.thumbnail_url, catalog_items.thumbnail_url),
                     mod_rarity    = COALESCE(excluded.mod_rarity, catalog_items.mod_rarity),

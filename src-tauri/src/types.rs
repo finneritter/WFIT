@@ -67,6 +67,15 @@ pub struct InventoryRow {
     pub excluded: bool,
 }
 
+/// Progress of the throttled owned-item price refresh — drives the "pricing…"
+/// indicator so the climbing portfolio value reads as "still loading", not a change.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PricingProgress {
+    pub active: bool, // a refresh is in flight
+    pub priced: i64,  // owned slugs that now have a price
+    pub total: i64,   // owned slugs total
+}
+
 /// A realized sale (Sold History).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SaleRow {

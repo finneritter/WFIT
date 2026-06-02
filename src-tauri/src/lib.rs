@@ -9,6 +9,7 @@ mod wfm_account;
 mod worldstate;
 
 use chrono::{DateTime, Duration, Utc};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::Manager;
 use tracing_subscriber::EnvFilter;
@@ -17,6 +18,10 @@ pub struct AppState {
     pub db: db::Db,
     pub market: market::Market,
     pub worldstate: worldstate::WorldstateClient,
+    /// True for the whole launch warm-up (catalog → vault → owned → drain), so the UI
+    /// can show a "syncing…" indicator the entire time prices are still filling in —
+    /// distinguishing "still loading" from a settled value (incl. a fresh post-wipe sync).
+    pub pricing_active: AtomicBool,
 }
 
 const CATALOG_STALE_HOURS: i64 = 24;
@@ -49,6 +54,7 @@ pub fn run() {
                 db,
                 market: market::Market::new(),
                 worldstate: worldstate::WorldstateClient::new(),
+                pricing_active: AtomicBool::new(false),
             });
             app.manage(state.clone());
 
@@ -93,6 +99,7 @@ pub fn run() {
             commands::set_excluded_rarities,
             commands::get_excluded_min_plat,
             commands::set_excluded_min_plat,
+            commands::get_pricing_progress,
             // computed
             commands::get_sets,
             commands::get_ducats,
@@ -103,6 +110,7 @@ pub fn run() {
             commands::get_item_history,
             commands::get_item_orders,
             commands::rebuild_cache,
+            commands::wipe_app,
             // worldstate
             commands::get_worldstate,
             // wfm account
@@ -127,11 +135,31 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
+/// RAII flag for the "syncing…" indicator: marks `pricing_active` true for its
+/// lifetime and false on drop, so the flag clears on every exit path of the warm-up
+/// (normal completion or an early error) and can never get stuck on.
+struct PricingGuard<'a>(&'a AtomicBool);
+impl<'a> PricingGuard<'a> {
+    fn new(b: &'a AtomicBool) -> Self {
+        b.store(true, Ordering::Relaxed);
+        Self(b)
+    }
+}
+impl Drop for PricingGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Relaxed);
+    }
+}
+
 /// On launch: refresh the catalog if empty/stale, prime owned + watchlist prices,
 /// then drain the rest in the background at the throttled rate. UI never blocks
 /// and the 350 ms global limit is never exceeded.
 async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
-    use db::{catalog, meta, prices};
+    use db::{catalog, meta, prices, vault};
+
+    // Hold the "syncing…" flag for the entire warm-up (catalog → vault → owned →
+    // drain) so the UI shows progress the whole time; the guard resets it on any exit.
+    let _active = PricingGuard::new(&state.pricing_active);
 
     // 0) If the pricing logic changed since these caches were built, wipe the
     // DERIVED price caches (not raw history) so everything re-derives below with
@@ -188,15 +216,17 @@ async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
         )?;
     }
 
-    // 2) Live sell orders for owned items FIRST — they are the primary price
-    // source, so they must populate before the slower statistics pass (which is
-    // only the fallback + the drawer chart). With hundreds of owned items the
-    // throttled refresh takes minutes; ordering this first means the price-critical
-    // data lands soonest and isn't starved if the app is closed early.
-    refresh_owned_orders(&state, false).await?;
+    // 1.5) Vault status from warframe-items (own host; TTL-gated ~monthly, bundled
+    // fallback). Runs after the catalog so the set→parts propagation has rows to mark.
+    if let Err(e) = vault::refresh_if_stale(&state.db).await {
+        tracing::warn!(error = %e, "vault status refresh failed");
+    }
 
-    // 3) Foreground-priority statistics: owned, then watchlist (chart/trend + the
-    // price fallback for items with no live sell orders).
+    // 2+3) Owned (then watchlist) pricing — the phase the inventory value depends on.
+    // pricing_active is held for the WHOLE warm-up by the guard at the top of this fn,
+    // so the "syncing…" indicator stays up through the background drain below too.
+    // Owned orders go first (primary price), then the slower statistics pass.
+    refresh_owned_orders(&state, false).await?;
     let mut priority = prices::stale_inventory_slugs(&state.db)?;
     for s in prices::stale_watchlist_slugs(&state.db)? {
         if !priority.contains(&s) {

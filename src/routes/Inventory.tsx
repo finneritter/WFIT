@@ -1,9 +1,10 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Dropdown, type DropdownOption } from "../components/Dropdown";
 import { Icon } from "../components/Icon";
 import { Spark } from "../components/charts";
 import { Glyph, StatBox } from "../components/ui";
-import { useInventory, useSummary } from "../hooks/queries";
+import { useInventory, usePricingProgress, useSummary } from "../hooks/queries";
 import { CATEGORY_LABELS, clsx, fmt, fmtK, glyph, pct, tier, trendOf } from "../lib/format";
 import type { InventoryRow } from "../lib/types";
 
@@ -59,6 +60,11 @@ function Tile({ row, onOpen }: { row: InventoryRow; onOpen: (slug: string) => vo
       title={row.excluded ? `${row.display_name} — excluded from portfolio value` : undefined}
     >
       {row.trend === "up" ? <span className="ct-tl">▲</span> : null}
+      {row.is_vaulted ? (
+        <span className="lock" title="Vaulted — no longer farmable">
+          <Icon name="lock" />
+        </span>
+      ) : null}
       <span className="qty num">×{row.qty}</span>
       {row.thumbnail_url ? (
         <img className="glyph-img" src={row.thumbnail_url} alt="" loading="lazy" />
@@ -120,6 +126,7 @@ function ChipItem({ row, onOpen }: { row: InventoryRow; onOpen: (slug: string) =
           {row.trend === "up" ? <span className="hot">▲ </span> : null}
           {row.excluded ? "excluded · " : ""}
           {row.part_type}
+          {row.is_vaulted ? <span className="vault">🔒</span> : null}
         </span>
       </span>
       <span className="ci-r">
@@ -174,6 +181,7 @@ function InvTable({ rows, onOpen }: { rows: InventoryRow[]; onOpen: (slug: strin
                       {row.display_name}
                       {row.trend === "up" ? <span className="hot">▲ HOT</span> : null}
                       {row.excluded ? <span className="excl-tag">EXCL</span> : null}
+                      {row.is_vaulted ? <span className="vault">VAULT</span> : null}
                     </span>
                     <span className="sub">{row.part_type}</span>
                   </span>
@@ -383,8 +391,22 @@ export function Inventory({
 }) {
   const { data: inv = [], isLoading } = useInventory();
   const { data: summary } = useSummary();
+  const { data: progress } = usePricingProgress();
+  const qc = useQueryClient();
+  // While the throttled refresh is in flight, the portfolio value climbs as items
+  // re-price. Show a "pricing…" note and pull fresh totals so it updates live.
+  const pricing = !!progress?.active && progress.priced < progress.total;
+  useEffect(() => {
+    if (!pricing) return;
+    const id = setInterval(() => {
+      qc.invalidateQueries({ queryKey: ["summary"] });
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+    }, 5000);
+    return () => clearInterval(id);
+  }, [pricing, qc]);
   const [cat, setCat] = useState<string>("all");
   const [hot, setHot] = useState(false);
+  const [vaulted, setVaulted] = useState(false);
   const [sort, setSort] = usePersisted<SortKey>("wfit-inv-sort", "value-desc");
   const [view, setView] = usePersisted<ViewKey>("wfit-inv-view", "grid");
   const [size, setSize] = usePersisted<string>("wfit-inv-size", "");
@@ -415,6 +437,7 @@ export function Inventory({
       if (query && !`${r.display_name} ${r.part_type} ${r.category}`.toLowerCase().includes(query))
         return false;
       if (hot && r.trend !== "up") return false;
+      if (vaulted && !r.is_vaulted) return false;
       return true;
     });
     const sorted = [...rows];
@@ -431,7 +454,7 @@ export function Inventory({
       }
     });
     return sorted;
-  }, [inv, query, hot, sort, hideExcl]);
+  }, [inv, query, hot, vaulted, sort, hideExcl]);
 
   const byCat = useMemo(() => {
     const map = new Map<string, InventoryRow[]>();
@@ -458,7 +481,7 @@ export function Inventory({
 
   // Section visibility (spec §3.5): hide non-selected categories; hide an emptied
   // section unless a specific category is selected with no hot/query filter.
-  const filtering = hot || query !== "";
+  const filtering = hot || vaulted || query !== "";
   const visible = CATS.filter((c) => {
     if (cat !== "all" && cat !== c) return false;
     const rows = byCat.get(c) ?? [];
@@ -468,6 +491,16 @@ export function Inventory({
 
   return (
     <div className={clsx("inv-root", size, labels, !magnify && "no-magnify")}>
+      {pricing && progress ? (
+        <div className="pricing-note">
+          <span className="spin" />
+          syncing prices from warframe.market…{" "}
+          <b className="num">
+            {fmt(progress.priced)} / {fmt(progress.total)}
+          </b>{" "}
+          priced — values update as this fills in.
+        </div>
+      ) : null}
       <div className="statband">
         <StatBox
           k="Realizable Platinum"
@@ -492,7 +525,9 @@ export function Inventory({
         <StatBox k="Sold · 7d" v={fmt(summary?.sold_7d)} unit="p" />
       </div>
 
-      {cat === "all" && !hot && !query ? <Composition rows={inv} onOpen={onOpen} /> : null}
+      {cat === "all" && !hot && !vaulted && !query ? (
+        <Composition rows={inv} onOpen={onOpen} />
+      ) : null}
 
       <div className="filters">
         <button
@@ -503,6 +538,15 @@ export function Inventory({
           title="Show only items trending up"
         >
           ▲ Hot
+        </button>
+        <button
+          type="button"
+          className="chip"
+          aria-pressed={vaulted}
+          onClick={() => setVaulted((v) => !v)}
+          title="Show only vaulted items (no longer farmable)"
+        >
+          🔒 Vaulted
         </button>
         <Dropdown
           icon="filter"

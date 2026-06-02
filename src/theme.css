@@ -408,7 +408,9 @@ code { font-family: var(--mono); font-size: 11px; color: var(--ink); background:
 .tile .glyph-img { position: absolute; top: 0; left: 0; right: 0; bottom: 14px; width: auto; height: auto; object-fit: contain; padding: 3px; }
 /* corner marks */
 .tile .ct-tl { position: absolute; top: 1px; left: 3px; font-size: 8px; color: var(--hot); z-index: 3; }
-.tile .lock { position: absolute; top: 2px; right: 3px; z-index: 3; width: 8px; height: 8px; stroke: var(--soft); fill: none; stroke-width: 2; }
+/* Vault badge: top-center (TL=hot, TR=qty are taken), so it never collides. */
+.tile .lock { position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 3; line-height: 0; }
+.tile .lock svg { width: 9px; height: 9px; stroke: var(--accent); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .tile .qty { position: absolute; top: 1px; right: 3px; z-index: 3; font-family: var(--mono); font-size: 9px; color: var(--faint); }
 /* value bar */
 .tile .vbar { position: absolute; left: 0; right: 0; bottom: 0; height: 14px; background: #06070a; border-top: 1px solid var(--line-2); display: flex; align-items: center; justify-content: flex-end; padding: 0 3px 0 6px; z-index: 2; }
@@ -492,6 +494,9 @@ code { font-family: var(--mono); font-size: 11px; color: var(--ink); background:
 .tile.excluded .vbar .pl { color: var(--faint); }
 .inv-tbl tr.excluded td { opacity: .55; }
 .inv-tbl .excl-tag { color: var(--faint); font-size: 9px; margin-left: 5px; border: 1px solid var(--line-2); padding: 0 3px; letter-spacing: .04em; }
+/* Vault markers in chips/list (the lock badge handles the grid). */
+.chip-it .ci-sub .vault, .inv-tbl .nm .vault { color: var(--accent); font-size: 9px; margin-left: 4px; }
+.inv-tbl .nm .vault { border: 1px solid var(--line-2); padding: 0 3px; letter-spacing: .04em; }
 
 /* Uniform 30px toolbar height (scoped to .filters). */
 .filters .search { height: 30px; padding: 0 10px; }
@@ -559,7 +564,21 @@ code { font-family: var(--mono); font-size: 11px; color: var(--ink); background:
 .set-num input { width: 70px; height: 30px; background: var(--panel); border: 1px solid var(--line-2); color: var(--ink); font-family: var(--mono); font-size: 12px; padding: 0 8px; text-align: right; }
 .set-num input:focus { outline: none; border-color: var(--soft); }
 .set-num .u { color: var(--faint); font-size: 11px; }
+.tpanel.danger { border-color: var(--neg); }
+.tpanel.danger .tpanel-h h3 { color: var(--neg); }
+.wipe-confirm { padding: 12px 14px; }
+.wipe-warn { font-size: 12px; line-height: 1.5; color: var(--ink); background: var(--panel-2); border: 1px solid var(--neg); padding: 9px 11px; margin-bottom: 10px; }
+.wipe-warn b { color: var(--neg); }
+.wipe-act { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wipe-act input { height: 32px; background: var(--panel); border: 1px solid var(--line-2); color: var(--ink); font-family: var(--mono); font-size: 12px; padding: 0 10px; }
+.wipe-act input:focus { outline: none; border-color: var(--neg); }
+.wipe-act .btn.warn { background: var(--neg); color: #fff; border-color: var(--neg); }
+.wipe-act .btn.warn:disabled { opacity: .45; cursor: not-allowed; background: var(--panel); color: var(--soft); border-color: var(--line-2); }
 .ws-stale { margin-bottom: 12px; padding: 9px 12px; font-size: 12px; line-height: 1.45; color: var(--hot); background: var(--panel-2); border: 1px solid var(--hot); }
+.pricing-note { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 7px 11px; font-size: 11.5px; color: var(--soft); background: var(--panel-2); border: 1px solid var(--line-2); }
+.pricing-note b { color: var(--ink); }
+.pricing-note .spin { width: 11px; height: 11px; flex: none; border: 2px solid var(--line-2); border-top-color: var(--accent); border-radius: 50%; animation: pn-spin .8s linear infinite; }
+@keyframes pn-spin { to { transform: rotate(360deg); } }
 
 /* legend */
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--faint); margin-top: 6px; padding: 2px; }

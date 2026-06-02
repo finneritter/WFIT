@@ -11,6 +11,7 @@ import type {
   ItemDetail,
   ItemOrders,
   ListingRow,
+  PricingProgress,
   SaleRow,
   ScanApply,
   ScanDiffRow,
@@ -26,6 +27,7 @@ import type {
 export const catalogCount = () => invoke<number>("catalog_count");
 export const catalogRefresh = () => invoke<number>("catalog_refresh");
 export const rebuildCache = () => invoke<number>("rebuild_cache");
+export const wipeApp = () => invoke<void>("wipe_app");
 export const setsRefresh = () => invoke<number>("sets_refresh");
 export const getCatalog = (category?: string) =>
   invoke<CatalogRow[]>("get_catalog", { category: category ?? null });
@@ -76,6 +78,7 @@ export const setExcludedRarities = (rarities: string[]) =>
 export const getExcludedMinPlat = () => invoke<number>("get_excluded_min_plat");
 export const setExcludedMinPlat = (value: number) =>
   invoke<void>("set_excluded_min_plat", { value });
+export const getPricingProgress = () => invoke<PricingProgress>("get_pricing_progress");
 
 // computed
 export const getSets = () => invoke<SetRow[]>("get_sets");

@@ -70,6 +70,34 @@ pub fn get_catalog(
     catalog::list(&state.db, category.as_deref())
 }
 
+/// DEV factory reset: erase ALL local data — inventory, sales, watchlist, buy list,
+/// settings, every cache and the catalog — then restart so the app comes back up
+/// exactly like a fresh install (re-fetches catalog/vault/prices from scratch).
+/// Destructive + irreversible; the UI gates it behind a dev-mode two-step confirm.
+#[tauri::command]
+pub fn wipe_app(state: State<'_, Arc<AppState>>, app: tauri::AppHandle) -> AppResult<()> {
+    state.db.with_mut(|conn| {
+        conn.pragma_update(None, "foreign_keys", "OFF")?;
+        let tables: Vec<String> = {
+            let mut stmt = conn.prepare(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+            )?;
+            let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+            rows.collect::<Result<Vec<_>, _>>()?
+        };
+        let tx = conn.transaction()?;
+        for t in &tables {
+            // Table names come from sqlite_master (our own schema), not user input.
+            tx.execute(&format!("DELETE FROM \"{t}\""), [])?;
+        }
+        tx.commit()?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+        Ok(())
+    })?;
+    tracing::warn!("app wiped (dev factory reset); restarting");
+    app.restart();
+}
+
 #[tauri::command]
 pub fn search_catalog(
     state: State<'_, Arc<AppState>>,
@@ -316,6 +344,53 @@ pub fn get_budget(state: State<'_, Arc<AppState>>) -> AppResult<Option<i64>> {
     Ok(v.and_then(|s| s.parse::<i64>().ok()))
 }
 
+/// Pricing/sync progress for the "syncing…" indicator. Reflects owned items when an
+/// inventory exists ("your value is settling"); falls back to the whole tradeable
+/// catalog when it's empty (fresh install / post-wipe), so a reset still shows
+/// progress while the catalog re-prices.
+#[tauri::command]
+pub fn get_pricing_progress(state: State<'_, Arc<AppState>>) -> AppResult<PricingProgress> {
+    let active = state
+        .pricing_active
+        .load(std::sync::atomic::Ordering::Relaxed);
+    state.db.with(|c| {
+        let owned_total: i64 = c.query_row(
+            "SELECT COUNT(*) FROM inventory_items WHERE qty > 0",
+            [],
+            |r| r.get(0),
+        )?;
+        let (priced, total) = if owned_total > 0 {
+            let owned_priced: i64 = c.query_row(
+                "SELECT COUNT(*) FROM inventory_items ii
+                 JOIN price_cache pc ON pc.slug = ii.slug
+                 WHERE ii.qty > 0 AND pc.median_plat IS NOT NULL",
+                [],
+                |r| r.get(0),
+            )?;
+            (owned_priced, owned_total)
+        } else {
+            let cat_total: i64 = c.query_row(
+                "SELECT COUNT(*) FROM catalog_items WHERE is_tradeable = 1",
+                [],
+                |r| r.get(0),
+            )?;
+            let cat_priced: i64 = c.query_row(
+                "SELECT COUNT(*) FROM catalog_items ci
+                 JOIN price_cache pc ON pc.slug = ci.slug
+                 WHERE ci.is_tradeable = 1 AND pc.median_plat IS NOT NULL",
+                [],
+                |r| r.get(0),
+            )?;
+            (cat_priced, cat_total)
+        };
+        Ok(PricingProgress {
+            active,
+            priced,
+            total,
+        })
+    })
+}
+
 #[tauri::command]
 pub fn set_budget(state: State<'_, Arc<AppState>>, value: i64) -> AppResult<()> {
     settings::set(&state.db, settings::KEY_BUDGET, &value.to_string())
@@ -449,45 +524,56 @@ pub async fn prices_refresh(
     slugs: Option<Vec<String>>,
     force: Option<bool>,
 ) -> AppResult<usize> {
-    let targets: Vec<String> = if let Some(s) = slugs {
-        s
-    } else if force.unwrap_or(false) {
-        inventory::owned_slugs(&state.db)?
-    } else {
-        let mut v = prices::stale_inventory_slugs(&state.db)?;
-        for s in prices::stale_watchlist_slugs(&state.db)? {
-            if !v.contains(&s) {
-                v.push(s);
+    // Surface this refresh in the "pricing…" indicator; reset even on error.
+    state
+        .pricing_active
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    let result = async {
+        let targets: Vec<String> = if let Some(s) = slugs {
+            s
+        } else if force.unwrap_or(false) {
+            inventory::owned_slugs(&state.db)?
+        } else {
+            let mut v = prices::stale_inventory_slugs(&state.db)?;
+            for s in prices::stale_watchlist_slugs(&state.db)? {
+                if !v.contains(&s) {
+                    v.push(s);
+                }
+            }
+            v.truncate(FG_REFRESH_CAP);
+            v
+        };
+
+        let mut updates = Vec::with_capacity(targets.len());
+        for slug in &targets {
+            match state.market.fetch_statistics(slug).await {
+                Ok(Some(p)) => updates.push(p),
+                Ok(None) => tracing::debug!(slug, "no stats"),
+                Err(e) => tracing::warn!(slug, error = %e, "fetch_statistics failed"),
             }
         }
-        v.truncate(FG_REFRESH_CAP);
-        v
-    };
-
-    let mut updates = Vec::with_capacity(targets.len());
-    for slug in &targets {
-        match state.market.fetch_statistics(slug).await {
-            Ok(Some(p)) => updates.push(p),
-            Ok(None) => tracing::debug!(slug, "no stats"),
-            Err(e) => tracing::warn!(slug, error = %e, "fetch_statistics failed"),
+        let n = if updates.is_empty() {
+            0
+        } else {
+            prices::upsert_many(&state.db, &updates, Duration::hours(PRICE_TTL_HOURS))?
+        };
+        meta::set(
+            &state.db,
+            meta::KEY_LAST_PRICE_SYNC,
+            &Utc::now().to_rfc3339(),
+        )?;
+        // A forced refresh ("Refresh prices") also re-pulls live sell orders for
+        // illiquid owned items, so their value reflects real asks.
+        if force.unwrap_or(false) {
+            crate::refresh_owned_orders(state.inner(), true).await?;
         }
+        Ok::<usize, AppError>(n)
     }
-    let n = if updates.is_empty() {
-        0
-    } else {
-        prices::upsert_many(&state.db, &updates, Duration::hours(PRICE_TTL_HOURS))?
-    };
-    meta::set(
-        &state.db,
-        meta::KEY_LAST_PRICE_SYNC,
-        &Utc::now().to_rfc3339(),
-    )?;
-    // A forced refresh ("Refresh prices") also re-pulls live sell orders for
-    // illiquid owned items, so their value reflects real asks.
-    if force.unwrap_or(false) {
-        crate::refresh_owned_orders(state.inner(), true).await?;
-    }
-    Ok(n)
+    .await;
+    state
+        .pricing_active
+        .store(false, std::sync::atomic::Ordering::Relaxed);
+    result
 }
 
 #[tauri::command]
