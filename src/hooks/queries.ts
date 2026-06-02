@@ -11,6 +11,8 @@ export const keys = {
   watchlist: ["watchlist"] as const,
   buyList: ["buyList"] as const,
   budget: ["budget"] as const,
+  excludedRarities: ["excludedRarities"] as const,
+  excludedMinPlat: ["excludedMinPlat"] as const,
   sets: ["sets"] as const,
   ducats: ["ducats"] as const,
   catalog: (cat?: string) => ["catalog", cat ?? "all"] as const,
@@ -211,6 +213,31 @@ export function useSetBudget() {
   return useMutation({
     mutationFn: (value: number) => api.setBudget(value),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.budget }),
+  });
+}
+export const useExcludedRarities = () =>
+  useQuery({ queryKey: keys.excludedRarities, queryFn: api.getExcludedRarities });
+export function useSetExcludedRarities() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rarities: string[]) => api.setExcludedRarities(rarities),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.excludedRarities });
+      // The exclusion changes every value-bearing view (totals, summary, trends).
+      invalidateInventoryDerived(qc);
+    },
+  });
+}
+export const useExcludedMinPlat = () =>
+  useQuery({ queryKey: keys.excludedMinPlat, queryFn: api.getExcludedMinPlat });
+export function useSetExcludedMinPlat() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (value: number) => api.setExcludedMinPlat(value),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.excludedMinPlat });
+      invalidateInventoryDerived(qc);
+    },
   });
 }
 

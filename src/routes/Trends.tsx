@@ -154,7 +154,9 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
         </div>
         {data.holdings_value > 0 ? (
           <div className="bandtop">
-            <span className="bandval num">{fmt(data.holdings_value)}p</span>
+            <span className="bandval num" title="Realizable (liquidation-adjusted) value, matching the Inventory headline">
+              ~{fmt(data.holdings_value)}p
+            </span>
             <span className={clsx("bandchg num", data.holdings_change >= 0 ? "pos" : "neg")}>
               {pct(data.holdings_change)}
             </span>

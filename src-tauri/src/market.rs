@@ -503,8 +503,8 @@ impl Market {
 /// The live order book for one item: robust asks per rank + the online bid ladder.
 #[derive(Debug, Clone, Default)]
 pub struct OrderBook {
-    pub sells: Vec<(i64, i64)>,      // (rank, robust lowest ask)
-    pub bids: Vec<(i64, i64, i64)>,  // (rank, price, qty) — online buy orders
+    pub sells: Vec<(i64, i64)>,     // (rank, robust lowest ask)
+    pub bids: Vec<(i64, i64, i64)>, // (rank, price, qty) — online buy orders
 }
 
 /// Raw set-composition fields from the detail endpoint (ids, not slugs).

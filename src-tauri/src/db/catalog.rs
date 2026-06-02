@@ -1,4 +1,5 @@
 use crate::db::Db;
+use crate::domain::mod_rarity;
 use crate::error::AppResult;
 use crate::types::CatalogRow;
 use chrono::Utc;
@@ -66,8 +67,9 @@ pub fn upsert_many(db: &Db, items: &[CatalogUpsert]) -> AppResult<usize> {
             let mut stmt = tx.prepare(
                 "INSERT INTO catalog_items
                     (slug, wfm_id, display_name, part_type, category, set_slug,
-                     ducats, game_ref, max_rank, is_vaulted, is_tradeable, thumbnail_url, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                     ducats, game_ref, max_rank, is_vaulted, is_tradeable, thumbnail_url,
+                     mod_rarity, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
                  ON CONFLICT(slug) DO UPDATE SET
                     wfm_id        = COALESCE(excluded.wfm_id, catalog_items.wfm_id),
                     display_name  = excluded.display_name,
@@ -80,9 +82,16 @@ pub fn upsert_many(db: &Db, items: &[CatalogUpsert]) -> AppResult<usize> {
                     is_vaulted    = excluded.is_vaulted,
                     is_tradeable  = excluded.is_tradeable,
                     thumbnail_url = COALESCE(excluded.thumbnail_url, catalog_items.thumbnail_url),
+                    mod_rarity    = COALESCE(excluded.mod_rarity, catalog_items.mod_rarity),
                     updated_at    = excluded.updated_at",
             )?;
             for it in items {
+                // Mods only: bundled rarity keyed on game_ref (uniqueName).
+                let rarity = if it.category == "mod" {
+                    it.game_ref.as_deref().and_then(mod_rarity::rarity_for)
+                } else {
+                    None
+                };
                 stmt.execute(params![
                     it.slug,
                     it.wfm_id,
@@ -96,6 +105,7 @@ pub fn upsert_many(db: &Db, items: &[CatalogUpsert]) -> AppResult<usize> {
                     it.is_vaulted as i64,
                     it.is_tradeable as i64,
                     it.thumbnail_url,
+                    rarity,
                     now,
                 ])?;
             }
@@ -103,6 +113,46 @@ pub fn upsert_many(db: &Db, items: &[CatalogUpsert]) -> AppResult<usize> {
         tx.commit()?;
         Ok(items.len())
     })
+}
+
+/// Current bundled mod-rarity dataset version. Bump alongside
+/// `domain/data/mod_rarity.tsv` to force a one-time re-backfill on next launch.
+const MOD_RARITY_VER: &str = "1";
+
+/// Populate `catalog_items.mod_rarity` for existing mods from the bundled map
+/// (keyed on game_ref). Runs once per dataset version — the ongoing upsert keeps
+/// new mods current, this just fills rows that predate the column. Idempotent.
+pub fn backfill_mod_rarity(db: &Db) -> AppResult<usize> {
+    use crate::db::settings;
+    if settings::get(db, settings::KEY_MOD_RARITY_VER)?.as_deref() == Some(MOD_RARITY_VER) {
+        return Ok(0);
+    }
+    let n = db.with_mut(|conn| {
+        let tx = conn.transaction()?;
+        let pairs: Vec<(String, String)> = {
+            let mut stmt = tx.prepare(
+                "SELECT slug, game_ref FROM catalog_items
+                 WHERE category = 'mod' AND game_ref IS NOT NULL",
+            )?;
+            let rows =
+                stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+            rows.collect::<Result<Vec<_>, _>>()?
+        };
+        let mut updated = 0usize;
+        for (slug, game_ref) in &pairs {
+            if let Some(rarity) = mod_rarity::rarity_for(game_ref) {
+                tx.execute(
+                    "UPDATE catalog_items SET mod_rarity = ?1 WHERE slug = ?2",
+                    params![rarity, slug],
+                )?;
+                updated += 1;
+            }
+        }
+        tx.commit()?;
+        Ok(updated)
+    })?;
+    settings::set(db, settings::KEY_MOD_RARITY_VER, MOD_RARITY_VER)?;
+    Ok(n)
 }
 
 /// Build the warframe.market id -> slug map (for resolving setParts ids in Pass B).

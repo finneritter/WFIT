@@ -321,6 +321,42 @@ pub fn set_budget(state: State<'_, Arc<AppState>>, value: i64) -> AppResult<()> 
     settings::set(&state.db, settings::KEY_BUDGET, &value.to_string())
 }
 
+/// Mod rarities excluded from portfolio valuation (canonical lowercase slugs).
+#[tauri::command]
+pub fn get_excluded_rarities(state: State<'_, Arc<AppState>>) -> AppResult<Vec<String>> {
+    settings::excluded_rarities(&state.db)
+}
+
+/// Set the excluded mod rarities. Only canonical rarities are kept; order/dupes
+/// are normalized, so the stored value is stable.
+#[tauri::command]
+pub fn set_excluded_rarities(
+    state: State<'_, Arc<AppState>>,
+    rarities: Vec<String>,
+) -> AppResult<()> {
+    let clean: Vec<&str> = crate::domain::mod_rarity::RARITIES
+        .iter()
+        .copied()
+        .filter(|r| rarities.iter().any(|x| x == r))
+        .collect();
+    settings::set(&state.db, settings::KEY_EXCLUDED_RARITIES, &clean.join(","))
+}
+
+/// Value floor (plat) sparing the pricier mods of an excluded rarity. 0 = no floor.
+#[tauri::command]
+pub fn get_excluded_min_plat(state: State<'_, Arc<AppState>>) -> AppResult<i64> {
+    settings::excluded_min_plat(&state.db)
+}
+
+#[tauri::command]
+pub fn set_excluded_min_plat(state: State<'_, Arc<AppState>>, value: i64) -> AppResult<()> {
+    settings::set(
+        &state.db,
+        settings::KEY_EXCLUDED_MIN_PLAT,
+        &value.max(0).to_string(),
+    )
+}
+
 // ===========================================================================
 // Sets + Ducats (computed)
 // ===========================================================================
@@ -538,8 +574,13 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
     let bids = state.db.with(|c| prices::bid_ladder(c, &slug))?;
     let (realizable_plat, liquidity, daily_volume, days_to_sell) = if owned_qty > 0 {
         let market = value_plat.unwrap_or_else(|| eff_median.unwrap_or(0) * owned_qty);
-        let (rz, phi) =
-            inventory::realizable_default(eff_median.unwrap_or(0), owned_qty, market, volume_7d, &bids);
+        let (rz, phi) = inventory::realizable_default(
+            eff_median.unwrap_or(0),
+            owned_qty,
+            market,
+            volume_7d,
+            &bids,
+        );
         let dv = volume_7d.map(|v| (v.max(0) as f64) / 7.0);
         let dts = match volume_7d {
             Some(v) if v > 0 => Some((owned_qty as f64 / (v as f64 / 7.0)).round() as i64),
@@ -549,8 +590,9 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
     } else {
         (None, None, None, None)
     };
-    let confidence = inventory::confidence_of(&slug, eff_median.is_some(), volume_7d, !bids.is_empty())
-        .map(String::from);
+    let confidence =
+        inventory::confidence_of(&slug, eff_median.is_some(), volume_7d, !bids.is_empty())
+            .map(String::from);
 
     Ok(ItemDetail {
         slug: row.slug,
@@ -843,11 +885,11 @@ pub fn game_scan_revoke(state: State<'_, Arc<AppState>>) -> AppResult<()> {
 /// Read-only preview: gated on consent + a running game, scan → map → diff.
 /// Writes nothing (other than last-scan bookkeeping).
 #[tauri::command]
-pub async fn game_scan_preview(
-    state: State<'_, Arc<AppState>>,
-) -> AppResult<Vec<ScanDiffRow>> {
+pub async fn game_scan_preview(state: State<'_, Arc<AppState>>) -> AppResult<Vec<ScanDiffRow>> {
     if !gamescan::is_supported() {
-        return Err(AppError::Invalid("game inventory scan is Linux-only".into()));
+        return Err(AppError::Invalid(
+            "game inventory scan is Linux-only".into(),
+        ));
     }
     if !gamescan_db::is_consented(&state.db)? {
         return Err(AppError::Invalid(
@@ -868,10 +910,7 @@ pub async fn game_scan_preview(
 
 /// Apply the user-confirmed subset of the diff. The only writer; transactional.
 #[tauri::command]
-pub fn game_scan_apply(
-    state: State<'_, Arc<AppState>>,
-    rows: Vec<ScanApply>,
-) -> AppResult<usize> {
+pub fn game_scan_apply(state: State<'_, Arc<AppState>>, rows: Vec<ScanApply>) -> AppResult<usize> {
     if !gamescan_db::is_consented(&state.db)? {
         return Err(AppError::Invalid(
             "game inventory scan requires consent first".into(),

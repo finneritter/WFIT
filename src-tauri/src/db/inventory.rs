@@ -1,4 +1,5 @@
 use crate::db::prices;
+use crate::db::settings;
 use crate::db::Db;
 use crate::error::{AppError, AppResult};
 use crate::types::InventoryRow;
@@ -205,7 +206,8 @@ pub fn total_realizable(db: &Db) -> AppResult<i64> {
 
 /// The plat value of one owned row: rank-aware value when present, else median × qty.
 fn row_value(r: &InventoryRow) -> i64 {
-    r.value_plat.unwrap_or_else(|| r.median_plat.unwrap_or(0) * r.qty)
+    r.value_plat
+        .unwrap_or_else(|| r.median_plat.unwrap_or(0) * r.qty)
 }
 
 // --- Liquidation-adjusted (realizable) valuation ---------------------------
@@ -336,7 +338,7 @@ fn fetch_owned(db: &Db) -> AppResult<Vec<InventoryRow>> {
                 ci.slug, ci.display_name, ci.part_type, ci.category, ci.set_slug,
                 ii.qty, ci.ducats, ci.is_vaulted,
                 pc.median_plat, pc.trend, pc.delta_7d, pc.volume_7d,
-                ci.thumbnail_url, ii.last_modified_at
+                ci.thumbnail_url, ii.last_modified_at, ci.mod_rarity
              FROM inventory_items ii
              JOIN catalog_items ci ON ci.slug = ii.slug
              LEFT JOIN price_cache pc ON pc.slug = ii.slug
@@ -364,6 +366,9 @@ fn fetch_owned(db: &Db) -> AppResult<Vec<InventoryRow>> {
                 liquidity: None,
                 days_to_sell: None,
                 confidence: None,
+                spark: Vec::new(),
+                mod_rarity: r.get(14)?,
+                excluded: false,
             })
         })?;
         let mut owned = rows.collect::<Result<Vec<_>, _>>()?;
@@ -385,6 +390,21 @@ fn fetch_owned(db: &Db) -> AppResult<Vec<InventoryRow>> {
         }
         Ok(owned)
     })
+}
+
+/// Recent daily medians (≤12 points, chronological) for a row's List-view sparkline.
+/// Display-only — reads price_history directly and never touches valuation.
+fn recent_medians(c: &rusqlite::Connection, slug: &str) -> AppResult<Vec<i64>> {
+    let mut stmt = c.prepare(
+        "SELECT median FROM price_history
+         WHERE slug = ?1 AND median IS NOT NULL AND median > 0
+         ORDER BY day DESC LIMIT 12",
+    )?;
+    let mut series = stmt
+        .query_map(params![slug], |r| r.get::<_, i64>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    series.reverse(); // DESC fetch → chronological
+    Ok(series)
 }
 
 /// Σ qty_r × effective per-rank price (live ask preferred over trade median) for a
@@ -439,6 +459,9 @@ fn set_templates(db: &Db) -> AppResult<HashMap<String, InventoryRow>> {
                 liquidity: None,
                 days_to_sell: None,
                 confidence: None,
+                spark: Vec::new(),
+                mod_rarity: None,
+                excluded: false,
             })
         })?;
         let mut m = HashMap::new();
@@ -467,7 +490,9 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
     let mut consumed: HashMap<String, i64> = HashMap::new();
     let mut out: Vec<InventoryRow> = Vec::new();
     for set_slug in members.keys() {
-        let Some(tmpl) = templates.get(set_slug) else { continue };
+        let Some(tmpl) = templates.get(set_slug) else {
+            continue;
+        };
         if tmpl.median_plat.is_none() {
             continue; // no set price → don't collapse, value parts individually
         }
@@ -500,14 +525,24 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
         }
     }
 
+    // Mod rarities the user excludes from the portfolio total (read once), plus the
+    // optional value floor that spares the pricier mods of those rarities.
+    let excluded = settings::excluded_rarities(db)?;
+    let min_plat = settings::excluded_min_plat(db)?;
+
     // Liquidity-adjusted (realizable) value + signals for every row (sets included):
     // liquidate into the live bid ladder, then a volume-capped tail.
     db.with(|c| {
         for row in &mut out {
             let market = row_value(row);
             let bids = prices::bid_ladder(c, &row.slug)?;
-            let (realizable, phi) =
-                realizable_default(row.median_plat.unwrap_or(0), row.qty, market, row.volume_7d, &bids);
+            let (realizable, phi) = realizable_default(
+                row.median_plat.unwrap_or(0),
+                row.qty,
+                market,
+                row.volume_7d,
+                &bids,
+            );
             row.realizable_plat = Some(realizable);
             row.liquidity = Some(phi);
             row.daily_volume = row.volume_7d.map(|v| (v.max(0) as f64) / 7.0);
@@ -522,6 +557,22 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
                 !bids.is_empty(),
             )
             .map(String::from);
+            // Display-only sparkline for the List view (sets + parts), independent of pricing.
+            row.spark = recent_medians(c, &row.slug)?;
+            // Exclude this row's value from the portfolio total when its mod rarity
+            // is on the user's exclusion list. Zeroing value/realizable makes the
+            // totals (and summary/trends, which sum these) drop it automatically; the
+            // row still appears in inventory, flagged + with its price still in the drawer.
+            if let Some(rarity) = &row.mod_rarity {
+                // Keep a mod of an excluded rarity when its unit price clears the floor
+                // (min_plat > 0); otherwise drop it from the portfolio value.
+                let kept_by_value = min_plat > 0 && row.median_plat.unwrap_or(0) >= min_plat;
+                if excluded.iter().any(|e| e == rarity) && !kept_by_value {
+                    row.excluded = true;
+                    row.value_plat = Some(0);
+                    row.realizable_plat = Some(0);
+                }
+            }
         }
         Ok(())
     })?;

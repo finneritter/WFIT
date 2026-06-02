@@ -56,6 +56,10 @@ pub struct Worldstate {
     pub fissures: Vec<Fissure>,
     pub baro: Option<Baro>,
     pub fetched_at: String,
+    /// warframe­stat.us's own snapshot time (ISO). When this lags real time the
+    /// source is stale — every fissure/cycle reads as expired through no fault of
+    /// ours, so the UI surfaces it instead of silently showing an empty page.
+    pub source_timestamp: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +68,7 @@ pub struct Worldstate {
 
 #[derive(Deserialize)]
 struct RawWorld {
+    timestamp: Option<String>,
     #[serde(rename = "cetusCycle")]
     cetus_cycle: Option<RawCycle>,
     #[serde(rename = "vallisCycle")]
@@ -228,7 +233,9 @@ impl WorldstateClient {
             let now = Utc::now();
             let parse = |s: &str| chrono::DateTime::parse_from_rfc3339(s).ok();
             let active = match (t.activation.as_deref(), t.expiry.as_deref()) {
-                (Some(a), Some(e)) => matches!((parse(a), parse(e)), (Some(a), Some(e)) if a <= now && now < e),
+                (Some(a), Some(e)) => {
+                    matches!((parse(a), parse(e)), (Some(a), Some(e)) if a <= now && now < e)
+                }
                 _ => false,
             };
             Baro {
@@ -245,6 +252,7 @@ impl WorldstateClient {
             fissures,
             baro,
             fetched_at: Utc::now().to_rfc3339(),
+            source_timestamp: raw.timestamp,
         })
     }
 }

@@ -1,3 +1,4 @@
+use crate::db::inventory;
 use crate::db::Db;
 use crate::error::AppResult;
 use crate::types::{HeatRow, TrendRow, TrendsData};
@@ -85,7 +86,11 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
              WHERE median IS NOT NULL ORDER BY slug, day ASC",
         )?;
         let rows = stmt.query_map([], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?))
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, i64>(2)?,
+            ))
         })?;
         let mut med: HashMap<String, Vec<i64>> = HashMap::new();
         let mut vol: HashMap<String, Vec<i64>> = HashMap::new();
@@ -115,7 +120,11 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
         .filter_map(|it| metrics_of(it, days).map(|m| (it.slug.clone(), m)))
         .collect();
 
-    let liquid = |it: &Item| metrics.get(&it.slug).is_some_and(|m| m.avg_vol >= LIQUID_MIN);
+    let liquid = |it: &Item| {
+        metrics
+            .get(&it.slug)
+            .is_some_and(|m| m.avg_vol >= LIQUID_MIN)
+    };
     let liquid_count = items.iter().filter(|it| liquid(it)).count() as i64;
 
     // Market read over the LIQUID subset only — breadth + a robust median move.
@@ -225,15 +234,18 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
         .collect();
     category_heat.sort_by(|a, b| a.category.cmp(&b.category));
 
-    // Holdings band: value of owned priced items + value-weighted % move.
-    let (mut hv, mut hnum, mut hden) = (0i64, 0.0f64, 0.0f64);
+    // Holdings band: the value matches the Inventory headline — the canonical
+    // liquidation-adjusted (realizable) total (set-collapsed, rank-aware), NOT the
+    // naive Σ median × qty this used to sum. The % move stays value-weighted over
+    // the timeframe (weighted by each item's market value, the available per-item basis).
+    let holdings_value = inventory::total_realizable(db)?;
+    let (mut hnum, mut hden) = (0.0f64, 0.0f64);
     for it in &items {
         if it.owned_qty > 0 {
-            let val = it.owned_qty * it.median_plat;
-            hv += val;
             if let Some(m) = metrics.get(&it.slug) {
-                hnum += m.delta * val as f64;
-                hden += val as f64;
+                let val = (it.owned_qty * it.median_plat) as f64;
+                hnum += m.delta * val;
+                hden += val;
             }
         }
     }
@@ -247,7 +259,7 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
         index_spark,
         liquid_count,
         total_priced: items.len() as i64,
-        holdings_value: hv,
+        holdings_value,
         holdings_change,
         sell_signal_count: sell_signals.len() as i64,
         sell_signals,
@@ -345,7 +357,11 @@ fn metrics_of(it: &Item, days: i64) -> Option<Metrics> {
         let var = returns.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / returns.len() as f64;
         let sd_daily = var.sqrt();
         let sd_tf = sd_daily * (days as f64).sqrt();
-        if sd_tf > 1e-6 { delta / sd_tf } else { 0.0 }
+        if sd_tf > 1e-6 {
+            delta / sd_tf
+        } else {
+            0.0
+        }
     } else {
         0.0
     };

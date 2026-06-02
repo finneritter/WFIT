@@ -28,6 +28,7 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         M::up(include_str!("../../migrations/0004_ranks.sql")),
         M::up(include_str!("../../migrations/0005_orders.sql")),
         M::up(include_str!("../../migrations/0006_buy_orders.sql")),
+        M::up(include_str!("../../migrations/0007_mod_rarity.sql")),
     ])
 });
 

@@ -22,9 +22,9 @@ mod memory;
 #[cfg(target_os = "linux")]
 mod process;
 
-use crate::error::AppResult;
 #[cfg(not(target_os = "linux"))]
 use crate::error::AppError;
+use crate::error::AppResult;
 use serde::{Deserialize, Serialize};
 
 /// A raw inventory line as read from the game (DE `uniqueName` + count), before
@@ -81,7 +81,9 @@ pub async fn scan() -> AppResult<RawInventory> {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        Err(AppError::Invalid("game inventory scan is Linux-only".into()))
+        Err(AppError::Invalid(
+            "game inventory scan is Linux-only".into(),
+        ))
     }
 }
 

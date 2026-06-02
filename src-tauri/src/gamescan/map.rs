@@ -178,10 +178,7 @@ mod tests {
         let out = resolve(&raw.items, &sample_map());
         // Barrel x3 (rank None) + Receiver x1 + mod rank0 x9 + mod rank5 x1; resource dropped.
         assert_eq!(out.len(), 4);
-        let barrel = out
-            .iter()
-            .find(|i| i.slug == "soma_prime_barrel")
-            .unwrap();
+        let barrel = out.iter().find(|i| i.slug == "soma_prime_barrel").unwrap();
         assert_eq!((barrel.rank, barrel.qty), (None, 3));
         // The mod splits by rank: 9 stacked unranked (RawUpgrades) + 1 at lvl 5 (Upgrades).
         let r0 = out

@@ -89,6 +89,10 @@ pub fn run() {
             commands::purchase_buy,
             commands::get_budget,
             commands::set_budget,
+            commands::get_excluded_rarities,
+            commands::set_excluded_rarities,
+            commands::get_excluded_min_plat,
+            commands::set_excluded_min_plat,
             // computed
             commands::get_sets,
             commands::get_ducats,
@@ -141,6 +145,13 @@ async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
             Ok(())
         })?;
         meta::set(&state.db, meta::KEY_PRICING_VERSION, PRICING_VERSION)?;
+    }
+
+    // 0.5) Backfill mod rarity into existing catalog rows from the bundled dataset
+    // (no network; version-gated so it runs once). New mods get it via the upsert.
+    let filled = catalog::backfill_mod_rarity(&state.db)?;
+    if filled > 0 {
+        tracing::info!(n = filled, "backfilled mod rarity");
     }
 
     // 1) Catalog skeleton (1 call) if empty or older than the stale window.
@@ -243,7 +254,10 @@ async fn refresh_slugs(state: &Arc<AppState>, slugs: &[String]) -> error::AppRes
 /// Fetch + store live lowest-sell prices for illiquid owned items, so their value
 /// tracks real asks instead of sparse/gameable trade statistics. Throttled inside
 /// the market client. Bounded to the (usually small) illiquid-owned subset.
-pub(crate) async fn refresh_owned_orders(state: &Arc<AppState>, force: bool) -> error::AppResult<()> {
+pub(crate) async fn refresh_owned_orders(
+    state: &Arc<AppState>,
+    force: bool,
+) -> error::AppResult<()> {
     use db::prices;
     // force → cutoff = now (nothing is fresher, so refetch all); else skip orders
     // refreshed within the price TTL.
@@ -256,7 +270,10 @@ pub(crate) async fn refresh_owned_orders(state: &Arc<AppState>, force: bool) -> 
     if slugs.is_empty() {
         return Ok(());
     }
-    tracing::info!(n = slugs.len(), "refreshing live sell orders for owned items");
+    tracing::info!(
+        n = slugs.len(),
+        "refreshing live sell orders for owned items"
+    );
     let mut priced = 0usize;
     for slug in &slugs {
         match state.market.fetch_order_book(slug).await {

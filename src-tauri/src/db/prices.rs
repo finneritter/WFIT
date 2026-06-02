@@ -124,13 +124,12 @@ pub fn rank_price(c: &Connection, slug: &str, rank: i64) -> AppResult<Option<i64
     if exact_or_nearest.is_some() {
         return Ok(exact_or_nearest);
     }
-    Ok(c
-        .query_row(
-            "SELECT median_plat FROM price_cache WHERE slug = ?1",
-            params![slug],
-            |r| r.get(0),
-        )
-        .optional()?)
+    Ok(c.query_row(
+        "SELECT median_plat FROM price_cache WHERE slug = ?1",
+        params![slug],
+        |r| r.get(0),
+    )
+    .optional()?)
 }
 
 /// One day of the real 90-day statistics series.

@@ -56,6 +56,15 @@ pub struct InventoryRow {
     /// Confidence in the value: 'high' (actively traded), 'medium', 'low' (thin /
     /// barely trades / riven). Drives how the UI presents the number.
     pub confidence: Option<String>,
+    /// Recent median series (≤12 points) for the List-view sparkline. Display-only;
+    /// read from price_history, never feeds pricing/valuation. Empty when no history.
+    pub spark: Vec<i64>,
+    /// Mod rarity (common|uncommon|rare|legendary), or None for non-mods / unmapped.
+    pub mod_rarity: Option<String>,
+    /// True when this row's value is excluded from the portfolio total (its rarity
+    /// is on the user's exclusion list). It still shows in inventory, but value_plat
+    /// and realizable_plat are zeroed so totals/summary/trends drop it.
+    pub excluded: bool,
 }
 
 /// A realized sale (Sold History).
@@ -76,8 +85,8 @@ pub struct SaleRow {
 /// Inventory stat band + sidebar quick-read figures.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Summary {
-    pub total_plat: i64,           // full market value (the optimistic "ceiling")
-    pub realizable_plat: i64,      // liquidation-adjusted value (the honest headline)
+    pub total_plat: i64,      // full market value (the optimistic "ceiling")
+    pub realizable_plat: i64, // liquidation-adjusted value (the honest headline)
     pub total_ducats: i64,
     pub part_count: i64,     // total units owned (excluding sets)
     pub distinct_count: i64, // distinct owned slugs
@@ -170,15 +179,15 @@ pub struct TrendRow {
     pub part_type: String,
     pub category: String,
     pub median_plat: i64,
-    pub delta: f64,       // % move over the selected timeframe
-    pub z: f64,           // move normalized by the item's own volatility (std devs)
-    pub range_pos: f64,   // 0..1 position of current price within its lookback low..high
-    pub range_low: i64,   // lookback low (plat)
-    pub range_high: i64,  // lookback high (plat)
-    pub volume: i64,      // avg daily traded volume over the lookback
+    pub delta: f64,      // % move over the selected timeframe
+    pub z: f64,          // move normalized by the item's own volatility (std devs)
+    pub range_pos: f64,  // 0..1 position of current price within its lookback low..high
+    pub range_low: i64,  // lookback low (plat)
+    pub range_high: i64, // lookback high (plat)
+    pub volume: i64,     // avg daily traded volume over the lookback
     pub owned_qty: i64,
     pub on_watchlist: bool,
-    pub spark: Vec<i64>,  // recent median series for the mini sparkline
+    pub spark: Vec<i64>, // recent median series for the mini sparkline
     pub thumbnail_url: Option<String>,
 }
 
@@ -229,7 +238,7 @@ pub struct HistoryPoint {
 /// only — the actually-tradeable market). Fetched lazily for the item drawer.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ItemOrders {
-    pub best_buy: Option<i64>,  // highest buy order — what you'd get selling now
+    pub best_buy: Option<i64>, // highest buy order — what you'd get selling now
     pub best_sell: Option<i64>, // lowest sell order — what you'd pay buying now
     pub buyers: i64,
     pub sellers: i64,
@@ -260,16 +269,16 @@ pub struct ItemDetail {
     pub owned_qty: i64,
     pub on_watchlist: bool,
     pub listed: bool,
-    pub realized_plat: i64, // total plat from past sales of this item
-    pub sold_qty: i64,      // units sold historically
-    pub max_rank: Option<i64>,    // rank ceiling (mods/arcanes)
-    pub ranks: Vec<OwnedRank>,    // owned rank breakdown (empty for prime parts)
-    pub value_plat: Option<i64>,  // rank-aware total value of the owned stack (market)
+    pub realized_plat: i64,      // total plat from past sales of this item
+    pub sold_qty: i64,           // units sold historically
+    pub max_rank: Option<i64>,   // rank ceiling (mods/arcanes)
+    pub ranks: Vec<OwnedRank>,   // owned rank breakdown (empty for prime parts)
+    pub value_plat: Option<i64>, // rank-aware total value of the owned stack (market)
     pub realizable_plat: Option<i64>, // liquidation-adjusted stack value
-    pub daily_volume: Option<f64>,    // avg units traded/day
-    pub liquidity: Option<f64>,       // φ 0..1
-    pub days_to_sell: Option<i64>,    // est. days to clear the stack
-    pub confidence: Option<String>,   // 'high' | 'medium' | 'low'
+    pub daily_volume: Option<f64>, // avg units traded/day
+    pub liquidity: Option<f64>,  // φ 0..1
+    pub days_to_sell: Option<i64>, // est. days to clear the stack
+    pub confidence: Option<String>, // 'high' | 'medium' | 'low'
     pub history: Vec<HistoryPoint>,
 }
 
@@ -321,10 +330,10 @@ pub struct ImportRow {
 /// Drives the Settings "Game inventory" section. No scan happens to compute this.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameScanStatus {
-    pub supported: bool,         // false on non-Linux (macOS/Windows)
-    pub consented: bool,         // typed-phrase risk acceptance recorded
-    pub warframe_running: bool,  // the game process was detected
-    pub auto_sync: bool,         // reserved; not built in v1
+    pub supported: bool,        // false on non-Linux (macOS/Windows)
+    pub consented: bool,        // typed-phrase risk acceptance recorded
+    pub warframe_running: bool, // the game process was detected
+    pub auto_sync: bool,        // reserved; not built in v1
     pub last_scan_at: Option<String>,
 }
 
@@ -342,10 +351,10 @@ pub struct ScanDiffRow {
     pub slug: String,
     pub display_name: String,
     pub part_type: String,
-    pub status: String,   // 'added' | 'changed' | 'removed'
-    pub scan_qty: i64,    // total quantity the scan reports (0 for 'removed')
-    pub current_qty: i64, // quantity inventory currently holds
-    pub source: String,   // current row provenance: 'manual' | 'wfm_import' | 'de_scan' | ''
+    pub status: String,      // 'added' | 'changed' | 'removed'
+    pub scan_qty: i64,       // total quantity the scan reports (0 for 'removed')
+    pub current_qty: i64,    // quantity inventory currently holds
+    pub source: String,      // current row provenance: 'manual' | 'wfm_import' | 'de_scan' | ''
     pub ranks: Vec<RankQty>, // per-rank breakdown (mods/arcanes); empty for prime parts
 }
 

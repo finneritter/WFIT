@@ -3,4 +3,5 @@
 //! The frontend never re-derives any of this; Rust hands it finished objects.
 
 pub mod classify;
+pub mod mod_rarity;
 pub mod partname;

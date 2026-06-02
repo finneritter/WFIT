@@ -26,10 +26,7 @@ pub struct ScanState {
 }
 
 fn ensure_row(c: &Connection) -> AppResult<()> {
-    c.execute(
-        "INSERT OR IGNORE INTO game_scan_state (id) VALUES (1)",
-        [],
-    )?;
+    c.execute("INSERT OR IGNORE INTO game_scan_state (id) VALUES (1)", [])?;
     Ok(())
 }
 
@@ -200,7 +197,11 @@ pub fn diff(db: &Db, scan: &[ScanItem]) -> AppResult<Vec<ScanDiffRow>> {
             }
         }
 
-        out.sort_by(|a, b| a.status.cmp(&b.status).then_with(|| a.display_name.cmp(&b.display_name)));
+        out.sort_by(|a, b| {
+            a.status
+                .cmp(&b.status)
+                .then_with(|| a.display_name.cmp(&b.display_name))
+        });
         Ok(out)
     })
 }
@@ -209,7 +210,11 @@ pub fn diff(db: &Db, scan: &[ScanItem]) -> AppResult<Vec<ScanDiffRow>> {
 fn current_ranks(c: &Connection) -> AppResult<HashMap<String, Vec<(i64, i64)>>> {
     let mut stmt = c.prepare("SELECT slug, rank, qty FROM inventory_ranks ORDER BY slug, rank")?;
     let rows = stmt.query_map([], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?))
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, i64>(1)?,
+            r.get::<_, i64>(2)?,
+        ))
     })?;
     let mut m: HashMap<String, Vec<(i64, i64)>> = HashMap::new();
     for r in rows {

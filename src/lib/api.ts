@@ -70,6 +70,13 @@ export const purchaseBuy = (slug: string) => invoke<number>("purchase_buy", { sl
 export const getBudget = () => invoke<number | null>("get_budget");
 export const setBudget = (value: number) => invoke<void>("set_budget", { value });
 
+export const getExcludedRarities = () => invoke<string[]>("get_excluded_rarities");
+export const setExcludedRarities = (rarities: string[]) =>
+  invoke<void>("set_excluded_rarities", { rarities });
+export const getExcludedMinPlat = () => invoke<number>("get_excluded_min_plat");
+export const setExcludedMinPlat = (value: number) =>
+  invoke<void>("set_excluded_min_plat", { value });
+
 // computed
 export const getSets = () => invoke<SetRow[]>("get_sets");
 export const getDucats = () => invoke<DucatRow[]>("get_ducats");

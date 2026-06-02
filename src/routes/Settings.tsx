@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GameScanPanel } from "../components/GameScanPanel";
 import type { ScreenId } from "../components/Sidebar";
 import {
   useCatalogRefresh,
+  useExcludedMinPlat,
+  useExcludedRarities,
   usePricesRefresh,
   useRebuildCache,
+  useSetExcludedMinPlat,
+  useSetExcludedRarities,
   useSetsRefresh,
   useSummary,
   useWfmAccount,
@@ -66,6 +70,21 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
   const catalog = useCatalogRefresh();
   const sets = useSetsRefresh();
   const rebuild = useRebuildCache();
+  const { data: excluded = [] } = useExcludedRarities();
+  const setExcluded = useSetExcludedRarities();
+  const { data: excludedMinPlat = 0 } = useExcludedMinPlat();
+  const setExcludedMin = useSetExcludedMinPlat();
+  const [minInput, setMinInput] = useState("");
+  useEffect(() => {
+    setMinInput(excludedMinPlat ? String(excludedMinPlat) : "");
+  }, [excludedMinPlat]);
+
+  const toggleRarity = (r: string) =>
+    setExcluded.mutate(excluded.includes(r) ? excluded.filter((x) => x !== r) : [...excluded, r]);
+  const commitMinPlat = () => {
+    const n = Math.max(0, Math.round(Number(minInput) || 0));
+    if (n !== excludedMinPlat) setExcludedMin.mutate(n);
+  };
 
   const update = (patch: Partial<Prefs>) => {
     const next = { ...prefs, ...patch };
@@ -111,6 +130,66 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
             onChange={(v) => update({ flatDeltas: v === "flat" })}
           />
         </Row>
+      </section>
+
+      <section className="tpanel">
+        <div className="tpanel-h">
+          <h3>Portfolio valuation</h3>
+          {excluded.length > 0 ? (
+            <span className="meta">{excluded.length} rarity excluded</span>
+          ) : null}
+        </div>
+        <Row
+          label="Exclude mod rarities"
+          hint="Tap a rarity to drop those mods from your portfolio plat — your Realizable total, summary and Trends. They still show in your inventory, dimmed. (warframe.market exposes no rarity; these come from a bundled dataset.)"
+        >
+          <div className="seg">
+            {(
+              [
+                ["common", "Common"],
+                ["uncommon", "Uncommon"],
+                ["rare", "Rare"],
+                ["legendary", "Legendary"],
+              ] as [string, string][]
+            ).map(([v, l]) => (
+              <button
+                key={v}
+                type="button"
+                className="chip"
+                aria-pressed={excluded.includes(v)}
+                onClick={() => toggleRarity(v)}
+                title={
+                  excluded.includes(v)
+                    ? "Excluded — tap to count again"
+                    : "Counted — tap to exclude"
+                }
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+        </Row>
+        {excluded.length > 0 ? (
+          <Row
+            label="Keep pricier mods"
+            hint="Within the excluded rarities, still count any mod worth at least this much plat (0 = exclude them all). E.g. set 30 and a 30p uncommon stays in your value."
+          >
+            <div className="set-num">
+              <input
+                type="number"
+                min={0}
+                value={minInput}
+                placeholder="0"
+                onChange={(e) => setMinInput(e.target.value)}
+                onBlur={commitMinPlat}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                }}
+              />
+              <span className="u">p</span>
+            </div>
+          </Row>
+        ) : null}
       </section>
 
       <section className="tpanel">

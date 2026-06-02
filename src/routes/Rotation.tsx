@@ -60,17 +60,36 @@ export function Rotation() {
   if (isLoading) return <div className="empty">Loading world-state…</div>;
   if (isError || !ws)
     return (
-      <div className="empty">Couldn't reach api.warframestat.us. The rest of WFIT works offline.</div>
+      <div className="empty">
+        Couldn't reach api.warframestat.us. The rest of WFIT works offline.
+      </div>
     );
+
+  // The source occasionally serves a frozen snapshot; when its own timestamp lags
+  // real time, every fissure/cycle reads as expired. Flag it so the empty page
+  // doesn't look like a WFIT bug. 15 min tolerates normal update lag.
+  const sourceAgeMs = ws.source_timestamp ? -msUntil(ws.source_timestamp) : 0;
+  const staleMins = Math.floor(sourceAgeMs / 60000);
+  const sourceStale = staleMins >= 15;
 
   return (
     <>
+      {sourceStale ? (
+        <div className="ws-stale">
+          ⚠ warframe.market's world-state source (api.warframestat.us) is lagging — its data is{" "}
+          {staleMins >= 120 ? `${Math.floor(staleMins / 60)}h` : `${staleMins}m`} old, so fissures
+          and cycles below may read as expired. This clears itself once the source catches up; WFIT
+          is fine.
+        </div>
+      ) : null}
       <div className="cyclebar">
         {ws.cycles.map((c) => (
           <div className="cyc" key={c.id}>
             <div className="cyc-st">{c.state}</div>
             <div className="cyc-pl">{c.name}</div>
-            <div className="cyc-end num">{c.expiry ? countdown(c.expiry, now) : (c.time_left ?? "—")}</div>
+            <div className="cyc-end num">
+              {c.expiry ? countdown(c.expiry, now) : (c.time_left ?? "—")}
+            </div>
           </div>
         ))}
       </div>
@@ -89,7 +108,7 @@ export function Rotation() {
             <div className="ft-timer num">{s.count ? countdown(s.nextExpiry, now) : "—"}</div>
             {s.tier === "Omnia" && s.count ? (
               <div className="ft-missions">
-                {s.cascade ? <b>⚡ Void Cascade</b> : s.missions[0] ?? "—"}
+                {s.cascade ? <b>⚡ Void Cascade</b> : (s.missions[0] ?? "—")}
               </div>
             ) : (
               <div className="ft-sub">{s.count ? "next refresh" : "none up"}</div>

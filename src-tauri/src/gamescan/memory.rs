@@ -135,15 +135,14 @@ fn readable_regions(maps: &str) -> Vec<(u64, u64)> {
         }
         let pathname = it.nth(3); // offset, dev, inode, then pathname
         match pathname {
-            None => {}                                   // anonymous — keep
-            Some(p) if p.starts_with('[') => {}          // [heap], [stack], [anon] — keep
-            Some(_) => continue,                         // file-backed — skip
+            None => {}                          // anonymous — keep
+            Some(p) if p.starts_with('[') => {} // [heap], [stack], [anon] — keep
+            Some(_) => continue,                // file-backed — skip
         }
-        let Some((s, e)) = range.split_once('-') else { continue };
-        let (Ok(start), Ok(end)) = (
-            u64::from_str_radix(s, 16),
-            u64::from_str_radix(e, 16),
-        ) else {
+        let Some((s, e)) = range.split_once('-') else {
+            continue;
+        };
+        let (Ok(start), Ok(end)) = (u64::from_str_radix(s, 16), u64::from_str_radix(e, 16)) else {
             continue;
         };
         if end > start {

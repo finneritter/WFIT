@@ -19,14 +19,20 @@ mod tests {
     #[test]
     fn exact_phrase_passes_with_surrounding_whitespace() {
         assert!(validate(EXPECTED_PHRASE));
-        assert!(validate("  I understand and accept the risk involved in using this functionality.  "));
+        assert!(validate(
+            "  I understand and accept the risk involved in using this functionality.  "
+        ));
     }
 
     #[test]
     fn wrong_phrase_fails() {
         assert!(!validate(""));
-        assert!(!validate("i understand and accept the risk involved in using this functionality."));
-        assert!(!validate("I understand and accept the risk involved in using this functionality"));
+        assert!(!validate(
+            "i understand and accept the risk involved in using this functionality."
+        ));
+        assert!(!validate(
+            "I understand and accept the risk involved in using this functionality"
+        ));
         assert!(!validate("yes"));
     }
 }

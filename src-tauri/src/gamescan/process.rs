@@ -11,7 +11,9 @@ pub fn find_pid() -> Option<u32> {
     for entry in dir.flatten() {
         let name = entry.file_name();
         let Some(pid_s) = name.to_str() else { continue };
-        let Ok(pid) = pid_s.parse::<u32>() else { continue };
+        let Ok(pid) = pid_s.parse::<u32>() else {
+            continue;
+        };
         if let Ok(comm) = std::fs::read_to_string(format!("/proc/{pid}/comm")) {
             if is_warframe_comm(comm.trim()) {
                 return Some(pid);

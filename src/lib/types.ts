@@ -42,6 +42,9 @@ export interface InventoryRow {
   liquidity: number | null; // φ 0..1
   days_to_sell: number | null;
   confidence: "high" | "medium" | "low" | null;
+  spark: number[]; // recent median series for the List-view sparkline (display-only)
+  mod_rarity: string | null; // common|uncommon|rare|legendary (mods only)
+  excluded: boolean; // value excluded from portfolio total (rarity on exclusion list)
 }
 
 export interface SaleRow {
@@ -307,4 +310,5 @@ export interface Worldstate {
   fissures: Fissure[];
   baro: Baro | null;
   fetched_at: string;
+  source_timestamp: string | null; // warframestat.us snapshot time; null if absent
 }
