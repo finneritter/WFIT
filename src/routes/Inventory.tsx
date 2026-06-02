@@ -237,7 +237,7 @@ function Composition({ rows, onOpen }: { rows: InventoryRow[]; onOpen: (slug: st
   return (
     <div className="tpanel compo">
       <div className="tpanel-h" onClick={() => setOpen(isOpen ? "0" : "1")}>
-        <span className="tw">{isOpen ? "▾" : "▸"}</span>
+        <span className={clsx("tw", isOpen && "open")}>▸</span>
         <h3>What's driving your value</h3>
         <span className="meta">
           top {top.length} of {ranked.length}
@@ -285,7 +285,7 @@ const Section = memo(function Section({
   return (
     <div className="section">
       <div className="sec-h" onClick={() => setOpen((o) => !o)}>
-        <span className="tw">{open ? "▾" : "▸"}</span>
+        <span className={clsx("tw", open && "open")}>▸</span>
         <h2>{title}</h2>
         <span className="ct">{rows.length}</span>
         <span className="tot num">

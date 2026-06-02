@@ -5,7 +5,8 @@ import { Icon } from "./components/Icon";
 import { SearchResults } from "./components/SearchResults";
 import { type ScreenId, Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
-import { usePricesRefresh, useSummary } from "./hooks/queries";
+import { usePricesRefresh, usePricingProgress, useSummary } from "./hooks/queries";
+import { clsx } from "./lib/format";
 
 // Routes are code-split: only the active screen's module is parsed/evaluated, so
 // startup and per-screen cost drop (the inventory grid is the heaviest by far).
@@ -45,6 +46,13 @@ export default function App() {
   const [adding, setAdding] = useState(false);
   const { data: summary } = useSummary();
   const refresh = usePricesRefresh();
+  const { data: progress } = usePricingProgress();
+
+  // A sync is "in flight" while the manual refresh mutation runs OR a background
+  // drain is active — drives the spinning refresh icon + the topbar progress bar.
+  const syncing = refresh.isPending || !!progress?.active;
+  const syncPct =
+    progress && progress.total > 0 ? `${(progress.priced / progress.total) * 100}%` : undefined;
 
   // Stable identity so memoized rows in every screen don't re-render when App
   // re-renders (e.g. the summary badge updating every 2s during a price sync).
@@ -96,13 +104,21 @@ export default function App() {
             </div>
             <button
               type="button"
-              className="icon-btn"
+              className={clsx("icon-btn", syncing && "spinning")}
               title="Refresh prices"
               onClick={() => refresh.mutate({})}
               disabled={refresh.isPending}
             >
               <Icon name="refresh" />
             </button>
+            {syncing ? (
+              <div className="topbar-prog">
+                <div
+                  className={clsx("topbar-prog-fill", !syncPct && "indeterminate")}
+                  style={syncPct ? { width: syncPct } : undefined}
+                />
+              </div>
+            ) : null}
           </div>
 
           <div className="content">

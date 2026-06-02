@@ -676,3 +676,45 @@ code { font-family: var(--mono); font-size: 11px; color: var(--ink); background:
 .vnum { font-family: var(--mono); font-size: 11.5px; color: var(--soft); text-align: right; }
 .impv { font-family: var(--mono); font-size: 12px; font-weight: 600; text-align: right; }
 .own { font-family: var(--mono); font-size: 11px; color: var(--faint); text-align: right; }
+
+/* ==================================================================
+   Motion — micro-animations. Sparse + on-brand; everything here is
+   disabled by the prefers-reduced-motion guard at the bottom.
+   ================================================================== */
+
+/* --- refresh spin + global topbar progress bar --- */
+.topbar { position: relative; }
+.icon-btn.spinning svg { animation: pn-spin .8s linear infinite; transform-origin: 50% 50%; }
+.topbar-prog { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; overflow: hidden; pointer-events: none; }
+.topbar-prog-fill { height: 100%; background: var(--accent); transition: width .3s ease; }
+/* unknown total: a sliver sweeps across to show "working" without a fraction */
+.topbar-prog-fill.indeterminate { width: 28%; animation: prog-sweep 1.1s ease-in-out infinite; }
+@keyframes prog-sweep {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(460%); }
+}
+
+/* --- overlay enter polish (drawer + modals mount on open) --- */
+.scrim, .modal-scrim { animation: scrim-in .15s ease both; }
+.drawer { animation: drawer-in .18s cubic-bezier(.2, .7, .3, 1) both; }
+.modal { animation: modal-in .15s ease both; }
+@keyframes scrim-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes drawer-in { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes modal-in  { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
+
+/* --- collapsible chevron rotation (single ▸ glyph) --- */
+.tw { display: inline-block; transition: transform .15s ease; }
+.tw.open { transform: rotate(90deg); }
+
+/* --- button / chip press feedback --- */
+.btn, .chip, .icon-btn, .nav-item, .nav-add { transition: transform .06s ease, background .12s ease, color .12s ease; }
+.btn:active, .chip:active, .icon-btn:active, .nav-item:active, .nav-add:active { transform: scale(.96); }
+
+/* --- respect the OS reduced-motion preference --- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}

@@ -147,7 +147,7 @@ function GroupedColumn({ rows, filter }: { rows: CatalogRow[]; filter: string })
               className={clsx("agrp-h", activeCount > 0 && "has")}
               onClick={() => setOpen((o) => ({ ...o, [setSlug]: !isOpen }))}
             >
-              <span className="tw">{isOpen ? "▾" : "▸"}</span>
+              <span className={clsx("tw", isOpen && "open")}>▸</span>
               <span className="gn">{name}</span>
               <span className="gc">
                 {activeCount}/{parts.length}
