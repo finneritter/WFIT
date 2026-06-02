@@ -13,21 +13,21 @@ cloud backend is being deleted in favor of one local binary. **No auth, no hosti
 **Status: implemented and working** (Tauri app builds, runs, and is installed; committed/pushed to
 `main` on the private repo `github.com/finneritter/WFIT`). All planned phases plus several features
 beyond the original plan are done — game inventory import, rank-aware mods/arcanes, robust order-book
-pricing, and liquidation-adjusted ("realizable") inventory valuation. `HANDOFF.md` is the current-state
-doc; read it first. The `.claude/plans/` and `CLAUDE_ECONOMIC_RESEARCH/` files are now historical
-design references, not a to-do list.
+pricing, and liquidation-adjusted ("realizable") inventory valuation. `docs/HANDOFF.md` is the
+current-state doc; read it first. The `.claude/plans/` and `reference/CLAUDE_ECONOMIC_RESEARCH/` files
+are now historical design references, not a to-do list.
 
 ## Authoritative documents (read before coding)
 
 - **`.claude/plans/i-just-added-the-noble-widget.md`** — THE approved implementation plan (schema,
   module layout, command surface, build order, locked decisions). Start here — it's the build roadmap.
-- **`DATA_SOURCING_MASTER_PLAN.md`** — the warframe.market data contract (3 endpoints, verified
+- **`docs/DATA_SOURCING_MASTER_PLAN.md`** — the warframe.market data contract (3 endpoints, verified
   field facts, the catalog two-pass strategy). All prices/catalog come from here.
-- **`GAMESTATE_WORLDSTATE.md`** — the Rotation screen's source (`api.warframestat.us`, optional
+- **`docs/GAMESTATE_WORLDSTATE.md`** — the Rotation screen's source (`api.warframestat.us`, optional
   second source, isolated + read-only).
-- **`WFM_ACCOUNT_SIGNIN.md`** — warframe.market account connect for the Listings screen (Tier 1
+- **`docs/WFM_ACCOUNT_SIGNIN.md`** — warframe.market account connect for the Listings screen (Tier 1
   username / Tier 2 pasted-JWT in OS keychain; read-only in v1).
-- **`design_handoff_wfit_update1/`** — THE design target (9-screen monochrome DIM-style wireframe).
+- **`reference/design_handoff_wfit_update1/`** — THE design target (9-screen monochrome DIM-style wireframe).
   `README.md` + `wireframe.jsx` + `WFIT Wireframe.html`. Build as-is. The mock `CATALOG`/prices in
   `wireframe.jsx` are FAKE — take only layout/tokens/behavior; all real data comes from the APIs.
 - **`reference/prior-tauri-attempt/`** — a working older Tauri scaffold (rusqlite). Reuse its
@@ -36,8 +36,8 @@ design references, not a to-do list.
 - **`reference/market-proxy/index.ts`** — the v2 catalog + statistics logic to port to Rust
   (`partTypeOf`/`categoryOf`/`deriveSetSlug`, median/trend derivation, 350ms throttle).
 
-Retired (do not build from): `design/` (old "Primely" hi-fi), `design_handoff_wfit/` (superseded by
-update1). "Primely" is the old name of the app.
+Retired (do not build from): `reference/design/` (old "Primely" hi-fi),
+`reference/design_handoff_wfit/` (superseded by update1). "Primely" is the old name of the app.
 
 ## Hard constraints (carry into all work)
 
@@ -49,7 +49,7 @@ update1). "Primely" is the old name of the app.
   your own orders. **Exception (opt-in):** real owned inventory is available via a consent-gated
   **memory-scan** of the running game client (`gamescan` module — isolated from the market path,
   Linux-only, off by default). It does NOT log in; it reuses the live session. **ToS-prohibited and
-  ban-risky.** See `GAME_INVENTORY_IMPORT.md` and `.claude/plans/game-inventory-import.md`.
+  ban-risky.** See `docs/GAME_INVENTORY_IMPORT.md` and `.claude/plans/game-inventory-import.md`.
 - Endpoint quirks: catalog = `GET /v2/items`; per-item detail = `GET /v2/items/<slug>` (plural;
   singular 404s); statistics = `GET /v1/items/<slug>/statistics` (v2 stats 404). Your orders =
   `GET /v2/orders/user/<name>`; public item orders = `GET /v2/orders/item/<slug>`. `vaulted` is
@@ -95,7 +95,7 @@ are priced **per rank** (`mod_rank` from statistics; rank-0 vs max are different
 **buy orders** (`buy_orders`, best-bid-first), then a volume-capped, discounted tail (`TAIL_FACTOR`,
 `WINDOW_DAYS`); units beyond real demand ≈ 0. `Summary.realizable_plat` is the honest headline,
 `total_plat` the optimistic "ceiling." Per-item `confidence` (high/medium/low) gates presentation.
-Rationale + the economics is in `CLAUDE_ECONOMIC_RESEARCH/` and `.claude/plans/pricing-rework.md`.
+Rationale + the economics is in `reference/CLAUDE_ECONOMIC_RESEARCH/` and `.claude/plans/pricing-rework.md`.
 
 **Auto-reprice:** bump `PRICING_VERSION` (`lib.rs`) whenever price/valuation derivation changes — on
 launch a mismatch wipes the derived price caches and recomputes, so fixes can't be stranded behind the

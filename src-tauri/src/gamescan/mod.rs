@@ -2,7 +2,7 @@
 //!
 //! ISOLATED, like `worldstate.rs`: own concern, never on the warframe.market data
 //! path. Opt-in, consent-gated (typed phrase), Linux-only, off by default.
-//! **ToS-prohibited and ban-risky** — see `GAME_INVENTORY_IMPORT.md`.
+//! **ToS-prohibited and ban-risky** — see `docs/GAME_INVENTORY_IMPORT.md`.
 //!
 //! Build status: **Phase B2 verified live (2026-06-01).** `consent` + `map` are
 //! unit-tested; `process`/`memory`/`api` implement the live read from the public

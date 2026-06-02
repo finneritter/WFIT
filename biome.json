@@ -2,7 +2,7 @@
   "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "ignore": ["dist", "src-tauri/target", "reference", "design", "design_handoff_wfit", "design_handoff_wfit_update1"]
+    "ignore": ["dist", "src-tauri/target", "reference", "docs"]
   },
   "formatter": {
     "enabled": true,

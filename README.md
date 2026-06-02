@@ -27,7 +27,7 @@ holding by **liquidating it into the live buy orders** (the actual demand), then
 tail; items nobody is bidding on collapse to near-zero. The Inventory headline shows this **realizable**
 estimate (with the optimistic `× qty` "ceiling" alongside), a *"what's driving your value"* breakdown,
 and per-item confidence + days-to-sell. Mods/arcanes are priced per rank. The economics behind it is in
-`CLAUDE_ECONOMIC_RESEARCH/`.
+`reference/CLAUDE_ECONOMIC_RESEARCH/`.
 
 ### Game inventory import (opt-in, beta)
 
@@ -37,7 +37,7 @@ give. **This violates DE's Terms of Service and could get your account banned** 
 consent-gated behind a typed acknowledgment, Linux-only, and off by default. It never logs in (it
 reuses the live game session). The full path (memory scan → DE inventory endpoint → mapped diff) is
 implemented and verified against a real client. On a locked-down kernel, `kernel.yama.ptrace_scope`
-may need to be `0` for the memory read to work. See `GAME_INVENTORY_IMPORT.md`.
+may need to be `0` for the memory read to work. See `docs/GAME_INVENTORY_IMPORT.md`.
 
 ## Develop
 
@@ -103,11 +103,13 @@ inventory / sales / watchlist / buy-list is a rebuildable cache of the APIs.
 
 ## Docs
 
-- `HANDOFF.md` — **current-state handoff; read first.**
+- `docs/HANDOFF.md` — **current-state handoff; read first.**
 - `CLAUDE.md` — working guidance, hard constraints, and the pricing/valuation model.
-- `CLAUDE_ECONOMIC_RESEARCH/` — the economics behind realizable valuation (liquidity, market impact,
-  honest presentation).
-- `DATA_SOURCING_MASTER_PLAN.md` — the warframe.market data contract.
-- `GAME_INVENTORY_IMPORT.md` — the game memory-scan import spec.
-- `GAMESTATE_WORLDSTATE.md` / `WFM_ACCOUNT_SIGNIN.md` — world-state and account-connect specs.
+- `reference/CLAUDE_ECONOMIC_RESEARCH/` — the economics behind realizable valuation (liquidity,
+  market impact, honest presentation).
+- `docs/DATA_SOURCING_MASTER_PLAN.md` — the warframe.market data contract.
+- `docs/GAME_INVENTORY_IMPORT.md` — the game memory-scan import spec.
+- `docs/GAMESTATE_WORLDSTATE.md` / `docs/WFM_ACCOUNT_SIGNIN.md` — world-state and account-connect specs.
+- `docs/` — the rest of the design/spec docs (DESKTOP_REWRITE_PRD, INVENTORY_REDESIGN, …).
+- `reference/` — code scaffolds (prior-tauri-attempt, market-proxy) + retired/target design handoffs.
 - `.claude/plans/` — historical design notes (game-inventory-import, pricing-rework, etc.).

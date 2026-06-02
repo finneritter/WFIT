@@ -333,7 +333,7 @@ pub struct ImportRow {
 
 // ---------------------------------------------------------------------------
 // Game inventory import (memory-scan). Opt-in, consent-gated, Linux-only.
-// See GAME_INVENTORY_IMPORT.md / .claude/plans/game-inventory-import.md.
+// See docs/GAME_INVENTORY_IMPORT.md / .claude/plans/game-inventory-import.md.
 // ---------------------------------------------------------------------------
 
 /// Drives the Settings "Game inventory" section. No scan happens to compute this.

@@ -934,7 +934,7 @@ pub async fn sets_refresh(state: State<'_, Arc<AppState>>) -> AppResult<usize> {
 // ===========================================================================
 // Game inventory import (memory-scan). Opt-in, consent-gated, Linux-only.
 // Mirrors the wfm listings preview/apply split. ToS-prohibited / ban-risky —
-// see GAME_INVENTORY_IMPORT.md.
+// see docs/GAME_INVENTORY_IMPORT.md.
 // ===========================================================================
 
 /// Drive the Settings UI. Does NOT scan — only reads consent state + detects the
