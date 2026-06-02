@@ -176,6 +176,64 @@ pub struct DucatRow {
 }
 
 // ---------------------------------------------------------------------------
+// Arcanes / Vosfor dissolution.
+// ---------------------------------------------------------------------------
+
+/// One Loid collection's expected-value summary (per 200-Vosfor pull = 3 arcanes).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollectionEv {
+    pub key: String,
+    pub name: String,
+    pub ev_plat_per_pull: f64, // expected plat from one 200-Vosfor / 3-arcane pull
+    pub plat_per_vosfor: f64,
+    pub legendary_pct: f64,
+    pub coverage: f64, // share of the collection's arcanes that have a price
+    pub pool_size: i64,
+    pub top: Vec<ArcaneContribution>, // biggest expected-value contributors
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArcaneContribution {
+    pub slug: String,
+    pub display_name: String,
+    pub prob: f64, // chance a single draw is this arcane
+    pub plat: Option<i64>,
+}
+
+/// One owned arcane with its dissolve-vs-sell economics.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OwnedArcane {
+    pub slug: String,
+    pub display_name: String,
+    pub qty: i64,
+    pub rank0_copies: i64, // unranked copies (dissolve unit)
+    pub plat: Option<i64>, // rank-0 market price
+    pub vosfor: i64,       // per unranked copy
+    pub vosfor_total: i64, // rank0_copies × vosfor
+    pub collection: Option<String>,
+    pub rarity: Option<String>,
+    pub verdict: String, // 'sell' | 'dissolve'
+    pub thumbnail_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArcaneSummary {
+    pub total_vosfor: i64, // dissolving every unranked copy
+    pub owned_count: i64,
+    pub sell_plat: i64, // est. plat if sold at rank-0 price
+    pub best_collection: Option<String>,
+    pub best_plat_per_200: f64,
+    pub plat_per_vosfor: f64, // implied Vosfor value (best collection)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArcaneDashboard {
+    pub collections: Vec<CollectionEv>,
+    pub owned: Vec<OwnedArcane>,
+    pub summary: ArcaneSummary,
+}
+
+// ---------------------------------------------------------------------------
 // Trends.
 // ---------------------------------------------------------------------------
 

@@ -8,6 +8,7 @@ use rusqlite_migration::{Migrations, M};
 use std::path::Path;
 use std::sync::Arc;
 
+pub mod arcanes;
 pub mod buylist;
 pub mod catalog;
 pub mod gamescan;

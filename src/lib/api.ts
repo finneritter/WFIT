@@ -2,6 +2,7 @@
 // live in Rust; these just type the boundary.
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  ArcaneDashboard,
   BuyRow,
   CatalogRow,
   DucatRow,
@@ -83,6 +84,7 @@ export const getPricingProgress = () => invoke<PricingProgress>("get_pricing_pro
 // computed
 export const getSets = () => invoke<SetRow[]>("get_sets");
 export const getDucats = () => invoke<DucatRow[]>("get_ducats");
+export const getArcaneDashboard = () => invoke<ArcaneDashboard>("get_arcane_dashboard");
 export const getTrends = (timeframe?: string, excludeOutliers = true) =>
   invoke<TrendsData>("get_trends", { timeframe: timeframe ?? null, excludeOutliers });
 

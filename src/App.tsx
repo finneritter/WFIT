@@ -7,6 +7,7 @@ import { type ScreenId, Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { usePricesRefresh, usePricingProgress, useSummary } from "./hooks/queries";
 import { clsx } from "./lib/format";
+import { Arcanes } from "./routes/Arcanes";
 // Routes are imported eagerly. This is a local desktop app — the bundle loads
 // from disk, so code-splitting saves nothing at startup and only adds a chunk-
 // fetch delay (and a Suspense flash) when navigating to a screen.
@@ -29,6 +30,7 @@ const TITLES: Record<ScreenId, string> = {
   buy: "Buy List",
   listings: "Listings",
   ducats: "Ducats",
+  arcanes: "Arcanes",
   rotation: "Rotation",
   sold: "Sold History",
   settings: "Settings",
@@ -132,6 +134,7 @@ export default function App() {
             {screen === "buy" && <BuyList onOpen={open} />}
             {screen === "listings" && <Listings onOpen={open} />}
             {screen === "ducats" && <Ducats onOpen={open} />}
+            {screen === "arcanes" && <Arcanes onOpen={open} />}
             {screen === "rotation" && <Rotation />}
             {screen === "sold" && <SoldHistory onOpen={open} />}
             {screen === "settings" && (

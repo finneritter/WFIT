@@ -26,6 +26,7 @@ export const keys = {
   excludedMinPlat: ["excludedMinPlat"] as const,
   sets: ["sets"] as const,
   ducats: ["ducats"] as const,
+  arcanes: ["arcanes"] as const,
   catalog: (cat?: string) => ["catalog", cat ?? "all"] as const,
   trends: (tf: string, excludeOutliers: boolean) => ["trends", tf, excludeOutliers] as const,
   itemDetail: (slug: string) => ["itemDetail", slug] as const,
@@ -43,6 +44,7 @@ function invalidateInventoryDerived(qc: QC) {
     keys.summary,
     keys.sets,
     keys.ducats,
+    keys.arcanes,
     keys.watchlist,
     keys.buyList,
   ]) {
@@ -65,6 +67,8 @@ export const useBuyList = () => useQuery({ queryKey: keys.buyList, queryFn: api.
 export const useBudget = () => useQuery({ queryKey: keys.budget, queryFn: api.getBudget });
 export const useSets = () => useQuery({ queryKey: keys.sets, queryFn: api.getSets });
 export const useDucats = () => useQuery({ queryKey: keys.ducats, queryFn: api.getDucats });
+export const useArcaneDashboard = () =>
+  useQuery({ queryKey: keys.arcanes, queryFn: api.getArcaneDashboard });
 export const useCatalog = (cat?: string) =>
   useQuery({ queryKey: keys.catalog(cat), queryFn: () => api.getCatalog(cat) });
 export const useSearchCatalog = (q: string) =>

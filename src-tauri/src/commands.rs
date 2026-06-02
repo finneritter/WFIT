@@ -496,6 +496,15 @@ pub fn get_ducats(state: State<'_, Arc<AppState>>) -> AppResult<Vec<DucatRow>> {
 }
 
 // ===========================================================================
+// Arcanes / Vosfor
+// ===========================================================================
+
+#[tauri::command]
+pub fn get_arcane_dashboard(state: State<'_, Arc<AppState>>) -> AppResult<ArcaneDashboard> {
+    crate::db::arcanes::dashboard(&state.db)
+}
+
+// ===========================================================================
 // Trends
 // ===========================================================================
 

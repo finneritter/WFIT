@@ -2,6 +2,7 @@
 //! from reference/market-proxy/index.ts and reference/domain-logic/partname.ts.
 //! The frontend never re-derives any of this; Rust hands it finished objects.
 
+pub mod arcane;
 pub mod classify;
 pub mod mod_rarity;
 pub mod partname;

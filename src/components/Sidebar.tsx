@@ -10,6 +10,7 @@ export type ScreenId =
   | "buy"
   | "listings"
   | "ducats"
+  | "arcanes"
   | "rotation"
   | "sold"
   | "settings";
@@ -28,6 +29,7 @@ const NAV: NavDef[] = [
   { id: "buy", label: "Buy List", icon: "buy" },
   { id: "listings", label: "Listings", icon: "tag" },
   { id: "ducats", label: "Ducats", icon: "coin" },
+  { id: "arcanes", label: "Arcanes", icon: "arcane" },
   { id: "rotation", label: "Rotation", icon: "timer" },
   { id: "sold", label: "Sold History", icon: "history" },
 ];

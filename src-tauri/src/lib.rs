@@ -103,6 +103,7 @@ pub fn run() {
             // computed
             commands::get_sets,
             commands::get_ducats,
+            commands::get_arcane_dashboard,
             commands::get_trends,
             // prices / detail
             commands::prices_refresh,

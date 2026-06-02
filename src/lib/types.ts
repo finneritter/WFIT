@@ -129,6 +129,50 @@ export interface DucatRow {
   thumbnail_url: string | null;
 }
 
+// ---- Arcanes / Vosfor ----
+export interface ArcaneContribution {
+  slug: string;
+  display_name: string;
+  prob: number;
+  plat: number | null;
+}
+export interface CollectionEv {
+  key: string;
+  name: string;
+  ev_plat_per_pull: number;
+  plat_per_vosfor: number;
+  legendary_pct: number;
+  coverage: number;
+  pool_size: number;
+  top: ArcaneContribution[];
+}
+export interface OwnedArcane {
+  slug: string;
+  display_name: string;
+  qty: number;
+  rank0_copies: number;
+  plat: number | null;
+  vosfor: number;
+  vosfor_total: number;
+  collection: string | null;
+  rarity: string | null;
+  verdict: "sell" | "dissolve";
+  thumbnail_url: string | null;
+}
+export interface ArcaneSummary {
+  total_vosfor: number;
+  owned_count: number;
+  sell_plat: number;
+  best_collection: string | null;
+  best_plat_per_200: number;
+  plat_per_vosfor: number;
+}
+export interface ArcaneDashboard {
+  collections: CollectionEv[];
+  owned: OwnedArcane[];
+  summary: ArcaneSummary;
+}
+
 export interface TrendRow {
   slug: string;
   display_name: string;
