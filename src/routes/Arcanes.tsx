@@ -33,7 +33,7 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
           dcls="muted"
         />
         <StatBox k="Owned arcanes" v={fmt(s?.owned_count)} />
-        <StatBox k="Sell value" v={fmt(s?.sell_plat)} unit="p" d="at rank-0 price" dcls="muted" />
+        <StatBox k="Maxed value" v={fmt(s?.sell_plat)} unit="p" d="if all ranked up" dcls="muted" />
       </div>
 
       <div className="tpanel">
@@ -79,14 +79,14 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
 
       <div className="tpanel">
         <div className="tpanel-h">
-          <h3>Your arcanes — dissolve or sell</h3>
-          <span className="meta">{owned.length} owned</span>
+          <h3>Your arcanes — keep or dissolve</h3>
+          <span className="meta">dissolve = low value even maxed; keep the rest</span>
         </div>
         <table className="dtable">
           <thead>
             <tr>
               <th>Arcane</th>
-              <th className="r">Sell</th>
+              <th className="r">Maxed</th>
               <th className="r">Vosfor</th>
               <th>Verdict</th>
             </tr>
@@ -119,11 +119,11 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
                       </div>
                     </div>
                   </td>
-                  <td className="r">{a.plat == null ? "—" : `${fmt(a.plat)}p`}</td>
+                  <td className="r">{a.maxed_plat == null ? "—" : `${fmt(a.maxed_plat)}p`}</td>
                   <td className="r">{fmt(a.vosfor_total)} vf</td>
                   <td>
                     <span className={clsx("badge", a.verdict === "dissolve" && "at")}>
-                      {a.verdict === "dissolve" ? "dissolve" : "sell"}
+                      {a.verdict === "dissolve" ? "dissolve" : "keep"}
                     </span>
                   </td>
                 </tr>

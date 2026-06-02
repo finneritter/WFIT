@@ -206,13 +206,14 @@ pub struct OwnedArcane {
     pub slug: String,
     pub display_name: String,
     pub qty: i64,
-    pub rank0_copies: i64, // unranked copies (dissolve unit)
-    pub plat: Option<i64>, // rank-0 market price
-    pub vosfor: i64,       // per unranked copy
-    pub vosfor_total: i64, // rank0_copies × vosfor
+    pub rank0_copies: i64,       // unranked copies (dissolve unit)
+    pub plat: Option<i64>,       // rank-0 (unranked) market price
+    pub maxed_plat: Option<i64>, // top-rank market price — the keep/dissolve signal
+    pub vosfor: i64,             // per unranked copy
+    pub vosfor_total: i64,       // rank0_copies × vosfor
     pub collection: Option<String>,
     pub rarity: Option<String>,
-    pub verdict: String, // 'sell' | 'dissolve'
+    pub verdict: String, // 'keep' | 'dissolve'
     pub thumbnail_url: Option<String>,
 }
 
@@ -220,7 +221,7 @@ pub struct OwnedArcane {
 pub struct ArcaneSummary {
     pub total_vosfor: i64, // dissolving every unranked copy
     pub owned_count: i64,
-    pub sell_plat: i64, // est. plat if sold at rank-0 price
+    pub sell_plat: i64, // est. plat if every copy were sold at its maxed price
     pub best_collection: Option<String>,
     pub best_plat_per_200: f64,
     pub plat_per_vosfor: f64, // implied Vosfor value (best collection)

@@ -152,11 +152,12 @@ export interface OwnedArcane {
   qty: number;
   rank0_copies: number;
   plat: number | null;
+  maxed_plat: number | null;
   vosfor: number;
   vosfor_total: number;
   collection: string | null;
   rarity: string | null;
-  verdict: "sell" | "dissolve";
+  verdict: "keep" | "dissolve";
   thumbnail_url: string | null;
 }
 export interface ArcaneSummary {
