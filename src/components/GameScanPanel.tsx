@@ -11,12 +11,13 @@ import type { ScanDiffRow } from "../lib/types";
 // The exact phrase the backend (gamescan::consent) requires. Kept in sync by hand.
 const CONSENT_PHRASE = "I understand and accept the risk involved in using this functionality.";
 
-function errMessage(e: unknown): string {
+export function errMessage(e: unknown): string {
   return typeof e === "string" ? e : e instanceof Error ? e.message : String(e);
 }
 
-/** The reviewable diff (added / changed / removed) before anything is written. */
-function ReviewPanel({ rows, onClose }: { rows: ScanDiffRow[]; onClose: () => void }) {
+/** The reviewable diff (added / changed / removed) before anything is written.
+ *  Shared: opened from Settings' GameScanPanel and the topbar SyncNow button. */
+export function ReviewPanel({ rows, onClose }: { rows: ScanDiffRow[]; onClose: () => void }) {
   const apply = useGameScanApply();
   // Everything checked by default; the scan is ground truth and the user vetted it.
   const [checked, setChecked] = useState<Record<string, boolean>>(

@@ -4,6 +4,7 @@ import { Drawer } from "./components/Drawer";
 import { Icon } from "./components/Icon";
 import { SearchResults } from "./components/SearchResults";
 import { type ScreenId, Sidebar } from "./components/Sidebar";
+import { SyncNow } from "./components/SyncNow";
 import { TitleBar } from "./components/TitleBar";
 import { usePricesRefresh, usePricingProgress, useSummary } from "./hooks/queries";
 import { clsx } from "./lib/format";
@@ -102,6 +103,7 @@ export default function App() {
                 />
               ) : null}
             </div>
+            <SyncNow />
             <button
               type="button"
               className={clsx("icon-btn", syncing && "spinning")}

@@ -14,6 +14,8 @@ const PATHS: Record<string, string> = {
   settings: "M12 8a4 4 0 100 8 4 4 0 000-8zm9 4l-2-1m-14 0l-2 1m9-9v3m0 12v3m7-5l-2-1m-10 0l-2 1",
   search: "M11 4a7 7 0 100 14 7 7 0 000-14zm10 17l-5-5",
   refresh: "M3 3v6h6M21 21v-6h-6M21 8a9 9 0 00-15-3M3 16a9 9 0 0015 3",
+  // download-into-tray — topbar "Sync now" (account listings + game inventory)
+  sync: "M12 3v11m0 0l-4-4m4 4l4-4M4 17v3h16v-3",
   box: "M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10",
   sold: "M7 7h10v10H7zM7 7l10 10",
   plus: "M12 5v14M5 12h14",

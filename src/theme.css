@@ -685,6 +685,9 @@ code { font-family: var(--mono); font-size: 11px; color: var(--ink); background:
 /* --- refresh spin + global topbar progress bar --- */
 .topbar { position: relative; }
 .icon-btn.spinning svg { animation: pn-spin .8s linear infinite; transform-origin: 50% 50%; }
+/* busy state for non-circular glyphs (topbar SyncNow) — spinning an arrow looks wrong */
+.icon-btn.pulsing svg { animation: sync-pulse 1s ease-in-out infinite; }
+@keyframes sync-pulse { 50% { opacity: .3; } }
 .topbar-prog { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; overflow: hidden; pointer-events: none; }
 .topbar-prog-fill { height: 100%; background: var(--accent); transition: width .3s ease; }
 /* unknown total: a sliver sweeps across to show "working" without a fraction */
