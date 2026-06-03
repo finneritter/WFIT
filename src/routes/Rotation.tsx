@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { useWorldstate } from "../hooks/queries";
 import { clsx, countdown, msUntil } from "../lib/format";
+import type { Fissure } from "../lib/types";
 
 const TIERS = ["All", "Lith", "Meso", "Neo", "Axi", "Requiem", "Omnia"] as const;
 // Order for the per-type refresh strip. Omnia last + highlighted: it's the
@@ -40,10 +41,39 @@ const Countdown = memo(function Countdown({
   return <>{iso ? countdown(iso, now) : fallback}</>;
 });
 
+/** One fissure group's table (tier · mission · location · live time-left). */
+function FissureTable({ rows }: { rows: Fissure[] }) {
+  return (
+    <table className="dtable">
+      <thead>
+        <tr>
+          <th>Tier</th>
+          <th>Mission</th>
+          <th>Location</th>
+          <th className="r">Time left</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((f, i) => (
+          <tr key={`${f.node}-${i}`}>
+            <td>
+              <span className={clsx("ftier", `t-${f.tier.toLowerCase()}`)}>{f.tier}</span>
+            </td>
+            <td>{f.mission_type}</td>
+            <td>{f.node}</td>
+            <td className="r when num">
+              <Countdown iso={f.expiry} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export function Rotation() {
   const { data: ws, isLoading, isError } = useWorldstate();
   const [tier, setTier] = useState<string>("All");
-  const [steelPath, setSteelPath] = useState(false);
 
   // Filtered/sorted only when the data or filters change (not every second);
   // expired fissures fall off on the next worldstate refetch (~45s).
@@ -53,16 +83,26 @@ export function Rotation() {
       .filter(
         (f) =>
           msUntil(f.expiry) > 0 && // drop expired
-          (tier === "All" || f.tier.toLowerCase() === tier.toLowerCase()) &&
-          (!steelPath || f.is_hard),
+          (tier === "All" || f.tier.toLowerCase() === tier.toLowerCase()),
       )
       .sort((a, b) => msUntil(a.expiry) - msUntil(b.expiry));
-  }, [ws, tier, steelPath]);
+  }, [ws, tier]);
+
+  // The three in-game fissure modes live in different menus, so split them:
+  // Normal relic fissures, Steel Path (isHard), and Railjack "Void Storms" (isStorm).
+  const groups = useMemo(
+    () => ({
+      normal: fissures.filter((f) => !f.is_hard && !f.is_storm),
+      steel: fissures.filter((f) => f.is_hard && !f.is_storm),
+      storm: fissures.filter((f) => f.is_storm),
+    }),
+    [fissures],
+  );
 
   // Per-tier refresh summary: how soon each fissure type next rotates, plus the
-  // mission types currently up (the point of Omnia).
+  // mission types currently up (the point of Omnia). Excludes Railjack storms.
   const typeSummary = useMemo(() => {
-    const live = (ws?.fissures ?? []).filter((f) => msUntil(f.expiry) > 0);
+    const live = (ws?.fissures ?? []).filter((f) => msUntil(f.expiry) > 0 && !f.is_storm);
     return FISSURE_TIERS.map((t) => {
       const of = live
         .filter((f) => f.tier.toLowerCase() === t.toLowerCase())
@@ -155,53 +195,33 @@ export function Rotation() {
               {t}
             </button>
           ))}
-          <span className="sp" />
-          <button
-            type="button"
-            className="chip"
-            aria-pressed={steelPath}
-            onClick={() => setSteelPath((s) => !s)}
-          >
-            Steel Path
-          </button>
         </div>
-        <table className="dtable">
-          <thead>
-            <tr>
-              <th>Tier</th>
-              <th>Mission</th>
-              <th>Location</th>
-              <th>SP</th>
-              <th className="r">Time left</th>
-            </tr>
-          </thead>
-          <tbody>
-            {fissures.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="muted">
-                  No active fissures match this filter.
-                </td>
-              </tr>
-            ) : (
-              fissures.map((f, i) => (
-                <tr key={`${f.node}-${i}`}>
-                  <td>
-                    <span className={clsx("ftier", `t-${f.tier.toLowerCase()}`)}>
-                      {f.tier}
-                      {f.is_storm ? " ⛆" : ""}
-                    </span>
-                  </td>
-                  <td>{f.mission_type}</td>
-                  <td>{f.node}</td>
-                  <td>{f.is_hard ? <span className="badge sp">SP</span> : ""}</td>
-                  <td className="r when num">
-                    <Countdown iso={f.expiry} />
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        {fissures.length === 0 ? (
+          <div className="empty" style={{ padding: "10px 12px" }}>
+            No active fissures match this filter.
+          </div>
+        ) : (
+          <>
+            {groups.normal.length > 0 ? (
+              <>
+                <div className="fgroup-h">Normal · {groups.normal.length}</div>
+                <FissureTable rows={groups.normal} />
+              </>
+            ) : null}
+            {groups.steel.length > 0 ? (
+              <>
+                <div className="fgroup-h">Steel Path · {groups.steel.length}</div>
+                <FissureTable rows={groups.steel} />
+              </>
+            ) : null}
+            {groups.storm.length > 0 ? (
+              <>
+                <div className="fgroup-h">Void Storms · Railjack · {groups.storm.length}</div>
+                <FissureTable rows={groups.storm} />
+              </>
+            ) : null}
+          </>
+        )}
       </div>
 
       <div className="tpanel">
