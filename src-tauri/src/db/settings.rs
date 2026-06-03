@@ -50,6 +50,21 @@ pub fn excluded_min_plat(db: &Db) -> AppResult<i64> {
         .max(0))
 }
 
+/// Per-category cheap-item floor: items in a category whose unit price is at or
+/// below its threshold are dropped from the portfolio value (and dimmed in the
+/// grid). Stored as a JSON object `{ "mod": 2, "arcane": 5, … }`; 0/absent = off.
+pub const KEY_EXCLUDED_MIN_PLAT_BY_CAT: &str = "excluded_min_plat_by_cat";
+
+/// The per-category min-plat thresholds (category → plat floor). Empty when unset.
+pub fn excluded_min_plat_by_cat(db: &Db) -> AppResult<std::collections::HashMap<String, i64>> {
+    Ok(get(db, KEY_EXCLUDED_MIN_PLAT_BY_CAT)?
+        .and_then(|s| serde_json::from_str::<std::collections::HashMap<String, i64>>(&s).ok())
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|(_, v)| *v > 0)
+        .collect())
+}
+
 /// Parsed list of excluded mod rarities (lowercase canonical slugs).
 pub fn excluded_rarities(db: &Db) -> AppResult<Vec<String>> {
     Ok(get(db, KEY_EXCLUDED_RARITIES)?

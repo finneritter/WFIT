@@ -99,6 +99,8 @@ pub fn run() {
             commands::set_excluded_rarities,
             commands::get_excluded_min_plat,
             commands::set_excluded_min_plat,
+            commands::get_excluded_min_plat_by_cat,
+            commands::set_excluded_min_plat_by_cat,
             commands::get_pricing_progress,
             // computed
             commands::get_sets,

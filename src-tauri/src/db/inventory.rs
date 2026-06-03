@@ -486,6 +486,7 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
     // valuation runs on a single pooled read connection — no writer contention.
     let excluded = settings::excluded_rarities(db)?;
     let min_plat = settings::excluded_min_plat(db)?;
+    let min_by_cat = settings::excluded_min_plat_by_cat(db)?;
 
     db.read(|c| {
         let owned = fetch_owned(c)?;
@@ -585,6 +586,16 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
                 // (min_plat > 0); otherwise drop it from the portfolio value.
                 let kept_by_value = min_plat > 0 && row.median_plat.unwrap_or(0) >= min_plat;
                 if excluded.iter().any(|e| e == rarity) && !kept_by_value {
+                    row.excluded = true;
+                    row.value_plat = Some(0);
+                    row.realizable_plat = Some(0);
+                }
+            }
+            // Per-category cheap-item floor: drop items whose unit price is at or below
+            // the category's threshold (only when priced — an unpriced item isn't
+            // confirmed cheap). Same mechanism as the rarity exclusion.
+            if let (Some(&floor), Some(price)) = (min_by_cat.get(&row.category), row.median_plat) {
+                if price <= floor {
                     row.excluded = true;
                     row.value_plat = Some(0);
                     row.realizable_plat = Some(0);

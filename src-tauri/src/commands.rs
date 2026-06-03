@@ -432,6 +432,30 @@ pub fn set_excluded_min_plat(state: State<'_, Arc<AppState>>, value: i64) -> App
     )
 }
 
+/// Per-category cheap-item plat floors (category → min plat). Items at/below their
+/// category's floor are dropped from the portfolio value.
+#[tauri::command]
+pub fn get_excluded_min_plat_by_cat(
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<std::collections::HashMap<String, i64>> {
+    settings::excluded_min_plat_by_cat(&state.db)
+}
+
+#[tauri::command]
+pub fn set_excluded_min_plat_by_cat(
+    state: State<'_, Arc<AppState>>,
+    thresholds: std::collections::HashMap<String, i64>,
+) -> AppResult<()> {
+    // Keep only known categories with a positive floor, so the stored value is clean.
+    const CATS: [&str; 5] = ["warframe", "weapon", "set", "mod", "arcane"];
+    let clean: std::collections::HashMap<&str, i64> = CATS
+        .iter()
+        .filter_map(|&c| thresholds.get(c).filter(|&&v| v > 0).map(|&v| (c, v)))
+        .collect();
+    let json = serde_json::to_string(&clean).map_err(crate::error::AppError::from)?;
+    settings::set(&state.db, settings::KEY_EXCLUDED_MIN_PLAT_BY_CAT, &json)
+}
+
 // ===========================================================================
 // Sets + Ducats (computed)
 // ===========================================================================

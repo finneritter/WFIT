@@ -4,15 +4,26 @@ import type { ScreenId } from "../components/Sidebar";
 import {
   useCatalogRefresh,
   useExcludedMinPlat,
+  useExcludedMinPlatByCat,
   useExcludedRarities,
   usePricesRefresh,
   useRebuildCache,
   useSetExcludedMinPlat,
+  useSetExcludedMinPlatByCat,
   useSetExcludedRarities,
   useSetsRefresh,
   useSummary,
   useWfmAccount,
 } from "../hooks/queries";
+
+// Categories that can have a per-category cheap-item floor.
+const CAT_FLOORS: [string, string][] = [
+  ["warframe", "Warframe"],
+  ["weapon", "Weapon"],
+  ["set", "Set"],
+  ["mod", "Mod"],
+  ["arcane", "Arcane"],
+];
 import { wipeApp } from "../lib/api";
 import { syncedAgo } from "../lib/format";
 import { type Prefs, type Theme, loadPrefs, savePrefs } from "../lib/prefs";
@@ -144,6 +155,22 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
   useEffect(() => {
     setMinInput(excludedMinPlat ? String(excludedMinPlat) : "");
   }, [excludedMinPlat]);
+  const { data: catFloors = {} } = useExcludedMinPlatByCat();
+  const setCatFloors = useSetExcludedMinPlatByCat();
+  const [catInput, setCatInput] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setCatInput(
+      Object.fromEntries(CAT_FLOORS.map(([k]) => [k, catFloors[k] ? String(catFloors[k]) : ""])),
+    );
+  }, [catFloors]);
+  const commitCatFloors = () => {
+    const next: Record<string, number> = {};
+    for (const [k] of CAT_FLOORS) {
+      const n = Math.max(0, Math.round(Number(catInput[k]) || 0));
+      if (n > 0) next[k] = n;
+    }
+    setCatFloors.mutate(next);
+  };
   const [dev, setDevState] = useState(() => {
     try {
       return localStorage.getItem("wfit-dev") === "1";
@@ -271,6 +298,32 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
             </div>
           </Row>
         ) : null}
+        <Row
+          label="Hide cheap items by category"
+          hint="Drop items worth this much plat or less from your portfolio value (and dim them in the grid — use Inventory's “Hide excluded” to remove them from view). E.g. set Mod to 2 and every 1–2p mod stops counting. 0 = off."
+        >
+          <div className="cat-mins">
+            {CAT_FLOORS.map(([k, l]) => (
+              <label key={k} className="cat-min">
+                <span className="cat-min-l">{l}</span>
+                <span className="set-num">
+                  <input
+                    type="number"
+                    min={0}
+                    value={catInput[k] ?? ""}
+                    placeholder="0"
+                    onChange={(e) => setCatInput((s) => ({ ...s, [k]: e.target.value }))}
+                    onBlur={commitCatFloors}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    }}
+                  />
+                  <span className="u">p</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </Row>
       </section>
 
       <section className="tpanel">

@@ -79,6 +79,10 @@ export const setExcludedRarities = (rarities: string[]) =>
 export const getExcludedMinPlat = () => invoke<number>("get_excluded_min_plat");
 export const setExcludedMinPlat = (value: number) =>
   invoke<void>("set_excluded_min_plat", { value });
+export const getExcludedMinPlatByCat = () =>
+  invoke<Record<string, number>>("get_excluded_min_plat_by_cat");
+export const setExcludedMinPlatByCat = (thresholds: Record<string, number>) =>
+  invoke<void>("set_excluded_min_plat_by_cat", { thresholds });
 export const getPricingProgress = () => invoke<PricingProgress>("get_pricing_progress");
 
 // computed

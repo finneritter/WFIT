@@ -24,6 +24,7 @@ export const keys = {
   budget: ["budget"] as const,
   excludedRarities: ["excludedRarities"] as const,
   excludedMinPlat: ["excludedMinPlat"] as const,
+  excludedMinPlatByCat: ["excludedMinPlatByCat"] as const,
   sets: ["sets"] as const,
   ducats: ["ducats"] as const,
   arcanes: ["arcanes"] as const,
@@ -275,6 +276,18 @@ export function useSetExcludedMinPlat() {
     mutationFn: (value: number) => api.setExcludedMinPlat(value),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.excludedMinPlat });
+      invalidateInventoryDerived(qc);
+    },
+  });
+}
+export const useExcludedMinPlatByCat = () =>
+  useQuery({ queryKey: keys.excludedMinPlatByCat, queryFn: api.getExcludedMinPlatByCat });
+export function useSetExcludedMinPlatByCat() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (thresholds: Record<string, number>) => api.setExcludedMinPlatByCat(thresholds),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.excludedMinPlatByCat });
       invalidateInventoryDerived(qc);
     },
   });

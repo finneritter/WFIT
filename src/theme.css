@@ -718,3 +718,9 @@ code { font-family: var(--mono); font-size: 11px; color: var(--ink); background:
     transition-duration: .001ms !important;
   }
 }
+
+/* per-category cheap-item floors (Settings → Portfolio valuation) */
+.cat-mins { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
+.cat-min { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cat-min-l { font-size: 12px; color: var(--soft); }
+.cat-min .set-num input { width: 64px; }
