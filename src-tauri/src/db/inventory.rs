@@ -554,13 +554,22 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
         for row in &mut out {
             let market = row_value(row);
             let bids = bid_map.get(&row.slug).unwrap_or(&no_bids);
-            let (realizable, phi) = realizable_default(
-                row.median_plat.unwrap_or(0),
-                row.qty,
-                market,
-                row.volume_7d,
-                bids,
-            );
+            // Prime parts (warframe/weapon/set) are liquid and fungible: qty × price
+            // holds, so realizable == full market value, no liquidation haircut. Only
+            // mods/arcanes — where hoarding many cheap copies inflates qty × price —
+            // get haircut into the bid ladder + volume-capped tail.
+            let (realizable, phi) =
+                if matches!(row.category.as_str(), "warframe" | "weapon" | "set") {
+                    (market, 1.0)
+                } else {
+                    realizable_default(
+                        row.median_plat.unwrap_or(0),
+                        row.qty,
+                        market,
+                        row.volume_7d,
+                        bids,
+                    )
+                };
             row.realizable_plat = Some(realizable);
             row.liquidity = Some(phi);
             row.daily_volume = row.volume_7d.map(|v| (v.max(0) as f64) / 7.0);
