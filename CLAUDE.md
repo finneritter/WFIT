@@ -11,11 +11,13 @@ world-state (fissures/cycles/Baro). It is a rewrite of an old React+Supabase web
 cloud backend is being deleted in favor of one local binary. **No auth, no hosting, no deploy.**
 
 **Status: implemented and working** (Tauri app builds, runs, and is installed; committed/pushed to
-`main` on the private repo `github.com/finneritter/WFIT`). All planned phases plus several features
+`main` on the private repo `github.com/finneritter/WFIT`). All planned phases plus many features
 beyond the original plan are done — game inventory import, rank-aware mods/arcanes, robust order-book
-pricing, and liquidation-adjusted ("realizable") inventory valuation. `docs/HANDOFF.md` is the
-current-state doc; read it first. The `.claude/plans/` and `reference/CLAUDE_ECONOMIC_RESEARCH/` files
-are now historical design references, not a to-do list.
+pricing, liquidation-adjusted ("realizable") valuation, an **Arcanes/Vosfor dissolution screen**, a
+backend perf pass (read-connection pool + batched valuation), UI micro-animations, and per-category
+cheap-item exclusion. The app now has **11 screens** (Arcanes added beyond the 9-screen wireframe).
+`docs/HANDOFF.md` is the current-state doc; read it first. The `.claude/plans/` and
+`reference/CLAUDE_ECONOMIC_RESEARCH/` files are now historical design references, not a to-do list.
 
 ## Authoritative documents (read before coding)
 
@@ -24,7 +26,11 @@ are now historical design references, not a to-do list.
 - **`docs/DATA_SOURCING_MASTER_PLAN.md`** — the warframe.market data contract (3 endpoints, verified
   field facts, the catalog two-pass strategy). All prices/catalog come from here.
 - **`docs/GAMESTATE_WORLDSTATE.md`** — the Rotation screen's source (`api.warframestat.us`, optional
-  second source, isolated + read-only).
+  second source, isolated + read-only). NB: fetch the canonical `/pc/` with a cache-buster query param
+  (Cloudflare serves stale otherwise); fissures are grouped Normal / Steel Path / Void Storm.
+- **`docs/ARCANE_DISSOLUTION.md`** — the Arcanes screen's domain reference (Loid Vosfor collections,
+  drop tables, per-arcane Vosfor, the collection-EV + keep/dissolve methodology). Bundled dataset.
+- **`docs/PERF_OPTIMIZATION.md`** — the backend perf pass (read pool, batched valuation, pragmas).
 - **`docs/WFM_ACCOUNT_SIGNIN.md`** — warframe.market account connect for the Listings screen (Tier 1
   username / Tier 2 pasted-JWT in OS keychain; read-only in v1).
 - **`reference/design_handoff_wfit_update1/`** — THE design target (9-screen monochrome DIM-style wireframe).
@@ -78,10 +84,15 @@ Retired (do not build from): `reference/design/` (old "Primely" hi-fi),
 Rust core in `src-tauri/src/`: `market.rs` (warframe.market v2 client + throttle), `worldstate.rs`
 (api.warframestat.us, isolated), `wfm_account.rs` (account/orders + keychain), `gamescan/`
 (opt-in DE memory-scan inventory import — isolated like worldstate, Linux-only, off by default), `domain/`
-(classify/partname/parts — pure), `db/` (rusqlite modules per table, transactional writes),
-`commands.rs` (the `#[command]` surface), `lib.rs` (`AppState{db,market}` + handler registry).
+(`classify`/`partname`/`mod_rarity`/`arcane` — pure; the rarity & arcane datasets are bundled `.tsv`s
+loaded into `Lazy` maps, no DB table), `db/` (rusqlite modules per table incl. `arcanes.rs`,
+transactional writes), `commands.rs` (the `#[command]` surface), `lib.rs` (`AppState` + handler registry).
+**DB connection model** (`db/mod.rs`): one writer behind a mutex (`with`/`with_mut`, also used by the
+few legacy read paths) **plus an r2d2 pool of `query_only` read connections** (`read()`) for hot UI
+reads, so a market sync holding the writer doesn't freeze the UI (WAL = concurrent readers).
 Frontend in `src/`: React Query hooks calling `invoke()` (`lib/api.ts`), components/routes ported
-1:1 from `wireframe.jsx`, the wireframe's CSS lifted to `theme.css` (square/dense/mono, no radius).
+from `wireframe.jsx` (Arcanes is beyond it), the wireframe's CSS lifted to `theme.css`
+(square/dense/mono, no radius; micro-animations + a `prefers-reduced-motion` guard).
 
 ## Pricing & valuation (the most-iterated subsystem — read before touching it)
 
@@ -90,13 +101,22 @@ the cheapest 5 online sells) → per-rank trade median (`price_rank`) → headli
 themselves are outlier-robust (`market.rs::robust_price` = winsorized, volume-weighted). Mods/arcanes
 are priced **per rank** (`mod_rank` from statistics; rank-0 vs max are different goods).
 
-**Realizable (liquidation-adjusted) value** (`db/inventory.rs::realizable_value`): a market price is a
-*marginal* price, so `× qty` overvalues hoards. Each holding is valued by liquidating it into the live
-**buy orders** (`buy_orders`, best-bid-first), then a volume-capped, discounted tail (`TAIL_FACTOR`,
-`WINDOW_DAYS`); units beyond real demand ≈ 0. `Summary.realizable_plat` is the honest headline,
-`total_plat` the optimistic "ceiling." Per-item `confidence` (high/medium/low) gates presentation.
-Rationale + the economics is in `reference/CLAUDE_ECONOMIC_RESEARCH/` and `.claude/plans/pricing-rework.md`.
+**Batched valuation (perf):** `get_inventory` no longer runs `effective_price` per item. `prices::PriceMaps`
++ `load_owned_price_maps` preload order/rank/headline once; **`effective_price_from` / `rank_aware_value_from`
+are in-memory twins of the SQL and MUST stay identical to `effective_price`/`rank_price`**; bid ladders
+and sparklines load via `bid_ladders_for`/`recent_medians_for`. `owned_holdings` runs the whole valuation
+in one pooled `db.read()`.
 
-**Auto-reprice:** bump `PRICING_VERSION` (`lib.rs`) whenever price/valuation derivation changes — on
-launch a mismatch wipes the derived price caches and recomputes, so fixes can't be stranded behind the
-6 h TTL. Do NOT rely on the TTL alone for logic changes.
+**Realizable (liquidation-adjusted) value** (`db/inventory.rs::owned_holdings` + `realizable_value`): a
+market price is a *marginal* price, so `× qty` overvalues hoards. **Full value (no haircut) when the row
+is a prime part (`warframe`/`weapon`/`set`) OR a single copy (`qty <= 1`)** — those are liquid/fungible.
+Only **multi-copy mod/arcane stacks** are haircut: liquidate into the live **buy orders** (`buy_orders`,
+best-bid-first) then a volume-capped, discounted tail (`TAIL_FACTOR`, `WINDOW_DAYS`); units beyond real
+demand ≈ 0. Exclusions (rarity list + per-category min-plat, `settings`) zero a row's value via the
+`excluded` flag. `Summary.realizable_plat` is the honest headline, `total_plat` the optimistic "ceiling";
+per-item `confidence` gates presentation. Economics in `reference/CLAUDE_ECONOMIC_RESEARCH/`.
+
+**Auto-reprice:** bump `PRICING_VERSION` (`lib.rs`) whenever the *cached* price derivation changes
+(`price_cache`/`price_rank`/`order_cache`/`buy_orders`) — on launch a mismatch wipes those caches and
+recomputes. NOTE: `realizable_plat` is computed fresh each `get_inventory` (not cached), so valuation-
+*rule* changes take effect immediately and need no bump. Do NOT rely on the TTL alone for cached logic.

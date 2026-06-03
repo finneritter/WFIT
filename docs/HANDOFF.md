@@ -1,161 +1,171 @@
-# WFIT — Session Handoff (2026-06-01)
+# WFIT — Session Handoff (2026-06-03)
 
 WFIT is a working, installed **Tauri 2 (Rust) + local SQLite + React/Vite** desktop app for tracking
-owned Warframe tradeables, warframe.market prices, sets, ducats, your sell orders, and live
-world-state. Read with `CLAUDE.md` (hard constraints). This handoff supersedes the earlier ones; the
-2026-05-31 "polish + features" session is condensed at the bottom.
+owned Warframe tradeables, warframe.market prices, sets, ducats, arcane/Vosfor economics, your sell
+orders, and live world-state. Read with `CLAUDE.md` (hard constraints). This handoff supersedes the
+earlier ones; prior sessions are condensed at the bottom.
 
-## Status: all merged to `main` (committed + pushed)
+## Status: all on `main` (committed + pushed)
 
-This session's work — game inventory import, rank-aware mods/arcanes, robust order-book pricing, and
-liquidation-adjusted ("realizable") valuation (Phases 1–3) — was built on the `game-inventory-import`
-branch and **merged to `main`** (`github.com/finneritter/WFIT`). The installed desktop app is on this
-code. The `game-inventory-import` branch still exists (not deleted). The user noted some **future UI
-tweaks** (not yet specified/built).
+Everything below is **merged to `main`** (`github.com/finneritter/WFIT`) and the installed desktop app
+is on this code. The session feature branches (`perf/responsiveness`, `feat/animations`,
+`feat/arcanes`) were merged and **deleted**. The 11 screens: Inventory, Sets, Trends, Watchlist, Buy
+List, Listings, Ducats, **Arcanes** (new), Rotation, Sold History, Settings.
 
-All gates pass: `cargo check`/`clippy` clean · `cargo test` **19 pass** · `tsc` · `npm run build` ·
-`biome` (pre-existing a11y warnings on interactive divs are tolerated).
+Gates green: `cargo clippy` clean · `cargo test` **27 pass + 3 ignored** · `tsc` · `npm run build` ·
+`biome` (pre-existing a11y/array-key warnings tolerated). Backend changes spot-checked against the live
+DB via `#[ignore]` probe tests (see below).
 
 ---
 
 ## Running / building
 
 ```fish
-pkill -x wfit; pkill -x node        # stop any running instance (exact-name kills only)
+pkill -x wfit                       # stop the running instance (exact-name; broad pkill -f self-kills the shell)
 npm run tauri:dev                   # dev; bakes in the WebKitGTK/Wayland env vars (plain `tauri dev` crashes)
-scripts/install.sh                  # build optimized release + install as a launchable app
+scripts/install.sh                  # build optimized release + install as a launchable app ("WFIT" in KRunner)
 ```
-- **Linux prereq:** `webkit2gtk-4.1`. Launch needs `WEBKIT_DISABLE_DMABUF_RENDERER=1
-  WEBKIT_DISABLE_COMPOSITING_MODE=1` (baked into the `tauri:dev` script + installed `.desktop`).
-- Live DB: `~/.local/share/dev.finn.wfit/wfit.sqlite`. Migrations `0001`–`0006` applied on launch.
+- **Linux prereq:** `webkit2gtk-4.1` (≥2.46 for `content-visibility`; this box runs 2.52).
+- Live DB: `~/.local/share/dev.finn.wfit/wfit.sqlite`. Migrations `0001`–`0009` applied on launch.
+- **Live-DB verification pattern (used heavily this session):** `#[ignore]` probe tests open a DB copy
+  and print/compare derived values. Run: `WFIT_PROBE_DB=/tmp/copy.sqlite cargo test --lib <probe>
+  -- --ignored --nocapture`. Make the copy with `sqlite3 $DB ".backup /tmp/copy.sqlite"` (consistent
+  snapshot even while the app is running). Probes: `inventory::tests::probe_real_db` (valuation
+  fingerprint), `db::arcanes::tests::probe_arcanes` (arcane dashboard), `worldstate::tests::ws_probe`
+  (live fissure freshness).
 
 ---
 
-## What this session added
+## What this session added (2026-06-03)
 
-### 1. Game inventory import (AlecaFrame-style memory-scan) — VERIFIED WORKING
+### 1. Backend performance — no more freeze during a price sync
+- **Read/write connection split** (`db/mod.rs`): a new `Db::read()` runs read-only closures on an
+  **r2d2 pool of `query_only` connections**, isolated from the single writer mutex. WAL lets reads run
+  while a sync holds the writer, so the UI no longer freezes mid-sync. **`with`/`with_mut` are
+  unchanged** (writer mutex) — they double as write paths in many modules, so only verified read-only
+  hot paths moved to `read()` (catalog, sets, trends, prices read-helpers, inventory read path,
+  `get_item_detail`). Readers are `query_only` so a stray write errors loudly.
+- **Pragmas** (`tune()` in `db/mod.rs`, all connections): `busy_timeout=5000`, `cache_size=-65536`
+  (64MB), `mmap_size=256MB`, `temp_store=MEMORY`.
+- **Batched the inventory N+1:** `get_inventory` went from **~2000+ queries to ~7**. `prices::PriceMaps`
+  + `load_owned_price_maps` preload order/rank/headline in 3 queries; `effective_price_from` /
+  `rank_aware_value_from` are in-memory twins of the SQL (KEEP IN LOCKSTEP); `bid_ladders_for` /
+  `recent_medians_for` / `inventory::memberships` batch the per-row/per-set loops. **Value-preserving** —
+  proven byte-identical via `probe_real_db` and a concurrency test (`db::tests::read_does_not_block_on_a_held_write`).
+- **Index** migration `0009_perf_indexes.sql` (`idx_catalog_cat_name` on `(category, display_name)`).
+- See `docs/PERF_OPTIMIZATION.md` for the full write-up.
 
-Optional, opt-in, consent-gated, **Linux-only**, off by default. Reads the running Warframe client's
-memory for the live session (`accountId`+`nonce`), calls the DE mobile inventory endpoint, maps it to
-the catalog, and merges true owned counts. **ToS-prohibited / ban-risky** — see
-`GAME_INVENTORY_IMPORT.md` and `.claude/plans/game-inventory-import.md`. This is a deliberate reversal
-of the old "no DE auth ever" rule (it never logs in; it reuses the live session).
+### 2. Data-layer + rendering responsiveness (frontend)
+- **Scoped React Query invalidation** (`hooks/queries.ts`): inventory edits no longer force-refetch all
+  5 catalog category queries — `patchCatalogRow` optimistically patches the owned slug; catalog is
+  invalidated `refetchType: "none"`. Removed the redundant pricing-progress `setInterval` (drive off the
+  progress query).
+- **Micro-animations** (`feat/animations`): refresh-icon **spin** + a **global topbar progress bar**
+  while a sync runs (`usePricingProgress` in `App.tsx`); drawer/modal **enter** transitions; collapsible
+  **chevron** rotation; button/chip **press**; cached `Intl.NumberFormat` singletons; Rotation's 1s tick
+  isolated to a `<Countdown>` leaf; a **`prefers-reduced-motion`** guard. `content-visibility: auto` on
+  `.tile`/`.chip-it` (browser-native off-screen skipping for the big grids) + `React.memo` on the
+  inventory rows.
+- **Routes are EAGER imports** (`App.tsx`) — route code-splitting was tried and **reverted**: for a
+  local desktop app it saved nothing and added a chunk-fetch flash on navigation.
+- **Inventory nav-freeze fix:** Inventory stays mounted and is hidden (`display:none`) when inactive —
+  re-mounting its ~800-tile grid on every navigation was a visible ~1s freeze.
 
-- **Isolated `gamescan/` module** (like `worldstate.rs`): `process.rs` (find pid; `/proc` only),
-  `memory.rs` (scan writable-anon `/proc/<pid>/mem` for `accountId=<24hex>&nonce=<digits>`; never
-  logs/persists the nonce), `api.rs` (`mobile.warframe.com/api/inventory.php`; own HTTP client),
-  `map.rs` (uniqueName→slug via `catalog_items.game_ref`), `consent.rs` (typed-phrase gate). Plus
-  `db/gamescan.rs` (state + diff + `merge_from_scan`). Reimplemented from the public protocol — **no
-  upstream code copied** (`wf-auth-finder` is GPLv3; Sainan's is MIT+Commons-Clause).
-- **DE JSON arrays parsed** (`map.rs INVENTORY_ARRAYS`): `MiscItems` (prime parts/resources),
-  `Recipes` (blueprints), **`RawUpgrades`** (stacked unranked mods/arcanes — the real count; omitting
-  it was the original undercount bug), `Upgrades` (individual ranked instances + their `lvl`).
-- **Commands:** `game_scan_{status,consent,revoke,preview,apply}` (mirror the wfm preview/apply split).
-  UI: `components/GameScanPanel.tsx` in Settings (consent → Scan now → reviewable diff → apply).
-- **Caveat:** at the common `kernel.yama.ptrace_scope = 1` a sibling memory read may be denied;
-  `memory.rs` returns guidance (`sysctl -w kernel.yama.ptrace_scope=0` or `setcap cap_sys_ptrace+ep`).
-  Scope ≥2 is rejected up front. It worked on this box after that setup.
+### 3. Arcanes / Vosfor dissolution screen (new) — see `docs/ARCANE_DISSOLUTION.md`
+- **Collection EV leaderboard:** ranks the 9 Loid collections by **expected platinum per 200 Vosfor**,
+  computed from live warframe.market **rank-0 (unranked)** prices × each collection's drop table.
+- **Owned arcanes → keep/dissolve:** total Vosfor if you dissolved all unranked copies, plus a per-arcane
+  verdict. **DISSOLVE only when an arcane is low value even when fully ranked** (maxed market price <
+  `KEEP_FLOOR_PLAT=15`, `db/arcanes.rs`); else KEEP. (The earlier rank-0-price comparison wrongly said
+  "dissolve Energize" — a rank-0 Energize is ~6p but it's a 100p arcane maxed.)
+- **Data:** `domain/arcane.rs` loads bundled `domain/data/arcane_dissolution.tsv`
+  (`slug\tcollection\trarity\tvosfor`), sourced from the wiki's `Module:Arcane` (rarity+Vosfor) and the
+  Loid `loidogoffer` collection rosters, **validated against the per-rarity drop-table counts** (unit
+  test `collection_pool_counts_match_wiki_checksums`). In-memory like `mod_rarity` — no DB table.
+- Backend: `db/arcanes.rs` (`dashboard()` = `get_arcane_dashboard` command). Frontend:
+  `routes/Arcanes.tsx`.
 
-### 2. Rank-aware mods/arcanes
+### 4. Valuation rule: prime parts + single copies use FULL value
+`db/inventory.rs::owned_holdings` — realizable value now equals `qty × price` (no liquidation haircut)
+when the row is a **prime part** (`warframe`/`weapon`/`set`) **or** a **single copy** (`qty <= 1`).
+Selling one item is easy; the haircut is for **hoards**, so it applies only to **multi-copy mod/arcane
+stacks**. (e.g. 2 Mag Prime Systems BPs @ 18p → 36p, not ~12–14p.) Verified live (realizable rose,
+full value unchanged).
 
-warframe.market prices mods/arcanes **per rank** (rank-0 Arcane Energize ≈ 7p, rank-5 ≈ 100p).
-- Migration `0004_ranks.sql`: `catalog_items.max_rank`; `inventory_ranks(slug,rank,qty)` (per-rank
-  owned breakdown, scan-written, additive — `inventory_items` stays the total-per-slug truth);
-  `price_rank(slug,rank,median)`.
-- The scan reads each copy's rank; valuation is Σ qty_r × price(rank r); the drawer shows an **Owned
-  by rank** table. `fetch_statistics` parses `mod_rank` (headline/history from rank 0 only).
+### 5. Settings: per-category cheap-item floor
+`Settings → Portfolio valuation → "Hide cheap items by category"`. A per-category min-plat
+(`KEY_EXCLUDED_MIN_PLAT_BY_CAT`, JSON map in `app_settings`; `excluded_min_plat_by_cat`). Items in a
+category whose unit price is at/below its floor are dropped from the portfolio value (and dimmed in the
+grid, hideable via Inventory's existing "Hide excluded" toggle) — **same `excluded`-flag mechanism as
+the rarity exclusion** (affects value, not the raw owned-count). Applied in `owned_holdings`.
 
-### 3. Reliable pricing (the big one — see `.claude/plans/pricing-rework.md`)
-
-The recurring "price is wrong / 50000p" had **two** causes — both fixed:
-
-- **Formula:** trade statistics are sparse/gameable for illiquid mods. The **live order book is now
-  the primary price source** for all owned items: `prices::effective_price(slug, rank)` resolves
-  **live lowest ask (`order_cache`) → per-rank trade median → headline median**. The ask is robust
-  (`robust_low` = median of the cheapest 5 asks, online preferred), so one troll-low/high ask can't
-  move it. Trade medians themselves are also robust (`market.rs robust_price` = winsorized +
-  volume-weighted median over 45 days). Migration `0005_orders.sql` = `order_cache(slug,rank,sell)`.
-  Fetched for all owned items by `refresh_owned_orders` (background on launch; forced by Refresh prices).
-- **Refresh (the structural fix):** fixes never reached already-cached values because refresh is
-  TTL-gated. Now there's a **`PRICING_VERSION` const + `KEY_PRICING_VERSION` meta** — on launch a
-  mismatch wipes the derived price caches (`price_cache`/`price_rank`/`order_cache`/`buy_orders`) and
-  recomputes. **➜ Bump `PRICING_VERSION` (in `lib.rs`) whenever you change how prices/valuation are
-  derived** so it auto-reprices on next launch instead of stale values surviving. Currently `"3"`.
-- Chart fix (`charts.tsx CandleChart`): robust 4th–96th-percentile y-domain so one spike candle no
-  longer flattens the graph.
-- Validated live: disruptor (had a 50000p wash print) → **~1p** from the live book; liquid items unchanged.
-
-### 4. Realizable (liquidation-adjusted) inventory value — Phases 1–3
-
-Driven by `CLAUDE_ECONOMIC_RESEARCH/` (the user's economics docs) + `.claude/plans/pricing-rework.md`.
-A market price is a *marginal* price, so `× qty` overvalues hoards (500 copies of a 3p mod that trades
-weekly is not worth 1,500p). Each holding is now valued by what it could actually realize.
-
-- **`inventory.rs::realizable_value`** liquidates a stack into the live **buy orders** best-bid-first
-  (`buy_orders` table, migration `0006`; fetched via `market.rs::fetch_order_book` → `store_order_book`),
-  then a volume-capped, discounted tail (`TAIL_FACTOR=0.35`, `WINDOW_DAYS=30`, `K=1`); units beyond
-  real demand ≈ 0. So commons with **zero online bids** collapse to ~nothing (metal_fiber 428 copies
-  1,284p → 40p). `Summary.realizable_plat` is the headline; `total_plat` is the "ceiling."
-- **Presentation (Phase 3):** inventory headline = hard-rounded estimate + range (`~6k · up to 29k at
-  market`, `fmtK`); a **"What's driving your value"** composition panel (top holdings by realizable);
-  per-item **confidence** (high/medium/low from volume + bids, riven→low) as a tile dot + drawer
-  "Confidence · basis"; drawer "Realizable · if sold gradually" with days-to-sell.
-- **New DTO fields** on `InventoryRow`/`ItemDetail`: `realizable_plat`, `daily_volume`, `liquidity`
-  (φ), `days_to_sell`, `confidence`; `Summary.realizable_plat`.
-- **Tuning knobs** if the total feels off: `TAIL_FACTOR` / `WINDOW_DAYS` in `inventory.rs`.
-- Validated on live inventory: market 28,757p → realizable ~6k (commons near-zero, demanded items keep
-  their bid value).
+### 6. Rotation / world-state fixes
+- **Freshness:** `api.warframestat.us/pc` now **301-redirects to `/pc/`**, and Cloudflare was serving a
+  **many-minutes-stale cached copy** (`cf-cache-status: HIT`, ignores client `no-cache` on a HIT). Fix
+  (`worldstate.rs`): hit the canonical `/pc/` and append a **per-fetch cache-buster** `?_=<timestamp>`
+  so each refresh misses the CDN cache. Measured **13min → 7min** lag (residual ~7min is warframestat's
+  own update cadence — inherent to that source).
+- **Fissures grouped by mode** (`routes/Rotation.tsx`): the list splits into **Normal / Steel Path
+  (`isHard`) / Void Storms · Railjack (`isStorm`)** sections — each lives in a different in-game menu, so
+  mixing them made Steel Path / Railjack fissures look like phantoms. Replaced the old "Steel Path"
+  toggle. The per-tier summary excludes Railjack storms.
+- **Omnia "⚡ Void Cascade" callout** is restored and **group-aware** ("· Steel Path" / "· Normal"),
+  pointing to the group where the fissure row actually appears. Box + list both derive from the same
+  data, so they agree.
 
 ---
 
 ## Architecture pointers
+- **Migrations:** `0001_init` · `0002_ohlc` · `0003_game_import` · `0004_ranks` · `0005_orders` ·
+  `0006_buy_orders` · `0007_mod_rarity` (`catalog_items.mod_rarity` + bundled `mod_rarity.tsv`) ·
+  `0008_vault_status` (`vault_status` table, WFCD-sourced, `db/vault.rs`) · `0009_perf_indexes`.
+- **DB connection model** (`db/mod.rs`): one writer `Arc<Mutex<Connection>>` (`with`/`with_mut`) + an
+  r2d2 read pool (`read()`). All tuned by `tune()`.
+- **Pricing path:** `market.rs` → `db/prices.rs` (`effective_price` + the batched `PriceMaps` /
+  `effective_price_from` / `bid_ladders_for` / `recent_medians_for`) → `db/inventory.rs`
+  (`owned_holdings`: rank-aware value, realizable value with the prime/single-copy full-value rule,
+  per-category + rarity exclusion) → `Summary`/`InventoryRow`/`ItemDetail`.
+- **Reference data (bundled, no DB table):** `domain/mod_rarity.rs` (mod rarity),
+  `domain/arcane.rs` (arcane collection/rarity/vosfor). Pattern: `include_str!` a `.tsv`, `Lazy` map.
+- **Modules** (`src-tauri/src/`): `market.rs`, `worldstate.rs`, `wfm_account.rs`, `gamescan/`, `domain/`
+  (`classify`/`partname`/`mod_rarity`/`arcane`), `db/` (per-table incl. `arcanes.rs`), `commands.rs`,
+  `lib.rs`.
 
-- **Migrations:** `0001_init` · `0002_ohlc` · `0003_game_import` (game_ref, last_scan_qty,
-  game_scan_state) · `0004_ranks` (max_rank, inventory_ranks, price_rank) · `0005_orders` (order_cache)
-  · `0006_buy_orders` (the bid ladder).
-- **Pricing path:** `market.rs` (`fetch_statistics` → robust per-rank medians; `fetch_order_book` →
-  robust asks + the online bid ladder) → `db/prices.rs` (`upsert_many`, `store_order_book`,
-  `bid_ladder`, `effective_price`, `rank_price`) → `db/inventory.rs` (`row_value` market value;
-  `realizable_value`/`realizable_default` liquidation value; `confidence_of`; `total_realizable`) →
-  `Summary`/`InventoryRow`/`ItemDetail` → grid/drawer.
-- **Modules** (`src-tauri/src/`): `market.rs`, `worldstate.rs`, `wfm_account.rs`, `gamescan/`,
-  `domain/`, `db/` (per-table), `commands.rs`, `lib.rs` (`AppState` + `launch_refresh`).
-
-## Key gotchas / lessons for next session
-- **When you change how a cached/derived value is computed, bump `PRICING_VERSION`** (or a similar
-  stamp) so it recomputes — don't rely on the TTL; stale old-logic values otherwise survive and look
-  like the fix didn't work. This caused several rounds of confusion this session.
-- `/proc/<pid>/comm` truncates to 15 chars (`Warframe.x64.exe` → `Warframe.x64.ex`) — match the
-  truncated form.
-- **UI not exhaustively click-tested** (no window-raise/input tool on this box — no wmctrl/ydotool).
-  Verified via build gates + querying the live SQLite DB. Game-scan + pricing WERE verified live with
-  the user this session; the 05-31 screens still want a click-test.
-- Shell stdout here can be unreliable — route to files / trust exit codes. Stop the dev server with
-  `pkill -x wfit` / `pkill -x node` (broad `pkill -f` self-kills the agent's shell).
+## Key gotchas / lessons
+- **`PRICING_VERSION` (`lib.rs`, currently checked on launch):** bump it when you change how *cached*
+  derived values are computed. NOTE: `realizable_plat` is computed fresh each `get_inventory` (not
+  cached), so this session's valuation changes needed no bump — but a change to `price_cache`/
+  `price_rank`/`order_cache` derivation does.
+- **`effective_price` (SQL) and `effective_price_from` (in-memory) must stay identical** — the batched
+  path relies on them being twins.
+- **Don't trust cross-snapshot DB comparisons** — the running app drains prices in the background.
+  Use one `.backup` copy for before/after.
+- `/proc/<pid>/comm` truncates to 15 chars (`Warframe.x64.exe` → `Warframe.x64.ex`).
+- **UI not exhaustively click-tested** (no window-raise/input tool on this box). Verified via gates +
+  live-DB probes + the user confirming behavior in the installed app. Shell stdout can be unreliable —
+  route to files / trust exit codes.
 
 ## Known gaps / next steps
-- **Future UI tweaks** the user mentioned (unspecified) — capture + build when they're ready.
-- Pass B set composition (`sets_refresh` → `set_membership`) available but Sets/valuation still use the
-  `set_slug` heuristic (`quantity_in_set` assumed 1).
-- Game scan: no auto-sync (manual "Scan now" only); macOS unsupported (SIP). Re-scan+apply to refresh
-  the per-rank breakdown of already-imported mods (the diff flags breakdown-only changes).
-- Listings write actions (price edit / list-on-market) still v1-deferred (read-only).
-- macOS build not done (needs a Mac). Search covers the tradable catalog only.
-- Realizable valuation is a snapshot (doesn't model self-impact over time); per-rank tail uses headline
-  volume (per-rank volume isn't stored). Tune `TAIL_FACTOR`/`WINDOW_DAYS` if the headline feels off.
-- Confidence tiers are computed/displayed but **not** yet used to quarantine Level-3 items out of the
-  headline total (a Phase-3 doc idea left for later).
+- Arcane EV uses **rank-0 (unranked) prices** (what collections actually grant) — not the maxed value.
+  A "potential maxed value" column is an easy add if wanted. The Cavia drop-pool vs intrinsic-rarity
+  quirk (Melee Fortification/Retaliation) is noted in `db/arcanes.rs`/the dataset.
+- World-state residual ~7min lag is warframestat's own cadence; a fresher/second source would need a
+  different provider (DE raw worldstate is deliberately avoided).
+- Per-category/rarity exclusion affects portfolio **value**, not the "Parts" count stat (matches the
+  existing rarity-exclusion behavior).
+- Pass B set composition still uses the `set_slug` heuristic; game-scan is manual + Linux-only; Listings
+  write actions and macOS build still deferred.
 
 ---
 
-## Appendix — 2026-05-31 "polish + features" session (committed/pushed)
-
-Frameless window + custom titlebar + app icon; Settings screen (Light/Dark theme, density, cache
-actions); Trends decision surface (Prime Market hero index, z-score signals, exclude-outliers
-winsorize); item drawer (OHLC candlestick + MA, live spread, resizable, Remove, Wiki ↗); sets-as-parts
-valuation; Rotation live countdowns; real wfm item icons; global catalog search (`ininv:` prefix);
-in-app wiki `WebviewWindow` (frameless, auto-closes on blur — `src/lib/wiki.ts`). Migration `0002`
-added OHLC. These screens were not click-tested that session.
+## Appendix — earlier sessions (condensed)
+- **2026-06-01:** game inventory import (memory-scan, `gamescan/`), rank-aware mods/arcanes
+  (`0004_ranks`), order-book pricing (`0005_orders`, `effective_price`/`robust_price`, `PRICING_VERSION`
+  auto-reprice), realizable valuation (`0006_buy_orders`, `realizable_value` + tail). Plus (later):
+  mod rarity (`0007`) + rarity/global-min-plat exclusion, vault status (`0008`).
+- **2026-05-31:** frameless window + titlebar + icon; Settings; Trends (index + z-score signals); item
+  drawer (OHLC candlestick + MA, live spread); sets-as-parts valuation; Rotation live countdowns; wfm
+  icons; global search (`ininv:`); in-app wiki window (`0002_ohlc`).
 
 ## Repo
-Private GitHub **github.com/finneritter/WFIT**, branch `main`. `src-tauri/gen/` is gitignored.
+Private **github.com/finneritter/WFIT**, branch `main`. `src-tauri/gen/` gitignored.

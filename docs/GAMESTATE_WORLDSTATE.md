@@ -18,6 +18,27 @@
 
 ---
 
+## Implementation notes (as built — 2026-06-03)
+
+Built in `src-tauri/src/worldstate.rs` (own client, 350ms throttle, 45s in-memory TTL, serves stale on
+fetch error) + the **Rotation** screen (`src/routes/Rotation.tsx`). Two gotchas learned the hard way:
+
+- **Fetch `https://api.warframestat.us/pc/` (trailing slash) with a per-fetch cache-buster
+  `?_=<unix_ts>`.** The no-slash `/pc` now **301-redirects** to `/pc/`, and the endpoint sits behind
+  **Cloudflare**, which serves a many-minutes-stale cached copy (`cf-cache-status: HIT`) and **ignores a
+  client `Cache-Control: no-cache` on a hit**. The unique query string forces a cache miss → warframestat's
+  freshest origin data. Measured source lag **~13min → ~7min** (the residual is warframestat's own update
+  cadence — that source can't go fresher; DE's raw worldstate is deliberately avoided).
+- **The fissure list is THREE modes that live in different in-game menus** — show them separately:
+  **Normal** (relic fissures), **Steel Path** (`isHard`), **Void Storms · Railjack** (`isStorm`). Mixing
+  them makes Steel Path / Railjack fissures look like phantoms ("a Void Cascade the normal list doesn't
+  have"). The Rotation screen groups them; the per-tier summary excludes Railjack storms; the Omnia
+  "⚡ Void Cascade" callout is tagged with its mode so it points to the right group.
+
+Live freshness can be checked with the `worldstate::tests::ws_probe` `#[ignore]` test (prints source lag).
+
+---
+
 ## 1. Two ways to get worldstate (use the parsed one)
 
 | Option | Endpoint | Shape | Verdict |
