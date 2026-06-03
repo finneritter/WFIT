@@ -27,6 +27,20 @@ pub struct AppState {
 const CATALOG_STALE_HOURS: i64 = 24;
 const PRICE_TTL_HOURS: i64 = 6;
 const DRAIN_BATCH: i64 = 40;
+// ---- live heartbeat (the app should feel alive, not snapshot-stale) ----
+// A perpetual rolling repricer: every tick it refreshes the most time-sensitive
+// stale slice, tiered watchlist → owned → rest-of-catalog. Budget math: worst
+// case ~12 stats + ~6 order books per 45s tick ≈ 24 req/min peak (vs the 350ms
+// throttle's ~170/min ceiling); steady state is far lower — ~800 owned items on
+// a 60min cycle averages ~13 stats/min, watchlist is small, catalog rides the
+// 6h TTL. Each tick that changed anything emits `prices-updated` so the UI
+// refetches immediately instead of waiting for a poll.
+const HEARTBEAT_SECS: u64 = 45;
+const HEARTBEAT_BATCH: i64 = 12; // max statistics calls per tick
+const HEARTBEAT_ORDER_BATCH: usize = 6; // max order-book calls per tick
+const WATCH_FRESH_MINS: i64 = 10; // watchlist targets are the time-sensitive tier
+const OWNED_FRESH_MINS: i64 = 60; // owned drives the headline value
+const LISTINGS_SYNC_TICKS: u64 = 13; // listings piggyback every ~10 min (1 call)
 // Bump whenever the price-derivation logic changes. On launch a mismatch wipes the
 // derived price caches and recomputes them, so fixes take effect without a manual
 // "rebuild cache" and stale old-logic prices can't survive behind the TTL.
@@ -61,6 +75,10 @@ pub fn run() {
             // Keep the worldstate cache confirmed-fresh every ~3min — the
             // Rotation screen's own poll stops when the window is backgrounded.
             state.worldstate.spawn_refresher();
+
+            // Live price heartbeat: rolling tiered repricer + UI notifications,
+            // so data keeps arriving the whole session, not just at launch.
+            spawn_price_heartbeat(state.clone(), app.handle().clone());
 
             // Kick off catalog/price warm-up off the UI thread; never block launch.
             tauri::async_runtime::spawn(async move {
@@ -264,6 +282,100 @@ async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
     }
     tracing::info!("launch: price drain complete");
     Ok(())
+}
+
+/// Perpetual freshness loop ("the app should feel alive"). Every tick it
+/// refreshes the stalest tiered slice — watchlist → owned → catalog tail —
+/// plus a few owned order books, and (every ~10 min) the listings mirror.
+/// Skips while a launch warm-up / manual refresh holds the throttle. Each
+/// tick that changed anything stamps `last_price_sync` and emits
+/// `prices-updated`, which the frontend listens for to refetch immediately.
+fn spawn_price_heartbeat(state: Arc<AppState>, app: tauri::AppHandle) {
+    use tauri::Emitter;
+    tauri::async_runtime::spawn(async move {
+        let mut tick: u64 = 0;
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(HEARTBEAT_SECS)).await;
+            tick += 1;
+            if state.pricing_active.load(Ordering::Relaxed) {
+                continue; // a full sync owns the throttle; we'd be redundant
+            }
+            let mut changed = match heartbeat_tick(&state).await {
+                Ok(n) => n,
+                Err(e) => {
+                    tracing::warn!(error = %e, "heartbeat tick failed");
+                    continue;
+                }
+            };
+            // Listings mirror rides along occasionally (a single API call).
+            if tick % LISTINGS_SYNC_TICKS == 0 {
+                match commands::sync_listings_impl(&state).await {
+                    Ok(n) => changed += n,
+                    Err(error::AppError::NotConnected(_)) => {} // no account — fine
+                    Err(e) => tracing::warn!(error = %e, "heartbeat listings sync failed"),
+                }
+            }
+            if changed > 0 {
+                tracing::debug!(changed, "heartbeat: refreshed");
+                let _ = db::meta::set(
+                    &state.db,
+                    db::meta::KEY_LAST_PRICE_SYNC,
+                    &Utc::now().to_rfc3339(),
+                );
+                let _ = app.emit("prices-updated", changed);
+            }
+        }
+    });
+}
+
+/// One heartbeat pass: statistics for the stalest watchlist → owned → catalog
+/// slugs (oldest-first within each tier), then live order books for the
+/// stalest owned subset. Returns how many slugs were touched.
+async fn heartbeat_tick(state: &Arc<AppState>) -> error::AppResult<usize> {
+    use db::prices;
+
+    let watch_cutoff = (Utc::now() - Duration::minutes(WATCH_FRESH_MINS)).to_rfc3339();
+    let owned_cutoff = (Utc::now() - Duration::minutes(OWNED_FRESH_MINS)).to_rfc3339();
+
+    let mut batch =
+        prices::slugs_older_than(&state.db, "watchlist", &watch_cutoff, HEARTBEAT_BATCH)?;
+    for s in prices::slugs_older_than(&state.db, "inventory_items", &owned_cutoff, HEARTBEAT_BATCH)?
+    {
+        if batch.len() >= HEARTBEAT_BATCH as usize {
+            break;
+        }
+        if !batch.contains(&s) {
+            batch.push(s);
+        }
+    }
+    // Spare budget drains the long catalog tail (6h TTL), oldest-first.
+    let spare = HEARTBEAT_BATCH - batch.len() as i64;
+    if spare > 0 {
+        for s in prices::stale_catalog_slugs(&state.db, spare)? {
+            if !batch.contains(&s) {
+                batch.push(s);
+            }
+        }
+    }
+    let mut touched = batch.len();
+    if !batch.is_empty() {
+        refresh_slugs(state, &batch).await?;
+    }
+
+    // Live order books — the primary price for owned items — for the stalest few.
+    let mut order_slugs = prices::owned_order_slugs(&state.db, &owned_cutoff)?;
+    order_slugs.truncate(HEARTBEAT_ORDER_BATCH);
+    for slug in &order_slugs {
+        match state.market.fetch_order_book(slug).await {
+            Ok(book) if !book.sells.is_empty() || !book.bids.is_empty() => {
+                prices::store_order_book(&state.db, slug, &book.sells, &book.bids)?;
+                touched += 1;
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!(slug, error = %e, "heartbeat order book failed"),
+        }
+    }
+    Ok(touched)
 }
 
 /// Fetch + persist statistics for each slug (throttled inside the client).

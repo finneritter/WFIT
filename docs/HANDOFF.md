@@ -123,6 +123,20 @@ the rarity exclusion** (affects value, not the raw owned-count). Applied in `own
   `refetchIntervalInBackground: true`. UI shows "as of HH:MM · DE-verified". Probe:
   `worldstate::raw::tests::de_probe`.
 
+### 7. Live heartbeat ("the app should feel alive") — 2026-06-03
+- **`lib.rs::spawn_price_heartbeat`**: perpetual 45s ticks; each refreshes the stalest tiered slice —
+  watchlist (>10min old) → owned (>60min) → stale catalog tail (6h TTL) — capped at ~12 statistics +
+  ~6 order-book calls/tick (~24 req/min worst case vs the 350ms throttle's ~170 ceiling; steady state
+  ~13/min). Listings mirror piggybacks every ~13th tick via `commands::sync_listings_impl`. Skips
+  while `pricing_active` (launch drain / manual refresh owns the throttle).
+- Each tick that changed anything stamps `app_meta.last_price_sync` and **emits `prices-updated`**;
+  `useLivePriceEvents` (App-mounted) invalidates inventory-derived + listings + progress queries, so
+  fresh numbers appear seconds after they land. `prices::slugs_older_than` is the fetched_at-based
+  tier query (tighter than `expires_at` staleness).
+- **Topbar `LiveBadge`**: pulsing dot + ticking age of the newest data (`PricingProgress.last_price_sync`);
+  dims after 5min without updates (offline). Verified live: `last_price_sync` advanced every ~60s for
+  13 consecutive minutes post-drain.
+
 ---
 
 ## Architecture pointers

@@ -688,6 +688,13 @@ code { font-family: var(--mono); font-size: 11px; color: var(--ink); background:
 /* busy state for non-circular glyphs (topbar SyncNow) — spinning an arrow looks wrong */
 .icon-btn.pulsing svg { animation: sync-pulse 1s ease-in-out infinite; }
 @keyframes sync-pulse { 50% { opacity: .3; } }
+
+/* --- topbar liveness badge (heartbeat freshness) --- */
+.live-badge { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 10.5px; color: var(--soft); font-family: var(--mono); }
+.live-badge .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--pos, #6ea86e); animation: live-pulse 2s ease-in-out infinite; }
+.live-badge.stale { color: var(--faint); }
+.live-badge.stale .live-dot { background: var(--faint); animation: none; }
+@keyframes live-pulse { 50% { opacity: .35; } }
 .topbar-prog { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; overflow: hidden; pointer-events: none; }
 .topbar-prog-fill { height: 100%; background: var(--accent); transition: width .3s ease; }
 /* unknown total: a sliver sweeps across to show "working" without a fraction */

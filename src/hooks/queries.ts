@@ -1,6 +1,8 @@
 // React Query hooks over the api layer. Mutations invalidate the related read
 // keys so the UI updates live across screens.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { listen } from "@tauri-apps/api/event";
+import { useEffect } from "react";
 import * as api from "../lib/api";
 import type { CatalogRow, ScanApply } from "../lib/types";
 
@@ -299,6 +301,25 @@ export function useSetExcludedMinPlatByCat() {
       invalidateInventoryDerived(qc);
     },
   });
+}
+
+// ---- live heartbeat ----
+// The backend's rolling repricer emits `prices-updated` after every tick that
+// changed something (lib.rs::spawn_price_heartbeat). Refetch the value-bearing
+// views right then, so new data appears moments after it lands — the "alive"
+// feel — instead of waiting for a poll or a manual refresh.
+export function useLivePriceEvents() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const un = listen("prices-updated", () => {
+      invalidateInventoryDerived(qc);
+      qc.invalidateQueries({ queryKey: keys.listings });
+      qc.invalidateQueries({ queryKey: keys.pricingProgress });
+    });
+    return () => {
+      un.then((f) => f());
+    };
+  }, [qc]);
 }
 
 // ---- refresh / catalog ----

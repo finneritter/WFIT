@@ -354,6 +354,9 @@ export interface PricingProgress {
   active: boolean;
   priced: number;
   total: number;
+  // When prices last changed (launch drain / manual refresh / live heartbeat);
+  // drives the topbar "live · Xs" indicator.
+  last_price_sync: string | null;
 }
 
 export interface Worldstate {

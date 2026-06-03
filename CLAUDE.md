@@ -119,6 +119,12 @@ demand ≈ 0. Exclusions (rarity list + per-category min-plat, `settings`) zero 
 `excluded` flag. `Summary.realizable_plat` is the honest headline, `total_plat` the optimistic "ceiling";
 per-item `confidence` gates presentation. Economics in `reference/CLAUDE_ECONOMIC_RESEARCH/`.
 
+**Live heartbeat** (`lib.rs::spawn_price_heartbeat`): a perpetual 45s-tick rolling repricer —
+tiered watchlist (~10min) → owned (~60min) → catalog tail (6h TTL), ~12 stats + ~6 order books per
+tick, listings mirror every ~10min — that defers to any active full sync (`pricing_active`), stamps
+`last_price_sync`, and emits a `prices-updated` Tauri event the frontend listens for
+(`useLivePriceEvents`) to refetch value-bearing views immediately. Topbar `LiveBadge` shows data age.
+
 **Auto-reprice:** bump `PRICING_VERSION` (`lib.rs`) whenever the *cached* price derivation changes
 (`price_cache`/`price_rank`/`order_cache`/`buy_orders`) — on launch a mismatch wipes those caches and
 recomputes. NOTE: `realizable_plat` is computed fresh each `get_inventory` (not cached), so valuation-

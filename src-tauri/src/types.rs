@@ -74,6 +74,9 @@ pub struct PricingProgress {
     pub active: bool, // a refresh is in flight
     pub priced: i64,  // owned slugs that now have a price
     pub total: i64,   // owned slugs total
+    /// When prices last changed (ISO) — launch drain, manual refresh, or the
+    /// live heartbeat. Drives the topbar "live · Xs ago" indicator.
+    pub last_price_sync: Option<String>,
 }
 
 /// A realized sale (Sold History).

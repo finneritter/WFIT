@@ -416,6 +416,29 @@ pub fn stale_watchlist_slugs(db: &Db) -> AppResult<Vec<String>> {
     stale_for(db, "watchlist")
 }
 
+/// Slugs from `table` whose cached price is missing or was fetched before
+/// `cutoff`, oldest-first — the live heartbeat's per-tier freshness query.
+/// Tighter than `stale_*` (which only sees hard `expires_at` expiry), so the
+/// heartbeat can keep watchlist/owned prices fresher than the cache TTL.
+pub fn slugs_older_than(db: &Db, table: &str, cutoff: &str, limit: i64) -> AppResult<Vec<String>> {
+    db.read(|c| {
+        let sql = format!(
+            "SELECT t.slug FROM {table} t
+             LEFT JOIN price_cache pc ON pc.slug = t.slug
+             WHERE pc.slug IS NULL OR pc.fetched_at < ?1
+             ORDER BY pc.fetched_at IS NOT NULL, pc.fetched_at ASC
+             LIMIT ?2"
+        );
+        let mut stmt = c.prepare(&sql)?;
+        let rows = stmt.query_map(params![cutoff, limit], |r| r.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    })
+}
+
 fn stale_for(db: &Db, table: &str) -> AppResult<Vec<String>> {
     db.read(|c| {
         let now = Utc::now().to_rfc3339();

@@ -383,10 +383,18 @@ pub fn get_pricing_progress(state: State<'_, Arc<AppState>>) -> AppResult<Pricin
             )?;
             (cat_priced, cat_total)
         };
+        let last_price_sync: Option<String> = c
+            .query_row(
+                "SELECT value FROM app_meta WHERE key = ?1",
+                rusqlite::params![meta::KEY_LAST_PRICE_SYNC],
+                |r| r.get(0),
+            )
+            .ok();
         Ok(PricingProgress {
             active,
             priced,
             total,
+            last_price_sync,
         })
     })
 }
@@ -832,6 +840,12 @@ pub fn wfm_signout(state: State<'_, Arc<AppState>>) -> AppResult<()> {
 /// Refresh the read-only listings mirror from warframe.market.
 #[tauri::command]
 pub async fn wfm_sync_listings(state: State<'_, Arc<AppState>>) -> AppResult<usize> {
+    sync_listings_impl(state.inner()).await
+}
+
+/// Command body, callable without a `State` wrapper — the live heartbeat
+/// (`lib.rs`) piggybacks a listings sync on its tick every ~10 min.
+pub(crate) async fn sync_listings_impl(state: &Arc<AppState>) -> AppResult<usize> {
     let acct = wfm::get_account(&state.db)?;
     let username = acct
         .username

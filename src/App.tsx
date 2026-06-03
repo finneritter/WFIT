@@ -2,11 +2,17 @@ import { useCallback, useDeferredValue, useState } from "react";
 import { AddItems } from "./components/AddItems";
 import { Drawer } from "./components/Drawer";
 import { Icon } from "./components/Icon";
+import { LiveBadge } from "./components/LiveBadge";
 import { SearchResults } from "./components/SearchResults";
 import { type ScreenId, Sidebar } from "./components/Sidebar";
 import { SyncNow } from "./components/SyncNow";
 import { TitleBar } from "./components/TitleBar";
-import { usePricesRefresh, usePricingProgress, useSummary } from "./hooks/queries";
+import {
+  useLivePriceEvents,
+  usePricesRefresh,
+  usePricingProgress,
+  useSummary,
+} from "./hooks/queries";
 import { clsx } from "./lib/format";
 import { Arcanes } from "./routes/Arcanes";
 // Routes are imported eagerly. This is a local desktop app — the bundle loads
@@ -48,6 +54,8 @@ export default function App() {
   const { data: summary } = useSummary();
   const refresh = usePricesRefresh();
   const { data: progress } = usePricingProgress();
+  // Refetch value-bearing views the moment the backend heartbeat lands new data.
+  useLivePriceEvents();
 
   // A sync is "in flight" while the manual refresh mutation runs OR a background
   // drain is active — drives the spinning refresh icon + the topbar progress bar.
@@ -103,6 +111,7 @@ export default function App() {
                 />
               ) : null}
             </div>
+            <LiveBadge />
             <SyncNow />
             <button
               type="button"
