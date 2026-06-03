@@ -731,6 +731,13 @@ code { font-family: var(--mono); font-size: 11px; color: var(--ink); background:
 /* fissure group sub-headers (Rotation → Void Fissures: Normal / Steel Path / Void Storms) */
 .fgroup-h { padding: 9px 12px 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--faint); border-top: 1px solid var(--line); }
 .fgroup-h:first-of-type { border-top: none; }
+/* The fissure groups are separate <table>s — fix the layout so Tier/Mission/
+   Location/Time-left line up across Normal / Steel Path / Void Storms. */
+.ftable { table-layout: fixed; }
+.ftable th:nth-child(1) { width: 90px; }
+.ftable th:nth-child(2) { width: 34%; }
+.ftable th:nth-child(4) { width: 110px; }
+.ftable td { overflow: hidden; text-overflow: ellipsis; }
 
 /* "⚡ Void Cascade · Steel Path" group tag in the Omnia summary card */
 .ft-grp { display: block; font-size: 9.5px; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-top: 1px; }

@@ -41,10 +41,12 @@ const Countdown = memo(function Countdown({
   return <>{iso ? countdown(iso, now) : fallback}</>;
 });
 
-/** One fissure group's table (tier · mission · location · live time-left). */
+/** One fissure group's table (tier · mission · location · live time-left).
+ *  `ftable` pins the column widths — the groups are separate <table>s, so
+ *  without it each one auto-sizes and the columns drift out of line. */
 function FissureTable({ rows }: { rows: Fissure[] }) {
   return (
-    <table className="dtable">
+    <table className="dtable ftable">
       <thead>
         <tr>
           <th>Tier</th>
