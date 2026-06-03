@@ -12,7 +12,10 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-const WS_URL: &str = "https://api.warframestat.us/pc";
+// Canonical URL (the no-slash form 301-redirects). A per-fetch cache-buster query
+// param is appended so Cloudflare can't serve a many-minutes-stale cached copy
+// (it ignores client no-cache on a HIT) — fissures rotate too fast for that.
+const WS_URL: &str = "https://api.warframestat.us/pc/";
 const TTL: Duration = Duration::from_secs(45); // fissures rotate fast; keep it short
 const MIN_GAP_MS: u64 = 350;
 
@@ -190,9 +193,12 @@ impl WorldstateClient {
 
     async fn fetch(&self) -> AppResult<Worldstate> {
         self.throttled().await;
+        // Unique query each fetch → Cloudflare cache miss → warframestat's freshest
+        // origin data. Only fires every ≥45s (TTL) and only while Rotation is open.
+        let url = format!("{WS_URL}?_={}", chrono::Utc::now().timestamp());
         let raw: RawWorld = self
             .http
-            .get(WS_URL)
+            .get(&url)
             .send()
             .await?
             .error_for_status()?
@@ -265,5 +271,34 @@ fn make_cycle(id: &str, name: &str, c: RawCycle) -> Cycle {
         state,
         time_left: c.time_left,
         expiry: c.expiry,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Live diagnostic: hit the configured WS_URL via the app's exact client and
+    // report what it actually gets. `cargo test --lib ws_probe -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore]
+    async fn ws_probe() {
+        let c = WorldstateClient::new();
+        match c.get().await {
+            Ok(ws) => {
+                let now = chrono::Utc::now();
+                println!("OK  url={WS_URL}");
+                println!("  source_timestamp = {:?}", ws.source_timestamp);
+                println!("  now              = {}", now.to_rfc3339());
+                println!("  fissures={} cycles={}", ws.fissures.len(), ws.cycles.len());
+                if let Some(ts) = &ws.source_timestamp {
+                    if let Ok(t) = chrono::DateTime::parse_from_rfc3339(ts) {
+                        let lag = now.signed_duration_since(t.with_timezone(&chrono::Utc));
+                        println!("  source lag = {} min", lag.num_minutes());
+                    }
+                }
+            }
+            Err(e) => println!("ERR url={WS_URL}: {e}"),
+        }
     }
 }
