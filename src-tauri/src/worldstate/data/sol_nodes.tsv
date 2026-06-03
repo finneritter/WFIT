@@ -1,0 +1,452 @@
+/Lotus/Types/Keys/SortieBossKeyPhorid	Sortie Boss: Phorid	Infested	Assassination
+ClanNode0	Romula (Venus)	Infested	Dark Sector Defense
+ClanNode1	Malva (Venus)	Infested	Dark Sector Survival
+ClanNode10	Memphis (Phobos)	Infested	Dark Sector Defection
+ClanNode11	Zeugma (Phobos)	Infested	Dark Sector Survival
+ClanNode12	Caracol (Saturn)	Infested	Dark Sector Defection
+ClanNode13	Piscinas (Saturn)	Infested	Dark Sector Survival
+ClanNode14	Amarna (Sedna)	Infested	Dark Sector Survival
+ClanNode15	Sangeru (Sedna)	Infested	Dark Sector Defense
+ClanNode16	Ur (Uranus)	Infested	Dark Sector Disruption
+ClanNode17	Assur (Uranus)	Infested	Dark Sector Survival
+ClanNode18	Akkad (Eris)	Infested	Dark Sector Defense
+ClanNode19	Zabala (Eris)	Infested	Dark Sector Survival
+ClanNode2	Coba (Earth)	Infested	Dark Sector Defense
+ClanNode20	Yursa (Neptune)	Infested	Dark Sector Defection
+ClanNode21	Kelashin (Neptune)	Infested	Dark Sector Survival
+ClanNode22	Seimeni (Ceres)	Infested	Dark Sector Defense
+ClanNode23	Gabii (Ceres)	Infested	Dark Sector Survival
+ClanNode24	Sechura (Pluto)	Infested	Dark Sector Defense
+ClanNode25	Hieracon (Pluto)	Infested	Dark Sector Excavation
+ClanNode3	Tikal (Earth)	Infested	Dark Sector Excavation
+ClanNode4	Sinai (Jupiter)	Infested	Dark Sector Defense
+ClanNode5	Cameria (Jupiter)	Infested	Dark Sector Survival
+ClanNode6	Larzac (Europa)	Infested	Dark Sector Defense
+ClanNode7	Cholistan (Europa)	Infested	Dark Sector Excavation
+ClanNode8	Kadesh (Mars)	Infested	Dark Sector Defense
+ClanNode9	Wahiba (Mars)	Infested	Dark Sector Survival
+CrewBattleNode501	Mordo Cluster (Saturn)	Grineer	Skirmish
+CrewBattleNode502	Sover Strait (Earth)	Grineer	Skirmish
+CrewBattleNode503	Bifrost Echo (Venus)	Corpus	Extermination
+CrewBattleNode504	Arva Vector (Neptune)	Corpus	Defense
+CrewBattleNode505	Ruse War Field (Veil)	Grineer	Skirmish
+CrewBattleNode509	Iota Temple (Earth)	Grineer	Skirmish
+CrewBattleNode510	Gian Point (Veil)	Grineer	Skirmish
+CrewBattleNode511	Beacon Shield Ring (Venus)	Corpus	Volatile
+CrewBattleNode512	Orvin-Haarc (Venus)	Corpus	Spy
+CrewBattleNode513	Vesper Strait (Venus)	Corpus	Orphix
+CrewBattleNode514	Falling Glory (Venus)	Corpus	Defense
+CrewBattleNode515	Luckless Expanse (Venus)	Corpus	Survival
+CrewBattleNode516	Nu-gua Mines (Neptune)	Corpus	Extermination
+CrewBattleNode518	Ogal Cluster (Earth)	Grineer	Skirmish
+CrewBattleNode519	Korm's Belt (Earth)	Grineer	Skirmish
+CrewBattleNode521	Enkidu Ice Drifts (Neptune)	Corpus	Survival
+CrewBattleNode522	Bendar Cluster (Earth)	Grineer	Skirmish
+CrewBattleNode523	Mammon's Prospect (Neptune)	Corpus	Orphix
+CrewBattleNode524	Sovereign Grasp (Neptune)	Corpus	Volatile
+CrewBattleNode525	Brom Cluster (Neptune)	Corpus	Spy
+CrewBattleNode526	Khufu Envoy (Pluto)	Corpus	Orphix
+CrewBattleNode527	Seven Sirens (Pluto)	Corpus	Extermination
+CrewBattleNode528	Obol Crossing (Pluto)	Corpus	Defense
+CrewBattleNode529	Profit Margin (Pluto)	Corpus	Volatile
+CrewBattleNode530	Kasio's Rest (Saturn)	Grineer	Skirmish
+CrewBattleNode531	Fenton's Field (Pluto)	Corpus	Survival
+CrewBattleNode533	Nodo Gap (Saturn)	Grineer	Skirmish
+CrewBattleNode534	Lupal Pass (Saturn)	Grineer	Skirmish
+CrewBattleNode535	Vand Cluster (Saturn)	Grineer	Skirmish
+CrewBattleNode536	Peregrine Axis (Pluto)	Corpus	Spy
+CrewBattleNode538	Calabash (Veil)	Corpus	Extermination
+CrewBattleNode539	Numina (Veil)	Corpus	Volatile
+CrewBattleNode540	Arc Silver (Veil)	Corpus	Defense
+CrewBattleNode541	Erato (Veil)	Corpus	Orphix
+CrewBattleNode542	Lu-yan (Veil)	Corpus	Survival
+CrewBattleNode543	Sambir Cloud (Veil)	Corpus	Spy
+CrewBattleNode550	Nsu Grid (Veil)	Grineer	Skirmish
+CrewBattleNode551	Ganalen's Grave (Veil)	Grineer	Skirmish
+CrewBattleNode552	Rya (Veil)	Grineer	Skirmish
+CrewBattleNode553	Flexa (Veil)	Grineer	Skirmish
+CrewBattleNode554	H-2 Cloud (Veil)	Grineer	Skirmish
+CrewBattleNode555	R-9 Cloud (Veil)	Grineer	Skirmish
+DeimosHub	Necralisk (Deimos)	Tenno	Relay
+EarthHUB	Strata Relay (Earth)	Grineer	Relay
+ErisHUB	Kuiper Relay (Eris)	Infested	Relay
+EuropaHUB	Leonov Relay (Europa)	Corpus	Relay
+EventNode0	Balor	Sentient	Ancient Retribution
+EventNode1	Tethra	Sentient	Ancient Retribution
+EventNode10	Lugh	Sentient	Ancient Retribution
+EventNode11	Nemed	Sentient	Ancient Retribution
+EventNode12	Operation Cryotic Front	Sentient	Ancient Retribution
+EventNode13	Shifting Sands	Sentient	Ancient Retribution
+EventNode14	Gate Crash	Sentient	Ancient Retribution
+EventNode15	Operation Cryotic Front	Sentient	Ancient Retribution
+EventNode16	Operation Cryotic Front	Sentient	Ancient Retribution
+EventNode17	Proxy Rebellion	Corpus	Defense
+EventNode18	Proxy Rebellion	Corpus	Defense
+EventNode19	Mars	Grineer	Defense
+EventNode2	Operation Gate Crash	Sentient	Ancient Retribution
+EventNode20	Tyl Regor Sea Lab	Sentient	Ancient Retribution
+EventNode22	Tyl Regor Sea Lab	Sentient	Ancient Retribution
+EventNode24	Earth	Grineer	Arena
+EventNode25	Earth	Grineer	Arena
+EventNode26	Earth	Grineer	Extermination
+EventNode27	Void	Corrupted	Survival
+EventNode28	Saturn	Grineer	Assassination
+EventNode29	Saturn	Grineer	Assassination
+EventNode3	Elatha	Sentient	Ancient Retribution
+EventNode30	Ganymede (Jupiter)	Corpus	Disruption
+EventNode31	Ganymede (Jupiter)	Corpus	Disruption
+EventNode32	Ganymede (Jupiter)	Corpus	Disruption
+EventNode33	Ganymede (Jupiter)	Corpus	Disruption
+EventNode34	Earth	Grineer	Arena
+EventNode35	Earth	Grineer	Arena
+EventNode4	Proxy Rebellion	Corpus	Survival
+EventNode5	Birog	Sentient	Ancient Retribution
+EventNode6	Tyl Reygor Seal Lab	Sentient	Ancient Retribution
+EventNode7	Proxy Rebellion	Corpus	Interception
+EventNode761	The Index	Corpus	Arena
+EventNode762	The Index pt 2	Corpus	Arena
+EventNode763	The Index Endurance	Corpus	Arena
+EventNode8	Corb	Sentient	Ancient Retribution
+EventNode9	Operation Gate Crash Pt. 2	Sentient	Ancient Retribution
+MercuryHUB	Larunda Relay (Mercury)	Grineer	Relay
+PlutoHUB	Orcus Relay (Pluto)	Corpus	Relay
+PvpNode0	Conclave Capture the Cephalon	Tenno	Conclave
+PvpNode1	Conclave	Tenno	Conclave
+PvpNode10	Conclave Domination	Tenno	Conclave
+PvpNode11	Conclave Domination	Tenno	Conclave
+PvpNode12	Conclave Domination	Tenno	Conclave
+PvpNode13	Tactical Alert: Snoball Fight!	Tenno	Conclave
+PvpNode14	Conclave: Quick Steel	Tenno	Conclave
+PvpNode2	Conclave	Tenno	Conclave
+PvpNode3	Conclave Capture the Cephalon	Tenno	Conclave
+PvpNode4	Conclave	Tenno	Conclave
+PvpNode5	Conclave	Tenno	Conclave
+PvpNode6	Conclave	Tenno	Conclave
+PvpNode7	Conclave	Tenno	Conclave
+PvpNode8	Conclave	Tenno	Conclave
+PvpNode9	Conclave Team Domination	Tenno	Conclave
+SaturnHUB	Kronia Relay (Saturn)	Grineer	Relay
+SettlementNode1	Roche (Phobos)	Corpus	Extermination
+SettlementNode10	Kepler (Phobos)	Corpus	Rush (Archwing)
+SettlementNode11	Gulliver (Phobos)	Corpus	Defense
+SettlementNode12	Monolith (Phobos)	Corpus	Rescue
+SettlementNode13	D'Arrest (Phobos)	Corpus	Ancient Retribution
+SettlementNode14	Shklovsky (Phobos)	Corpus	Spy
+SettlementNode15	Sharpless (Phobos)	Corpus	Mobile Defense
+SettlementNode16	Wendell (Phobos)	Corpus	Ancient Retribution
+SettlementNode17	Flimnap (Phobos)	Corpus	Ancient Retribution
+SettlementNode18	Opik (Phobos)	Corpus	Ancient Retribution
+SettlementNode19	Todd (Phobos)	Corpus	Ancient Retribution
+SettlementNode2	Skyresh (Phobos)	Corpus	Capture
+SettlementNode20	Iliad (Phobos)	Corpus	Assassination
+SettlementNode3	Stickney (Phobos)	Corpus	Survival
+SettlementNode4	Drunlo (Phobos)	Corpus	Ancient Retribution
+SettlementNode5	Grildrig (Phobos)	Corpus	Ancient Retribution
+SettlementNode6	Limtoc (Phobos)	Corpus	Ancient Retribution
+SettlementNode7	Hall (Phobos)	Corpus	Ancient Retribution
+SettlementNode8	Reldresal (Phobos)	Corpus	Ancient Retribution
+SettlementNode9	Clustril (Phobos)	Corpus	Ancient Retribution
+SolNode0	SolNode0	Sentient	Ancient Retribution
+SolNode1	Galatea (Neptune)	Corpus	Capture
+SolNode10	Thebe (Jupiter)	Corpus	Sabotage
+SolNode100	Elara (Jupiter)	Corpus	Survival
+SolNode101	Kiliken (Venus)	Corpus	Excavation
+SolNode102	Oceanum (Pluto)	Corpus	Spy
+SolNode103	M Prime (Mercury)	Crossfire	Extermination
+SolNode104	Fossa (Venus)	Corpus	Assassination
+SolNode105	Titania (Uranus)	Grineer	Assassination
+SolNode106	Alator (Mars)	Grineer	Interception
+SolNode107	Venera (Venus)	Corpus	Capture
+SolNode108	Tolstoj (Mercury)	Grineer	Assassination
+SolNode109	Linea (Venus)	Corpus	Rescue
+SolNode11	Tharsis (Mars)	Corpus	Mobile Defense
+SolNode110	Hyperion (Saturn)	Grineer	Ancient Retribution
+SolNode111	Juliet (Uranus)	Grineer	Ancient Retribution
+SolNode112	Setebos (Uranus)	Grineer	Ancient Retribution
+SolNode113	Ares (Mars)	Grineer	Sabotage
+SolNode114	Puck (Uranus)	Grineer	Extermination
+SolNode115	Quirinus (Mars)	Grineer	Ancient Retribution
+SolNode116	Mab (Uranus)	Grineer	Ancient Retribution
+SolNode117	Naiad (Neptune)	Corpus	Ancient Retribution
+SolNode118	Laomedeia (Neptune)	Corpus	Disruption
+SolNode119	Caloris (Mercury)	Grineer	Rescue
+SolNode12	Elion (Mercury)	Grineer	Capture
+SolNode120	Halimede (Neptune)	Corpus	Ancient Retribution
+SolNode121	Carpo (Jupiter)	Corpus	Extermination
+SolNode122	Stephano (Uranus)	Grineer	Defense
+SolNode123	V Prime (Venus)	Corpus	Survival
+SolNode124	Trinculo (Uranus)	Grineer	Ancient Retribution
+SolNode125	Io (Jupiter)	Corpus	Defense
+SolNode126	Metis (Jupiter)	Corpus	Rescue
+SolNode127	Psamathe (Neptune)	Corpus	Assassination
+SolNode128	E Gate (Venus)	Corpus	Extermination
+SolNode129	Orb Vallis (Venus)	Corpus	Free Roam
+SolNode13	Bianca (Uranus)	Grineer	Ancient Retribution
+SolNode130	Lares (Mercury)	Grineer	Defense
+SolNode131	Pallas (Ceres)	Grineer	Extermination
+SolNode132	Bode (Ceres)	Grineer	Spy
+SolNode133	Vedic (Ceres)	Grineer	Ancient Retribution
+SolNode134	Varro (Ceres)	Grineer	Ancient Retribution
+SolNode135	Thon (Ceres)	Grineer	Sabotage
+SolNode136	Olla (Ceres)	Grineer	Ancient Retribution
+SolNode137	Nuovo (Ceres)	Grineer	Rescue
+SolNode138	Ludi (Ceres)	Grineer	Hijack
+SolNode139	Lex (Ceres)	Grineer	Capture
+SolNode14	Ultor (Mars)	Crossfire	Extermination
+SolNode140	Kiste (Ceres)	Grineer	Mobile Defense
+SolNode141	Ker (Ceres)	Grineer	Sabotage
+SolNode142	Hapke (Ceres)	Grineer	Ancient Retribution
+SolNode143	Gefion (Ceres)	Grineer	Ancient Retribution
+SolNode144	Exta (Ceres)	Grineer	Assassination
+SolNode145	Egeria (Ceres)	Grineer	Ancient Retribution
+SolNode146	Draco (Ceres)	Grineer	Survival
+SolNode147	Cinxia (Ceres)	Grineer	Interception
+SolNode148	Cerium (Ceres)		
+SolNode149	Casta (Ceres)	Grineer	Defense
+SolNode15	Pacific (Earth)	Grineer	Rescue
+SolNode150	Albedo (Ceres)	Grineer	Ancient Retribution
+SolNode151	Acanth (Eris)	Infested	Ancient Retribution
+SolNode152	Ascar (Eris)	Infested	Ancient Retribution
+SolNode153	Brugia (Eris)	Infested	Rescue
+SolNode154	Candiru (Eris)	Infested	Ancient Retribution
+SolNode155	Cosis (Eris)	Infested	Ancient Retribution
+SolNode156	Cyath (Eris)	Infested	Ancient Retribution
+SolNode157	Giardia (Eris)	Infested	Ancient Retribution
+SolNode158	Gnathos (Eris)	Infested	Ancient Retribution
+SolNode159	Lepis (Eris)	Infested	Ancient Retribution
+SolNode16	Augustus (Mars)	Grineer	Excavation
+SolNode160	Histo (Eris)	Infested	Ancient Retribution
+SolNode161	Hymeno (Eris)	Infested	Ancient Retribution
+SolNode162	Isos (Eris)	Infested	Capture
+SolNode163	Ixodes (Eris)		
+SolNode164	Kala-azar (Eris)	Infested	Defense
+SolNode165	Sporid (Eris)	Infested	Hive Sabotage
+SolNode166	Nimus (Eris)	Infested	Survival
+SolNode167	Oestrus (Eris)	Infested	Infested Salvage
+SolNode168	Phalan (Eris)	Infested	Ancient Retribution
+SolNode169	Psoro (Eris)	Infested	Ancient Retribution
+SolNode17	Proteus (Neptune)	Corpus	Defense
+SolNode170	Ranova (Eris)	Infested	Ancient Retribution
+SolNode171	Saxis (Eris)	Infested	Extermination
+SolNode172	Xini (Eris)	Infested	Interception
+SolNode173	Solium (Eris)	Infested	Mobile Defense
+SolNode174	Sparga (Eris)	Infested	Ancient Retribution
+SolNode175	Naeglar (Eris)	Infested	Hive
+SolNode176	Viver (Eris)	Infested	Ancient Retribution
+SolNode177	Kappa (Sedna)	Grineer	Disruption
+SolNode178	Hyosube (Sedna)	Grineer	Ancient Retribution
+SolNode179	Jengu (Sedna)	Grineer	Ancient Retribution
+SolNode18	Rhea (Saturn)	Grineer	Interception
+SolNode180	Undine (Sedna)	Grineer	Ancient Retribution
+SolNode181	Adaro (Sedna)	Grineer	Extermination
+SolNode182	Camenae (Sedna)	Grineer	Ancient Retribution
+SolNode183	Vodyanoi (Sedna)	Grineer	Arena
+SolNode184	Rusalka (Sedna)	Grineer	Sabotage
+SolNode185	Berehynia (Sedna)	Grineer	Interception
+SolNode186	Phithale (Sedna)	Grineer	Sabotage
+SolNode187	Selkie (Sedna)	Grineer	Survival
+SolNode188	Kelpie (Sedna)	Grineer	Spy
+SolNode189	Naga (Sedna)	Grineer	Rescue
+SolNode19	Enceladus (Saturn)	Grineer	Sabotage
+SolNode190	Nakki (Sedna)	Grineer	Arena
+SolNode191	Marid (Sedna)	Grineer	Hijack
+SolNode192	Tikoloshe (Sedna)	Grineer	Spy
+SolNode193	Merrow (Sedna)	Grineer	Assassination
+SolNode194	Ponaturi (Sedna)	Grineer	Ancient Retribution
+SolNode195	Hydron (Sedna)	Grineer	Defense
+SolNode196	Charybdis (Sedna)	Grineer	Mobile Defense
+SolNode197	Graeae (Sedna)	Grineer	Ancient Retribution
+SolNode198	Scylla (Sedna)	Grineer	Ancient Retribution
+SolNode199	Yam (Sedna)	Grineer	Arena
+SolNode2	Aphrodite (Venus)	Corpus	Mobile Defense
+SolNode20	Telesto (Saturn)	Grineer	Extermination
+SolNode200	Veles (Sedna)	Grineer	Ancient Retribution
+SolNode201	Tiamat (Sedna)	Grineer	Ancient Retribution
+SolNode202	Yemaja (Sedna)	Grineer	Ancient Retribution
+SolNode203	Abaddon (Europa)	Corpus	Capture
+SolNode204	Armaros (Europa)	Corpus	Extermination
+SolNode205	Baal (Europa)	Corpus	Extermination
+SolNode206	Eligor (Europa)		
+SolNode207	Gamygyn (Europa)	Corpus	Ancient Retribution
+SolNode208	Lillith (Europa)	Corpus	Ancient Retribution
+SolNode209	Morax (Europa)	Corpus	Mobile Defense
+SolNode21	Narcissus (Pluto)	Corpus	Extermination
+SolNode210	Naamah (Europa)	Corpus	Assassination
+SolNode211	Ose (Europa)	Corpus	Interception
+SolNode212	Paimon (Europa)	Corpus	Defense
+SolNode213	Shax (Europa)		
+SolNode214	Sorath (Europa)	Corpus	Hijack
+SolNode215	Valac (Europa)	Corpus	Spy
+SolNode216	Valefor (Europa)	Corpus	Excavation
+SolNode217	Orias (Europa)	Corpus	Rescue
+SolNode218	Zagan (Europa)	Corpus	Ancient Retribution
+SolNode219	Beleth (Europa)	Corpus	Ancient Retribution
+SolNode22	Tessera (Venus)	Corpus	Defense
+SolNode220	Kokabiel (Europa)	Corpus	Sabotage
+SolNode221	Neruda (Mercury)	Grineer	Ancient Retribution
+SolNode222	Eminescu (Mercury)	Grineer	Ancient Retribution
+SolNode223	Boethius (Mercury)	Grineer	Mobile Defense
+SolNode224	Odin (Mercury)	Grineer	Interception
+SolNode225	Suisei (Mercury)	Grineer	Spy
+SolNode226	Pantheon (Mercury)	Grineer	Extermination
+SolNode227	Verdi (Mercury)		
+SolNode228	Plains of Eidolon (Earth)	Grineer	Free Roam
+SolNode229	Cambion Drift (Deimos)	Infested	Free Roam
+SolNode23	Cytherean (Venus)	Corpus	Interception
+SolNode230	Everview Arc (Zariman)	Crossfire	Void Flood
+SolNode231	Halako Perimeter (Zariman)	Crossfire	Extermination
+SolNode232	Tuvul Commons (Zariman)	Crossfire	Void Cascade
+SolNode233	Oro Works (Zariman)	Crossfire	Void Armageddon
+SolNode234	Dormizone (Zariman)	Tenno	Relay
+SolNode235	The Greenway (Zariman)	Crossfire	Mobile Defense
+SolNode236	The Duviri Experience (Duviri)	Duviri	Free Roam
+SolNode237	The Lone Story (Duviri)	Duviri	Free Roam
+SolNode238	The Circuit (Duviri)	Duviri	Free Roam
+SolNode239	Vesper Relay (Venus)	Corpus	Relay
+SolNode24	Oro (Earth)	Grineer	Assassination
+SolNode25	Callisto (Jupiter)	Corpus	Interception
+SolNode251	Dark Refactory (Deimos)	Anarch	The Perita Rebellion
+SolNode26	Lith (Earth)	Grineer	Defense
+SolNode27	E Prime (Earth)	Grineer	Extermination
+SolNode28	Terminus (Mercury)	Crossfire	Sabotage
+SolNode29	Oberon (Uranus)	Grineer	Ancient Retribution
+SolNode3	Cordelia (Uranus)	Sentient	Ancient Retribution
+SolNode30	Olympus (Mars)	Grineer	Disruption
+SolNode300	Plato (Lua)	Crossfire	Extermination
+SolNode301	Grimaldi (Lua)	Grineer	Mobile Defense
+SolNode302	Tycho (Lua)	Corpus	Survival
+SolNode304	Copernicus (Lua)	Corpus	Capture
+SolNode305	Stöfler (Lua)	Grineer	Defense
+SolNode306	Pavlov (Lua)	Crossfire	Spy
+SolNode307	Zeipel (Lua)	Corpus	Rescue
+SolNode308	Apollo (Lua)	Corpus	Disruption
+SolNode309	Yuvarium (Lua)	Orokin	Survival
+SolNode31	Anthe (Saturn)	Grineer	Rescue
+SolNode310	Circulus (Lua)	Grineer	Survival
+SolNode32	Tethys (Saturn)	Grineer	Assassination
+SolNode33	Ariel (Uranus)	Grineer	Capture
+SolNode34	Sycorax (Uranus)	Grineer	Extermination
+SolNode35	Arcadia (Mars)	Grineer	Ancient Retribution
+SolNode36	Martialis (Mars)	Grineer	Rescue
+SolNode37	Pallene (Saturn)	Grineer	Ancient Retribution
+SolNode38	Minthe (Pluto)	Corpus	Mobile Defense
+SolNode39	Everest (Earth)	Grineer	Excavation
+SolNode4	Acheron (Pluto)	Corpus	Extermination
+SolNode40	Prospero (Uranus)	Grineer	Ancient Retribution
+SolNode400	Teshub (Void)	Orokin	Extermination
+SolNode401	Hepit (Void)	Orokin	Capture
+SolNode402	Taranis (Void)	Orokin	Defense
+SolNode403	Tiwaz (Void)	Orokin	Mobile Defense
+SolNode404	Stribog (Void)	Orokin	Orokin Sabotage
+SolNode405	Ani (Void)	Orokin	Survival
+SolNode406	Ukko (Void)	Orokin	Capture
+SolNode407	Oxomoco (Void)	Orokin	Extermination
+SolNode408	Belenus (Void)	Orokin	Defense
+SolNode409	Mot (Void)	Orokin	Survival
+SolNode41	Arval (Mars)	Grineer	Spy
+SolNode410	Aten (Void)	Orokin	Mobile Defense
+SolNode411	Marduk (Void)	Orokin	Sabotage
+SolNode412	Mithra (Void)	Orokin	Interception
+SolNode413	SolNode413 (Void)	Corrupted	Ancient Retribution
+SolNode42	Helene (Saturn)	Grineer	Defense
+SolNode43	Cerberus (Pluto)	Corpus	Interception
+SolNode44	Mimas (Saturn)	Grineer	Ancient Retribution
+SolNode45	Ara (Mars)	Grineer	Capture
+SolNode450	Tyana Pass (Mars)	Crossfire	Mirror Defense
+SolNode46	Spear (Mars)	Grineer	Defense
+SolNode47	Janus (Saturn)	Grineer	Ancient Retribution
+SolNode48	Regna (Pluto)	Corpus	Rescue
+SolNode49	Larissa (Neptune)	Corpus	Mobile Defense
+SolNode5	Perdita (Uranus)	Grineer	Ancient Retribution
+SolNode50	Numa (Saturn)	Grineer	Rescue
+SolNode51	Hades (Pluto)	Corpus	Assassination
+SolNode52	Portia (Uranus)	Grineer	Ancient Retribution
+SolNode53	Themisto (Jupiter)	Corpus	Assassination
+SolNode54	Silvanus (Mars)	Grineer	Ancient Retribution
+SolNode55	Methone (Saturn)	Grineer	Ancient Retribution
+SolNode56	Cypress (Pluto)	Corpus	Sabotage
+SolNode57	Sao (Neptune)	Corpus	Sabotage
+SolNode58	Hellas (Mars)	Grineer	Extermination
+SolNode59	Eurasia (Earth)	Grineer	Mobile Defense
+SolNode6	Despina (Neptune)	Corpus	Excavation
+SolNode60	Caliban (Uranus)	Grineer	Rescue
+SolNode61	Ishtar (Venus)	Corpus	Sabotage
+SolNode62	Neso (Neptune)	Corpus	Extermination
+SolNode63	Mantle (Earth)	Grineer	Capture
+SolNode64	Umbriel (Uranus)	Grineer	Interception
+SolNode65	Gradivus (Mars)	Corpus	Sabotage
+SolNode66	Unda (Venus)	Corpus	Spy
+SolNode67	Dione (Saturn)	Grineer	Spy
+SolNode68	Vallis (Mars)	Grineer	Mobile Defense
+SolNode69	Ophelia (Uranus)	Grineer	Survival
+SolNode7	Epimetheus (Saturn)	Grineer	Ancient Retribution
+SolNode70	Cassini (Saturn)	Grineer	Capture
+SolNode706	Horend (Deimos)	Infested	Capture
+SolNode707	Hyf (Deimos)	Infested	Defense
+SolNode708	Phlegyas (Deimos)	Infested	Extermination
+SolNode709	Dirus (Deimos)	Infested	Mobile Defense
+SolNode71	Vesper (Venus)	Corpus	Spy
+SolNode710	Formido (Deimos)	Infested	Sabotage
+SolNode711	Terrorem (Deimos)	Infested	Survival
+SolNode712	Magnacidium (Deimos)	Infested	Assassination
+SolNode713	Exequias (Deimos)	Infested	Assassination
+SolNode714	Sanctum Anatomica (Deimos)	Tenno	Relay
+SolNode715	Effervo (Deimos)	The Murmur	Assassination
+SolNode716	Nex (Deimos)	The Murmur	Extermination
+SolNode717	Persto (Deimos)	The Murmur	Survival
+SolNode718	Cambire (Deimos)	The Murmur	Alchemy
+SolNode719	Munio (Deimos)	The Murmur	Mirror Defense
+SolNode72	Outer Terminus (Pluto)	Corpus	Defense
+SolNode720	Testudo (Deimos)	The Murmur	Netracells
+SolNode721	Armatus (Deimos)	The Murmur	Disruption
+SolNode723	Brutus (Uranus)	Corpus	Ascension
+SolNode73	Ananke (Jupiter)	Corpus	Capture
+SolNode74	Carme (Jupiter)	Corpus	Mobile Defense
+SolNode740	The Ropalolyst (Jupiter)	Sentient	Assassination
+SolNode741	Koro (Kuva Fortress)	Grineer	Assault
+SolNode742	Nabuk (Kuva Fortress)	Grineer	Defense
+SolNode743	Rotuma (Kuva Fortress)	Grineer	Mobile Defense
+SolNode744	Taveuni (Kuva Fortress)	Grineer	Survival
+SolNode745	Tamu (Kuva Fortress)	Grineer	Disruption
+SolNode746	Dakata (Kuva Fortress)	Grineer	Extermination
+SolNode747	Pago (Kuva Fortress)	Grineer	Spy
+SolNode748	Garus (Kuva Fortress)	Grineer	Rescue
+SolNode75	Cervantes (Earth)	Grineer	Sabotage
+SolNode76	Hydra (Pluto)	Corpus	Capture
+SolNode77	Cupid (Uranus)	Grineer	Ancient Retribution
+SolNode78	Triton (Neptune)	Corpus	Rescue
+SolNode79	Cambria (Earth)	Grineer	Spy
+SolNode8	Nix (Pluto)	Corpus	Ancient Retribution
+SolNode80	Phoebe (Saturn)	Grineer	Ancient Retribution
+SolNode81	Palus (Pluto)	Corpus	Survival
+SolNode82	Calypso (Saturn)	Grineer	Sabotage
+SolNode83	Cressida (Uranus)	Grineer	Mobile Defense
+SolNode84	Nereid (Neptune)	Corpus	Spy
+SolNode85	Gaia (Earth)	Grineer	Interception
+SolNode86	Aegaeon (Saturn)	Grineer	Ancient Retribution
+SolNode87	Ganymede (Jupiter)	Corpus	Disruption
+SolNode88	Adrastea (Jupiter)	Corpus	Sabotage
+SolNode89	Mariana (Earth)	Grineer	Extermination
+SolNode9	Rosalind (Uranus)	Grineer	Spy
+SolNode90	Miranda	Sentient	Ancient Retribution
+SolNode901	Caduceus	Sentient	Ancient Retribution
+SolNode902	Montes (Venus)	Corpus	Extermination (Archwing)
+SolNode903	Erpo (Earth)	Grineer	Mobile Defense (Archwing)
+SolNode904	Syrtis (Mars)	Grineer	Extermination (Archwing)
+SolNode905	Galilea (Jupiter)	Corpus	Sabotage (Archwing)
+SolNode906	Pandora (Saturn)	Grineer	Pursuit (Archwing)
+SolNode907	Caelus (Uranus)	Grineer	Interception (Archwing)
+SolNode908	Salacia (Neptune)	Corpus	Mobile Defense (Archwing)
+SolNode91	Iapetus (Saturn)	Grineer	Ancient Retribution
+SolNode92	Charon (Pluto)	Corpus	Ancient Retribution
+SolNode93	Keeler (Saturn)	Grineer	Mobile Defense
+SolNode94	Apollodorus (Mercury)	Infested	Survival
+SolNode95	Thalassa (Neptune)	Corpus	Ancient Retribution
+SolNode96	Titan (Saturn)	Grineer	Survival
+SolNode97	Amalthea (Jupiter)	Corpus	Spy
+SolNode98	Desdemona (Uranus)	Grineer	Sabotage (Archwing)
+SolNode99	War (Mars)	Grineer	Assassination
+SolarisUnitedHub1	Fortuna (Venus)	Corpus	Relay
+TradeHUB1	Maroo's Bazaar (Mars)	Corpus	Relay
+VenusHUB	Vesper Relay (Venus)	Corpus	Relay
+ZarimanHub	Chrysalith (Zariman)	Tenno	Relay

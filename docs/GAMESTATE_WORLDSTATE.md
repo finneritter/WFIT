@@ -35,7 +35,28 @@ fetch error) + the **Rotation** screen (`src/routes/Rotation.tsx`). Two gotchas 
   have"). The Rotation screen groups them; the per-tier summary excludes Railjack storms; the Omnia
   "⚡ Void Cascade" callout is tagged with its mode so it points to the right group.
 
-Live freshness can be checked with the `worldstate::tests::ws_probe` `#[ignore]` test (prints source lag).
+- **Fissures are now sourced from DE's raw worldstate, cross-checked against warframestat
+  (2026-06-03).** Even with the cache-buster, warframestat's *origin ingest* lags real time by ~3–13
+  min — observed as the Rotation page being "really out of sync" (e.g. 26 listed fissures vs DE's
+  actual 32). `worldstate/raw.rs` fetches `https://api.warframe.com/cdn/worldState.php` (the old
+  `content.warframe.com/dynamic` host now 301s there; DE serves `Cache-Control: max-age=43`, which we
+  respect — no buster needed) and parses ONLY `ActiveMissions` (+ the `Hard` flag) and `VoidStorms`.
+  Decoding uses two bundled maps so display strings stay identical to the wrapper's: a hardcoded
+  `MT_*` table and `worldstate/data/sol_nodes.tsv`, regenerated with:
+  `curl -s https://raw.githubusercontent.com/WFCD/warframe-worldstate-data/master/data/solNodes.json | jq -r 'to_entries|sort_by(.key)[]|[.key,(.value.value//.key),(.value.enemy//""),(.value.type//"")]|@tsv'`
+  Per refresh both sources are fetched concurrently; **DE wins for fissures**
+  (`Worldstate.fissure_source: "de"`), warframestat still provides cycles/Baro and is the fissure
+  fallback; disagreements are logged (`cross_check`). Unknown node/mission IDs degrade to the raw ID
+  (new content stays visible) — refresh the tsv when that shows up. Dates are Mongo-export style
+  (`{"$date":{"$numberLong":"<ms>"}}`); Void Storm mission types live on the *node* (sol_nodes `type`
+  column), not the storm entry.
+- **A backend `spawn_refresher` re-confirms every 3 min** (and `useWorldstate` sets
+  `refetchIntervalInBackground: true`): the frontend's 45s poll pauses whenever WebKitGTK throttles a
+  hidden/unfocused window — exactly the "Rotation open on a second monitor while playing" case that
+  made the page silently freeze mid-session.
+
+Live freshness can be checked with the `worldstate::tests::ws_probe` `#[ignore]` test (prints source
+lag + fissure source) and `worldstate::raw::tests::de_probe` (DE raw lag + decoded sample).
 
 ---
 
@@ -43,8 +64,8 @@ Live freshness can be checked with the `worldstate::tests::ws_probe` `#[ignore]`
 
 | Option | Endpoint | Shape | Verdict |
 |---|---|---|---|
-| **Raw DE worldstate** | `https://content.warframe.com/dynamic/worldState.php` (and newer `https://api.warframe.com/cdn/worldState.php`) | Dense, **undocumented**, internal-ID JSON; changes without notice | **Avoid parsing directly.** |
-| **Parsed wrapper (WarframeStatus)** | `https://api.warframestat.us/pc/...` (docs: `docs.warframestat.us`) | Clean, decoded JSON (tier/mission/node/expiry already resolved) | **Use this.** |
+| **Raw DE worldstate** | `https://content.warframe.com/dynamic/worldState.php` (now 301s to `https://api.warframe.com/cdn/worldState.php`) | Dense, **undocumented**, internal-ID JSON; changes without notice | ~~Avoid parsing directly~~ **Revised 2026-06-03: minimally parsed for fissures only** (see implementation notes) — the wrapper's origin lag made fissures inaccurate. |
+| **Parsed wrapper (WarframeStatus)** | `https://api.warframestat.us/pc/...` (docs: `docs.warframestat.us`) | Clean, decoded JSON (tier/mission/node/expiry already resolved) | **Use this** for cycles/Baro + as the fissure fallback. |
 
 The raw endpoint feeds the official Warframe Companion app, so it's "public," but it's a cryptic blob:
 fissures are buried in `ActiveMissions` with internal mission/region/tier IDs you'd have to map yourself,
@@ -126,10 +147,11 @@ follow-up** — the v1 fissure panel ("here's what's live, with timers") stands 
 
 ## 6. One-line summary for future sessions
 
-> Optional **second** data source (separate from warframe.market) for live game-state. Get fissures from
-> the **parsed wrapper** `GET https://api.warframestat.us/pc/fissures` — **not** DE's raw, undocumented
-> `worldState.php` (host recently moved `content.warframe.com/dynamic/` → `api.warframe.com/cdn/`; cross-play
-> = one shared worldstate). Decoded fields: `tier`, `missionType`, `node`, `expiry`, `isHard`, `isStorm`.
-> Lives in its own `worldstate.rs` + short-TTL (~30–60 s) in-memory cache, exposed via `get_active_fissures()`;
-> never touches `catalog_items`/`price_cache`. A "farmable now" relic→part view is a v2+ follow-up needing a
-> third (drop-table) dataset. Read-only, no auth, optional, app works fully without it.
+> Optional **second** data source (separate from warframe.market) for live game-state. **Fissures come
+> from DE's raw `api.warframe.com/cdn/worldState.php`** (authoritative, ≤43s CDN staleness; minimally
+> parsed in `worldstate/raw.rs`, decoded via bundled WFCD maps), cross-checked against and falling back
+> to the **parsed wrapper** `api.warframestat.us/pc/` — which still provides cycles/Baro (its origin
+> ingest lags minutes; cross-play = one shared worldstate). Lives in its own `worldstate/` module +
+> short-TTL (45 s) in-memory cache + a 3-min backend refresher; never touches
+> `catalog_items`/`price_cache`. A "farmable now" relic→part view is a v2+ follow-up needing a third
+> (drop-table) dataset. Read-only, no auth, optional, app works fully without it.

@@ -58,6 +58,10 @@ pub fn run() {
             });
             app.manage(state.clone());
 
+            // Keep the worldstate cache confirmed-fresh every ~3min — the
+            // Rotation screen's own poll stops when the window is backgrounded.
+            state.worldstate.spawn_refresher();
+
             // Kick off catalog/price warm-up off the UI thread; never block launch.
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = launch_refresh(state).await {

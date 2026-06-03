@@ -362,4 +362,7 @@ export interface Worldstate {
   baro: Baro | null;
   fetched_at: string;
   source_timestamp: string | null; // warframestat.us snapshot time; null if absent
+  // "de" = fissures cross-checked against DE's raw worldstate (the normal,
+  // authoritative case); "warframestat" = wrapper-only fallback (DE unreachable).
+  fissure_source: "de" | "warframestat";
 }

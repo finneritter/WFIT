@@ -112,6 +112,16 @@ the rarity exclusion** (affects value, not the raw owned-count). Applied in `own
 - **Omnia "⚡ Void Cascade" callout** is restored and **group-aware** ("· Steel Path" / "· Normal"),
   pointing to the group where the fissure row actually appears. Box + list both derive from the same
   data, so they agree.
+- **Fissures are now DE-verified (2026-06-03):** `worldstate/raw.rs` fetches DE's raw
+  `api.warframe.com/cdn/worldState.php` (authoritative, ≤43s CDN staleness) concurrently with
+  warframestat each refresh; **DE wins for fissures** (`Worldstate.fissure_source: "de"`), warframestat
+  still feeds cycles/Baro and is the fissure fallback; disagreements are logged (`cross_check`). Decoding
+  uses bundled `worldstate/data/sol_nodes.tsv` + a hardcoded `MT_*` map (both from WFCD
+  warframe-worldstate-data — the same data warframestat decodes with, so display strings are identical).
+  A backend `spawn_refresher` re-confirms every 3 min even while the webview throttles timers
+  (hidden/unfocused window — the original "Rotation froze mid-session" bug), and `useWorldstate` sets
+  `refetchIntervalInBackground: true`. UI shows "as of HH:MM · DE-verified". Probe:
+  `worldstate::raw::tests::de_probe`.
 
 ---
 
@@ -127,7 +137,8 @@ the rarity exclusion** (affects value, not the raw owned-count). Applied in `own
   per-category + rarity exclusion) → `Summary`/`InventoryRow`/`ItemDetail`.
 - **Reference data (bundled, no DB table):** `domain/mod_rarity.rs` (mod rarity),
   `domain/arcane.rs` (arcane collection/rarity/vosfor). Pattern: `include_str!` a `.tsv`, `Lazy` map.
-- **Modules** (`src-tauri/src/`): `market.rs`, `worldstate.rs`, `wfm_account.rs`, `gamescan/`, `domain/`
+- **Modules** (`src-tauri/src/`): `market.rs`, `worldstate/` (`mod.rs` + `raw.rs` DE cross-check),
+  `wfm_account.rs`, `gamescan/`, `domain/`
   (`classify`/`partname`/`mod_rarity`/`arcane`), `db/` (per-table incl. `arcanes.rs`), `commands.rs`,
   `lib.rs`.
 
@@ -149,8 +160,9 @@ the rarity exclusion** (affects value, not the raw owned-count). Applied in `own
 - Arcane EV uses **rank-0 (unranked) prices** (what collections actually grant) — not the maxed value.
   A "potential maxed value" column is an easy add if wanted. The Cavia drop-pool vs intrinsic-rarity
   quirk (Melee Fortification/Retaliation) is noted in `db/arcanes.rs`/the dataset.
-- World-state residual ~7min lag is warframestat's own cadence; a fresher/second source would need a
-  different provider (DE raw worldstate is deliberately avoided).
+- ~~World-state residual ~7min lag~~ resolved 2026-06-03: fissures now come from DE's raw worldstate
+  (≤43s stale); only the cycle bar/Baro still ride warframestat's cadence (they're deterministic
+  timers, so lag there is mostly harmless).
 - Per-category/rarity exclusion affects portfolio **value**, not the "Parts" count stat (matches the
   existing rarity-exclusion behavior).
 - Pass B set composition still uses the `set_slug` heuristic; game-scan is manual + Linux-only; Listings

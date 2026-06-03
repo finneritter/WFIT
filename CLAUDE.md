@@ -25,9 +25,12 @@ cheap-item exclusion. The app now has **11 screens** (Arcanes added beyond the 9
   module layout, command surface, build order, locked decisions). Start here — it's the build roadmap.
 - **`docs/DATA_SOURCING_MASTER_PLAN.md`** — the warframe.market data contract (3 endpoints, verified
   field facts, the catalog two-pass strategy). All prices/catalog come from here.
-- **`docs/GAMESTATE_WORLDSTATE.md`** — the Rotation screen's source (`api.warframestat.us`, optional
-  second source, isolated + read-only). NB: fetch the canonical `/pc/` with a cache-buster query param
-  (Cloudflare serves stale otherwise); fissures are grouped Normal / Steel Path / Void Storm.
+- **`docs/GAMESTATE_WORLDSTATE.md`** — the Rotation screen's sources (isolated + read-only).
+  **Fissures = DE's raw `api.warframe.com/cdn/worldState.php`** (authoritative; minimally parsed in
+  `worldstate/raw.rs`, decoded via the bundled `sol_nodes.tsv` + `MT_*` maps), cross-checked against /
+  falling back to `api.warframestat.us` (which still feeds cycles/Baro — fetch the canonical `/pc/`
+  with a cache-buster; its origin lags minutes). A 3-min backend refresher keeps it fresh even while
+  the webview throttles. Fissures are grouped Normal / Steel Path / Void Storm.
 - **`docs/ARCANE_DISSOLUTION.md`** — the Arcanes screen's domain reference (Loid Vosfor collections,
   drop tables, per-arcane Vosfor, the collection-EV + keep/dissolve methodology). Bundled dataset.
 - **`docs/PERF_OPTIMIZATION.md`** — the backend perf pass (read pool, batched valuation, pragmas).

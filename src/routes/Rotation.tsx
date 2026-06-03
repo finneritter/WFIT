@@ -131,21 +131,34 @@ export function Rotation() {
       </div>
     );
 
-  // The source occasionally serves a frozen snapshot; when its own timestamp lags
-  // real time, every fissure/cycle reads as expired. Flag it so the empty page
-  // doesn't look like a WFIT bug. 15 min tolerates normal update lag.
+  // Fissures normally come from DE's raw worldstate (authoritative, ≤~43s old);
+  // warframestat only feeds the cycle bar + Baro, and is the fissure fallback.
+  const deVerified = ws.fissure_source === "de";
+
+  // warframestat occasionally serves a frozen snapshot; when its own timestamp
+  // lags real time, whatever still depends on it reads as expired. Flag it so
+  // that doesn't look like a WFIT bug. 15 min tolerates normal update lag.
   const sourceAgeMs = ws.source_timestamp ? -msUntil(ws.source_timestamp) : 0;
   const staleMins = Math.floor(sourceAgeMs / 60000);
   const sourceStale = staleMins >= 15;
+  const staleFor = staleMins >= 120 ? `${Math.floor(staleMins / 60)}h` : `${staleMins}m`;
 
   return (
     <>
       {sourceStale ? (
         <div className="ws-stale">
-          ⚠ warframe.market's world-state source (api.warframestat.us) is lagging — its data is{" "}
-          {staleMins >= 120 ? `${Math.floor(staleMins / 60)}h` : `${staleMins}m`} old, so fissures
-          and cycles below may read as expired. This clears itself once the source catches up; WFIT
-          is fine.
+          {deVerified ? (
+            <>
+              ⚠ api.warframestat.us is lagging ({staleFor} old), so the cycle bar and Baro may be
+              off. Fissures are unaffected — they're verified against DE's worldstate directly.
+            </>
+          ) : (
+            <>
+              ⚠ Both world-state sources are degraded — api.warframestat.us is {staleFor} old and
+              DE's worldstate is unreachable, so fissures and cycles below may read as expired. This
+              clears itself once a source recovers; WFIT is fine.
+            </>
+          )}
         </div>
       ) : null}
       <div className="cyclebar">
@@ -187,7 +200,11 @@ export function Rotation() {
       <div className="tpanel" style={{ marginBottom: 12 }}>
         <div className="tpanel-h">
           <h3>Void Fissures</h3>
-          <span className="meta">{fissures.length} active</span>
+          <span className="meta">
+            {fissures.length} active · as of{" "}
+            {new Date(ws.fetched_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {deVerified ? " · DE-verified" : " · unverified (DE unreachable)"}
+          </span>
         </div>
         <div className="filters" style={{ padding: "8px 12px", marginBottom: 0 }}>
           {TIERS.map((t) => (

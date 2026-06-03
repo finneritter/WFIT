@@ -98,7 +98,15 @@ export const useItemOrders = (slug: string | null) =>
     staleTime: 60_000,
   });
 export const useWorldstate = () =>
-  useQuery({ queryKey: keys.worldstate, queryFn: api.getWorldstate, refetchInterval: 45_000 });
+  useQuery({
+    queryKey: keys.worldstate,
+    queryFn: api.getWorldstate,
+    refetchInterval: 45_000,
+    // Rotation is a companion screen — usually visible on a second monitor
+    // while the game holds focus. Default React Query behavior pauses interval
+    // refetching for unfocused windows, which froze this page mid-session.
+    refetchIntervalInBackground: true,
+  });
 // Poll fast while a refresh is in flight, slow otherwise (to notice it starting).
 export const usePricingProgress = () =>
   useQuery({
@@ -373,8 +381,10 @@ export function useWfmApplyImport() {
 }
 
 // ---- game inventory import (memory-scan) ----
+// Polled: it's a cheap local check (consent flag + process detect), and the
+// always-mounted topbar SyncNow button needs `warframe_running` to stay live.
 export const useGameScanStatus = () =>
-  useQuery({ queryKey: keys.gameScan, queryFn: api.gameScanStatus });
+  useQuery({ queryKey: keys.gameScan, queryFn: api.gameScanStatus, refetchInterval: 15_000 });
 
 export function useGameScanConsent() {
   const qc = useQueryClient();
