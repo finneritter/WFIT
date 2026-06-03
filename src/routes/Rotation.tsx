@@ -99,10 +99,10 @@ export function Rotation() {
     [fissures],
   );
 
-  // Per-tier refresh summary: count + how soon each tier next rotates. The mission
-  // types (which Omnia mission, Steel Path vs not) live in the grouped list below —
-  // the single source of truth — so this stays a simple timing glance. Hover for the
-  // current missions. Excludes Railjack storms.
+  // Per-tier refresh summary: count + next rotation. The Omnia card surfaces the
+  // current Zariman/Lua mission and flags Void Cascade when it's up — the same
+  // fissure also appears as a row in the grouped list below (in its Normal/Steel
+  // Path group). Excludes Railjack storms.
   const typeSummary = useMemo(() => {
     const live = (ws?.fissures ?? []).filter((f) => msUntil(f.expiry) > 0 && !f.is_storm);
     return FISSURE_TIERS.map((t) => {
@@ -110,11 +110,15 @@ export function Rotation() {
         .filter((f) => f.tier.toLowerCase() === t.toLowerCase())
         .sort((a, b) => msUntil(a.expiry) - msUntil(b.expiry));
       const missions = [...new Set(of.map((f) => f.mission_type))];
+      const cascade = of.find((f) => /cascade/i.test(f.mission_type));
       return {
         tier: t,
         count: of.length,
         nextExpiry: of[0]?.expiry ?? null,
         missions,
+        cascade: cascade
+          ? { steel: cascade.is_hard, node: cascade.node, expiry: cascade.expiry }
+          : null,
       };
     });
   }, [ws]);
@@ -160,7 +164,7 @@ export function Rotation() {
         {typeSummary.map((s) => (
           <div
             key={s.tier}
-            className={clsx("ftype", s.tier === "Omnia" && "omnia")}
+            className={clsx("ftype", s.tier === "Omnia" && "omnia", s.cascade && "cascade")}
             title={s.missions.length ? s.missions.join(" · ") : undefined}
           >
             <div className="ft-h">
@@ -168,7 +172,14 @@ export function Rotation() {
               <span className="ft-n num">{s.count}</span>
             </div>
             <div className="ft-timer num">{s.count ? <Countdown iso={s.nextExpiry} /> : "—"}</div>
-            <div className="ft-sub">{s.count ? "next refresh" : "none up"}</div>
+            {s.cascade ? (
+              <div className="ft-missions">
+                <b>⚡ Void Cascade</b>
+                <span className="ft-grp">{s.cascade.steel ? "Steel Path" : "Normal"}</span>
+              </div>
+            ) : (
+              <div className="ft-sub">{s.count ? "next refresh" : "none up"}</div>
+            )}
           </div>
         ))}
       </div>
