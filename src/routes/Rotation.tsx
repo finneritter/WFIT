@@ -99,8 +99,10 @@ export function Rotation() {
     [fissures],
   );
 
-  // Per-tier refresh summary: how soon each fissure type next rotates, plus the
-  // mission types currently up (the point of Omnia). Excludes Railjack storms.
+  // Per-tier refresh summary: count + how soon each tier next rotates. The mission
+  // types (which Omnia mission, Steel Path vs not) live in the grouped list below —
+  // the single source of truth — so this stays a simple timing glance. Hover for the
+  // current missions. Excludes Railjack storms.
   const typeSummary = useMemo(() => {
     const live = (ws?.fissures ?? []).filter((f) => msUntil(f.expiry) > 0 && !f.is_storm);
     return FISSURE_TIERS.map((t) => {
@@ -113,7 +115,6 @@ export function Rotation() {
         count: of.length,
         nextExpiry: of[0]?.expiry ?? null,
         missions,
-        cascade: of.some((f) => /cascade/i.test(f.mission_type)),
       };
     });
   }, [ws]);
@@ -159,21 +160,15 @@ export function Rotation() {
         {typeSummary.map((s) => (
           <div
             key={s.tier}
-            className={clsx("ftype", s.tier === "Omnia" && "omnia", s.cascade && "cascade")}
-            title={s.missions.join(" · ")}
+            className={clsx("ftype", s.tier === "Omnia" && "omnia")}
+            title={s.missions.length ? s.missions.join(" · ") : undefined}
           >
             <div className="ft-h">
               <span className="ft-name">{s.tier}</span>
               <span className="ft-n num">{s.count}</span>
             </div>
             <div className="ft-timer num">{s.count ? <Countdown iso={s.nextExpiry} /> : "—"}</div>
-            {s.tier === "Omnia" && s.count ? (
-              <div className="ft-missions">
-                {s.cascade ? <b>⚡ Void Cascade</b> : (s.missions[0] ?? "—")}
-              </div>
-            ) : (
-              <div className="ft-sub">{s.count ? "next refresh" : "none up"}</div>
-            )}
+            <div className="ft-sub">{s.count ? "next refresh" : "none up"}</div>
           </div>
         ))}
       </div>
