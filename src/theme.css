@@ -823,5 +823,14 @@ code { font-family: var(--mono); font-size: 11px; color: var(--ink); background:
 .ftable th:nth-child(4) { width: 110px; }
 .ftable td { overflow: hidden; text-overflow: ellipsis; }
 
+/* Inventory list view: each category section is its own <table>, so pin the
+   numeric columns (7d/Qty/Unit/Stack) or they drift out of line per section. */
+.inv-tbl { table-layout: fixed; }
+.inv-tbl th:nth-child(2) { width: 130px; }
+.inv-tbl th:nth-child(3) { width: 64px; }
+.inv-tbl th:nth-child(4) { width: 88px; }
+.inv-tbl th:nth-child(5) { width: 100px; }
+.inv-tbl td { overflow: hidden; text-overflow: ellipsis; }
+
 /* "⚡ Void Cascade · Steel Path" group tag in the Omnia summary card */
 .ft-grp { display: block; font-size: 9.5px; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-top: 1px; }
