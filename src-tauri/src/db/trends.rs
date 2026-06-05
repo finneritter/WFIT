@@ -234,22 +234,16 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
         .collect();
     category_heat.sort_by(|a, b| a.category.cmp(&b.category));
 
-    // Holdings band: the value matches the Inventory headline — the canonical
-    // liquidation-adjusted (realizable) total (set-collapsed, rank-aware), NOT the
-    // naive Σ median × qty this used to sum. The % move stays value-weighted over
-    // the timeframe (weighted by each item's market value, the available per-item basis).
+    // Holdings band: matches the Inventory headline on BOTH numbers — the value
+    // is the canonical liquidation-adjusted (realizable) total and the % is the
+    // same value-weighted 7d change (`portfolio_7d_change`), NOT the timeframe
+    // point-to-point delta this used to average. Two screens disagreeing on
+    // "your holdings moved X%" reads as a bug, so this band is pinned to 7d
+    // regardless of the timeframe chips (the UI labels it accordingly).
     let holdings_value = inventory::total_realizable(db)?;
-    let (mut hnum, mut hden) = (0.0f64, 0.0f64);
-    for it in &items {
-        if it.owned_qty > 0 {
-            if let Some(m) = metrics.get(&it.slug) {
-                let val = (it.owned_qty * it.median_plat) as f64;
-                hnum += m.delta * val;
-                hden += val;
-            }
-        }
-    }
-    let holdings_change = if hden > 0.0 { hnum / hden } else { 0.0 };
+    let holdings_change = db
+        .read(|c| Ok(inventory::portfolio_7d_change(c)?))?
+        .unwrap_or(0.0);
 
     Ok(TrendsData {
         index_change,

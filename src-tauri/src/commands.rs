@@ -190,17 +190,9 @@ pub fn get_summary(state: State<'_, Arc<AppState>>) -> AppResult<Summary> {
             [],
             |r| r.get(0),
         )?;
-        // Value-weighted 7d portfolio change.
-        let (num, den): (f64, f64) = c.query_row(
-            "SELECT
-                COALESCE(SUM(COALESCE(pc.delta_7d, 0) * pc.median_plat * ii.qty), 0),
-                COALESCE(SUM(CASE WHEN pc.delta_7d IS NOT NULL THEN pc.median_plat * ii.qty ELSE 0 END), 0)
-             FROM inventory_items ii JOIN price_cache pc ON pc.slug = ii.slug
-             WHERE ii.qty > 0",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )?;
-        let portfolio_7d = if den > 0.0 { Some(num / den) } else { None };
+        // Value-weighted 7d portfolio change — shared with the Trends holdings
+        // band so the two screens can never disagree.
+        let portfolio_7d = inventory::portfolio_7d_change(c)?;
 
         let last_synced: Option<String> = c
             .query_row(

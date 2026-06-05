@@ -204,6 +204,23 @@ pub fn total_realizable(db: &Db) -> AppResult<i64> {
         .sum())
 }
 
+/// Value-weighted 7d portfolio change over priced owned items (weight =
+/// median × qty; items with no 7d delta are excluded from the basis). The
+/// single source of truth — the Inventory header and the Trends "Your
+/// holdings" band must show the SAME number.
+pub fn portfolio_7d_change(c: &rusqlite::Connection) -> rusqlite::Result<Option<f64>> {
+    let (num, den): (f64, f64) = c.query_row(
+        "SELECT
+            COALESCE(SUM(COALESCE(pc.delta_7d, 0) * pc.median_plat * ii.qty), 0),
+            COALESCE(SUM(CASE WHEN pc.delta_7d IS NOT NULL THEN pc.median_plat * ii.qty ELSE 0 END), 0)
+         FROM inventory_items ii JOIN price_cache pc ON pc.slug = ii.slug
+         WHERE ii.qty > 0",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    Ok((den > 0.0).then(|| num / den))
+}
+
 /// The plat value of one owned row: rank-aware value when present, else median × qty.
 fn row_value(r: &InventoryRow) -> i64 {
     r.value_plat

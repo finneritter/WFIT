@@ -281,7 +281,7 @@ pub struct TrendsData {
     pub total_priced: i64,
     // Your holdings (row 1).
     pub holdings_value: i64,
-    pub holdings_change: f64, // value-weighted % over the timeframe
+    pub holdings_change: f64, // value-weighted 7d % — same calc as Summary.portfolio_7d
     pub sell_signal_count: i64,
     // Decision panels (row 2) + context (row 3).
     pub sell_signals: Vec<TrendRow>,

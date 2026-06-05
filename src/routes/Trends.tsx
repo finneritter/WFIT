@@ -128,8 +128,8 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
               {pct(data.index_change)}
             </span>
             <span className="mh-breadth">
-              <b className="up">{data.advancing}</b> up · <b className="dn">{data.declining}</b> down ·{" "}
-              <b>{data.flat}</b> flat
+              <b className="up">{data.advancing}</b> up · <b className="dn">{data.declining}</b>{" "}
+              down · <b>{data.flat}</b> flat
               <span className="mh-liq">
                 · {fmt(data.liquid_count)} liquid of {fmt(data.total_priced)} priced
               </span>
@@ -150,19 +150,26 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
       <div className="tpanel band hold-band">
         <div className="tpanel-h">
           <h3>Your holdings</h3>
-          <span className="meta">{tf}</span>
+          {/* pinned to 7d (not the timeframe chips) — mirrors the Inventory header */}
+          <span className="meta">7d</span>
         </div>
         {data.holdings_value > 0 ? (
           <div className="bandtop">
-            <span className="bandval num" title="Realizable (liquidation-adjusted) value, matching the Inventory headline">
+            <span
+              className="bandval num"
+              title="Realizable (liquidation-adjusted) value, matching the Inventory headline"
+            >
               ~{fmt(data.holdings_value)}p
             </span>
-            <span className={clsx("bandchg num", data.holdings_change >= 0 ? "pos" : "neg")}>
+            <span
+              className={clsx("bandchg num", data.holdings_change >= 0 ? "pos" : "neg")}
+              title="Value-weighted 7d change — matches the Inventory header"
+            >
               {pct(data.holdings_change)}
             </span>
             <span className="breadth">
-              <b className={data.sell_signal_count > 0 ? "up" : ""}>{data.sell_signal_count}</b> sell
-              signal{data.sell_signal_count === 1 ? "" : "s"}
+              <b className={data.sell_signal_count > 0 ? "up" : ""}>{data.sell_signal_count}</b>{" "}
+              sell signal{data.sell_signal_count === 1 ? "" : "s"}
             </span>
           </div>
         ) : (
