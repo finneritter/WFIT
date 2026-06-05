@@ -1,5 +1,5 @@
 import { useSummary } from "../hooks/queries";
-import { fmt, syncedAgo } from "../lib/format";
+import { fmt } from "../lib/format";
 import { Icon } from "./Icon";
 
 export type ScreenId =
@@ -49,59 +49,59 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
-      <div className="syncbar">
-        <span className="dot" />
-        <span className="src">warframe.market</span>
-        <span className="ago">{syncedAgo(summary?.last_synced ?? null)}</span>
-      </div>
-
-      <button type="button" className="nav-add" onClick={onAdd}>
-        <Icon name="plus" /> Add items
-      </button>
-
-      <div className="grp">Screens</div>
-      {NAV.map((n) => (
-        <button
-          key={n.id}
-          type="button"
-          className="nav-item"
-          aria-current={screen === n.id}
-          onClick={() => onNavigate(n.id)}
-        >
-          <Icon name={n.icon} />
-          {n.label}
-          {badges[n.id] ? <span className="ct">{badges[n.id]}</span> : null}
-        </button>
-      ))}
-
-      <div className="nav-sp" />
-
-      <div className="qr">
-        <div className="qr-h">Quick read</div>
-        <div className="qr-row">
-          <span>Hot parts</span>
-          <b className="num">{fmt(summary?.hot_count ?? 0)}</b>
+      {/* Fixed-width inner column so content doesn't reflow while the width animates. */}
+      <div className="sidebar-inner">
+        {/* Top strip — Add items plus room for the floating collapse toggle
+            (rendered in App); its border lines up with the topbar's. */}
+        <div className="nav-top">
+          <button type="button" className="nav-add" onClick={onAdd}>
+            <Icon name="plus" /> Add items
+          </button>
         </div>
-        <div className="qr-row">
-          <span>At watch target</span>
-          <b className="num">{fmt(summary?.at_target_count ?? 0)}</b>
-        </div>
-        <div className="qr-row">
-          <span>Sold · 7d</span>
-          <b className="num">{fmt(summary?.sold_7d ?? 0)}p</b>
-        </div>
-      </div>
 
-      <div className="nav-foot">
-        <button
-          type="button"
-          className="nav-item"
-          aria-current={screen === "settings"}
-          onClick={() => onNavigate("settings")}
-        >
-          <Icon name="settings" />
-          Settings
-        </button>
+        {NAV.map((n) => (
+          <button
+            key={n.id}
+            type="button"
+            className="nav-item"
+            aria-current={screen === n.id}
+            onClick={() => onNavigate(n.id)}
+          >
+            <Icon name={n.icon} />
+            {n.label}
+            {badges[n.id] ? <span className="ct">{badges[n.id]}</span> : null}
+          </button>
+        ))}
+
+        <div className="nav-sp" />
+
+        <div className="qr">
+          <div className="qr-h">Quick read</div>
+          <div className="qr-row">
+            <span>Hot parts</span>
+            <b className="num">{fmt(summary?.hot_count ?? 0)}</b>
+          </div>
+          <div className="qr-row">
+            <span>At watch target</span>
+            <b className="num">{fmt(summary?.at_target_count ?? 0)}</b>
+          </div>
+          <div className="qr-row">
+            <span>Sold · 7d</span>
+            <b className="num">{fmt(summary?.sold_7d ?? 0)}p</b>
+          </div>
+        </div>
+
+        <div className="nav-foot">
+          <button
+            type="button"
+            className="nav-item"
+            aria-current={screen === "settings"}
+            onClick={() => onNavigate("settings")}
+          >
+            <Icon name="settings" />
+            Settings
+          </button>
+        </div>
       </div>
     </aside>
   );

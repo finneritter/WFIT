@@ -52,6 +52,9 @@ export default function App() {
   const deferredSearch = useDeferredValue(search);
   const [drawer, setDrawer] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(
+    () => localStorage.getItem("wfit.navCollapsed") === "1",
+  );
   const { data: summary } = useSummary();
   const refresh = usePricesRefresh();
   const { data: progress } = usePricingProgress();
@@ -68,6 +71,13 @@ export default function App() {
   // re-renders (e.g. the summary badge updating every 2s during a price sync).
   const open = useCallback((slug: string) => setDrawer(slug), []);
 
+  const toggleNav = useCallback(() => {
+    setNavCollapsed((c) => {
+      localStorage.setItem("wfit.navCollapsed", c ? "0" : "1");
+      return !c;
+    });
+  }, []);
+
   const contentRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!contentRef.current) return;
@@ -82,7 +92,7 @@ export default function App() {
   return (
     <div className="win">
       <TitleBar />
-      <div className="shell">
+      <div className={clsx("shell", navCollapsed && "nav-collapsed")}>
         <Sidebar
           screen={screen}
           onNavigate={(s) => {
@@ -92,6 +102,18 @@ export default function App() {
           onAdd={() => setAdding(true)}
           badges={badges}
         />
+
+        {/* Floats over the sidebar's top strip; slides to the window edge when
+            collapsed so it stays clickable to expand again. */}
+        <button
+          type="button"
+          className="icon-btn nav-toggle"
+          title={navCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!navCollapsed}
+          onClick={toggleNav}
+        >
+          <Icon name="chevrons" />
+        </button>
 
         <main className="main">
           <div className="topbar">

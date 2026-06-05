@@ -30,6 +30,8 @@ const PATHS: Record<string, string> = {
   lock: "M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z",
   // faceted gem — Arcanes screen
   arcane: "M6 3h12l4 6-10 12L2 9zM2 9h20M9 3l3 18M15 3l-3 18",
+  // double chevron — sidebar collapse toggle (rotated 180° when collapsed)
+  chevrons: "M11 17l-5-5 5-5M18 17l-5-5 5-5",
 };
 
 export const Icon = memo(function Icon({ name }: { name: string }) {

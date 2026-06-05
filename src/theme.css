@@ -84,28 +84,52 @@ body.flat-deltas .pos, body.flat-deltas .neg { color: var(--soft) !important; }
 .tb-btn svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; fill: none; }
 
 /* ---------------- shell ---------------- */
-.shell { display: flex; flex: 1; min-height: 0; }
+.shell { display: flex; flex: 1; min-height: 0; position: relative; }
 
-/* ---------------- sidebar ---------------- */
+/* ---------------- sidebar (collapsible) ---------------- */
 .sidebar {
   width: var(--nav); flex: none; height: 100%;
   border-right: 1px solid var(--line); background: var(--bg-2);
-  display: flex; flex-direction: column; overflow: hidden;
+  overflow: hidden;
+  transition: width .28s cubic-bezier(.2, .7, .3, 1), border-right-color .28s ease;
 }
+.shell.nav-collapsed .sidebar { width: 0; border-right-color: transparent; }
+/* fixed-width inner column — content keeps its layout while the aside clips */
+.sidebar-inner { width: var(--nav); height: 100%; display: flex; flex-direction: column; }
 .brand { display: flex; align-items: baseline; gap: 7px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 .brand b { font-size: 13px; font-weight: 800; letter-spacing: .14em; color: var(--ink); }
 .brand .sub { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); }
 
-/* market-sync status strip (replaces account/profile) */
-.syncbar { display: flex; align-items: center; gap: 7px; height: 42px; padding: 0 12px; border-bottom: 1px solid var(--line); font-size: 10.5px; color: var(--soft); }
-.syncbar .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--pos); flex: none; }
-.syncbar .src { font-weight: 600; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.syncbar .ago { margin-left: auto; padding-left: 8px; color: var(--faint); font-family: var(--mono); white-space: nowrap; flex: none; }
+/* top strip (replaces the market-sync chip) — Add items + the floating collapse
+   toggle; 42px tall so its border-bottom continues the topbar's line */
+.nav-top {
+  flex: none; height: 42px; display: flex; align-items: center;
+  padding: 0 44px 0 10px; /* right gap = the 28px floating toggle + gutters */
+  border-bottom: 1px solid var(--line);
+}
+/* docked beside the accent Add button it shares its fill; collapsed it slides
+   out and morphs to the grey panel style of the topbar's icon buttons.
+   top 6.5px = flex-centered height inside the 42px strip (1px border). */
+.icon-btn.nav-toggle {
+  position: absolute; top: 6.5px; left: calc(var(--nav) - 38px); z-index: 30;
+  background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+  transition: left .28s cubic-bezier(.2, .7, .3, 1), background .28s ease, color .28s ease, border-color .28s ease, transform .06s ease;
+}
+.icon-btn.nav-toggle:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); filter: brightness(1.08); }
+.shell.nav-collapsed .icon-btn.nav-toggle { left: 8px; background: var(--panel); color: var(--soft); border-color: var(--line-2); filter: none; }
+.shell.nav-collapsed .icon-btn.nav-toggle:hover { background: var(--hover); color: var(--ink); }
+.nav-toggle svg { transition: transform .28s cubic-bezier(.2, .7, .3, 1); }
+.shell.nav-collapsed .nav-toggle svg { transform: rotate(180deg); }
+/* collapsed: indent the topbar so the title clears the floating toggle */
+.topbar { transition: padding-left .28s cubic-bezier(.2, .7, .3, 1); }
+.shell.nav-collapsed .topbar { padding-left: 48px; }
 
 .nav-cta { margin: 8px 10px; padding: 6px; cursor: pointer; font-family: var(--sans); font-size: 11.5px; font-weight: 600; background: var(--panel-2); color: var(--ink); border: 1px solid var(--line-2); text-align: center; }
 .nav-cta:hover { background: var(--hover); border-color: var(--soft); }
 
 .grp { font-size: 9.5px; text-transform: uppercase; letter-spacing: .09em; color: var(--faint); padding: 9px 12px 3px; }
+/* nav list starts right under the top strip (the "Screens" label is gone) */
+.nav-top + .nav-item { margin-top: 7px; }
 .nav-item { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; font-family: var(--sans); font-size: 12.5px; color: var(--soft); background: transparent; border: none; border-left: 2px solid transparent; padding: 6px 12px; cursor: pointer; }
 .nav-item:hover { background: var(--hover); color: var(--ink); }
 .nav-item[aria-current="true"] { color: var(--ink); font-weight: 600; background: var(--hover); border-left-color: var(--ink); }
@@ -150,8 +174,9 @@ body.flat-deltas .pos, body.flat-deltas .neg { color: var(--soft) !important; }
 .icon-btn:hover { color: var(--ink); border-color: var(--line-2); background: var(--hover); }
 .icon-btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
-/* highlighted sidebar add button */
-.nav-add { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 9px 10px 4px; padding: 8px; font-family: var(--sans); font-size: 12.5px; font-weight: 700; letter-spacing: .01em; background: var(--accent); color: var(--accent-ink); border: none; cursor: pointer; }
+/* highlighted sidebar add button — fills the nav-top strip, 28px tall to match
+   the icon-btn / floating toggle beside it */
+.nav-add { flex: 1; height: 28px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 8px; font-family: var(--sans); font-size: 12.5px; font-weight: 700; letter-spacing: .01em; background: var(--accent); color: var(--accent-ink); border: none; cursor: pointer; }
 .nav-add svg { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .nav-add:hover { filter: brightness(1.08); }
 
