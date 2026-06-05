@@ -251,6 +251,58 @@ body.flat-deltas .pos, body.flat-deltas .neg { color: var(--soft) !important; }
 .ftype.omnia { border-top-color: var(--hot); }
 .ftype.cascade { border-color: var(--hot); background: linear-gradient(180deg, color-mix(in srgb, var(--hot) 8%, var(--panel)), var(--panel)); }
 
+/* rotation: sub-tabs + overview panel grid */
+.rot-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.rot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: start; }
+.rot-grid.v2 { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 1180px) { .rot-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 860px) { .rot-grid, .rot-grid.v2 { grid-template-columns: 1fr; } }
+
+/* arbitration tier badge (community S–D rating; value-tier palette) */
+.tierb { display: inline-grid; place-items: center; width: 22px; height: 18px; flex: none; font-family: var(--mono); font-size: 11px; font-weight: 700; border: 1px solid var(--line-2); color: var(--faint); }
+.tierb.t-s { color: var(--t-exotic); border-color: var(--t-exotic); }
+.tierb.t-a { color: var(--t-legend); border-color: var(--t-legend); }
+.tierb.t-b { color: var(--t-rare); border-color: var(--t-rare); }
+.tierb.t-c, .tierb.t-d, .tierb.t-f { color: var(--t-basic); border-color: var(--line-2); }
+
+/* arbitration panel: live mission + upcoming schedule rows */
+.arb-now { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: linear-gradient(100deg, var(--panel-2), var(--panel)); }
+.arb-now .tierb { width: 30px; height: 26px; font-size: 14px; }
+.arb-i { flex: 1; min-width: 0; }
+.arb-mission { font-size: 13px; font-weight: 700; }
+.arb-node { font-size: 11px; color: var(--soft); margin-top: 1px; }
+.arb-cd { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--accent); flex: none; }
+.arb-row { display: flex; align-items: center; gap: 8px; padding: 4px 12px; font-size: 11.5px; }
+.arb-row + .arb-row { border-top: 1px dotted var(--line); }
+.arb-at { width: 44px; flex: none; font-size: 10.5px; color: var(--faint); }
+.arb-rn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arb-rm { margin-left: auto; flex: none; color: var(--soft); }
+.src-note { padding: 6px 12px; font-size: 9.5px; color: var(--faint); border-top: 1px solid var(--line); }
+
+/* sortie / archon hunt rows */
+.srt-boss { padding: 8px 12px; font-size: 12.5px; border-bottom: 1px solid var(--line); }
+.srt-boss .muted { color: var(--soft); }
+.srt-row { padding: 7px 12px; }
+.srt-row + .srt-row { border-top: 1px dotted var(--line); }
+.srt-top { display: flex; align-items: baseline; gap: 8px; }
+.srt-t { font-size: 12px; font-weight: 600; }
+.srt-node { margin-left: auto; font-size: 11px; color: var(--soft); text-align: right; }
+.srt-mod { display: block; font-size: 10.5px; color: var(--faint); margin-top: 2px; }
+
+/* steel path weekly rotation */
+.sp-now { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: linear-gradient(100deg, var(--panel-2), var(--panel)); }
+.sp-name { font-size: 13px; font-weight: 700; }
+.sp-cost { font-size: 11px; color: var(--soft); }
+.sp-r { display: flex; justify-content: space-between; gap: 8px; padding: 4px 12px; font-size: 11px; color: var(--soft); }
+.sp-r + .sp-r { border-top: 1px dotted var(--line); }
+.sp-r.on { color: var(--ink); font-weight: 600; background: var(--hover); }
+
+/* reset timers */
+.reset-row { display: flex; justify-content: space-between; gap: 8px; padding: 6px 12px; font-size: 11.5px; }
+.reset-row + .reset-row { border-top: 1px dotted var(--line); }
+.reset-row span { color: var(--soft); }
+.reset-row b { font-family: var(--mono); font-weight: 600; }
+
 /* listings / warframe.market connection */
 .conn { display: flex; align-items: center; gap: 12px; padding: 9px 13px; border: 1px solid var(--line-2); background: linear-gradient(100deg, var(--panel-2), var(--panel)); margin-bottom: 12px; flex-wrap: wrap; }
 .conn .cdot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--faint); }

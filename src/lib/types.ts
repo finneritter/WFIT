@@ -343,12 +343,55 @@ export interface Fissure {
   is_hard: boolean;
   is_storm: boolean;
 }
-export interface Baro {
+export interface VendorItem {
+  item: string;
+  // Baro: ducats. Varzia: the wrapper reuses this key for the AYA cost.
+  ducats: number | null;
+  credits: number | null;
+}
+export interface Trader {
   active: boolean;
   activation: string | null;
   expiry: string | null;
   location: string | null;
   character: string | null;
+  inventory: VendorItem[];
+}
+export interface SortieMission {
+  node: string;
+  mission_type: string;
+  modifier: string | null;
+  modifier_desc: string | null;
+}
+// One shape for the daily sortie AND the weekly archon hunt (no modifiers).
+export interface Sortie {
+  boss: string;
+  faction: string;
+  activation: string | null;
+  expiry: string | null;
+  missions: SortieMission[];
+}
+export interface SpReward {
+  name: string;
+  cost: number | null; // Steel Essence
+}
+export interface SteelPath {
+  current_reward: SpReward | null;
+  activation: string | null;
+  expiry: string | null;
+  rotation: SpReward[];
+}
+export interface Arbitration {
+  node: string;
+  mission_type: string;
+  enemy: string | null;
+  tier: string | null; // community S–D rating (browse.wf), null = unrated
+  activation: string;
+  expiry: string;
+}
+export interface ArbitrationBlock {
+  current: Arbitration | null;
+  upcoming: Arbitration[];
 }
 export interface PricingProgress {
   active: boolean;
@@ -362,7 +405,12 @@ export interface PricingProgress {
 export interface Worldstate {
   cycles: Cycle[];
   fissures: Fissure[];
-  baro: Baro | null;
+  baro: Trader | null;
+  varzia: Trader | null;
+  sortie: Sortie | null;
+  archon_hunt: Sortie | null;
+  steel_path: SteelPath | null;
+  arbitration: ArbitrationBlock | null;
   fetched_at: string;
   source_timestamp: string | null; // warframestat.us snapshot time; null if absent
   // "de" = fissures cross-checked against DE's raw worldstate (the normal,

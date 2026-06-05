@@ -55,10 +55,16 @@ const MISSION_TYPES: &[(&str, &str)] = &[
     ("MT_VOID_CASCADE", "Void Cascade"),
 ];
 
-struct NodeInfo {
-    name: &'static str,
-    enemy: &'static str,
-    mission: &'static str,
+pub(super) struct NodeInfo {
+    pub(super) name: &'static str,
+    pub(super) enemy: &'static str,
+    pub(super) mission: &'static str,
+}
+
+/// Decode a raw node id (also used by `arbys` for the arbitration schedule,
+/// whose entries are keyed by the same SolNode/ClanNode/SettlementNode ids).
+pub(super) fn node_info(id: &str) -> Option<&'static NodeInfo> {
+    NODES.get(id)
 }
 
 static NODES: Lazy<HashMap<&'static str, NodeInfo>> = Lazy::new(|| {

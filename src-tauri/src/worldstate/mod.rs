@@ -9,7 +9,12 @@
 //! - DE's raw worldState.php (`raw` module) — the AUTHORITATIVE fissure list,
 //!   cross-checked against the wrapper and preferred whenever it responds.
 
+mod arbys;
+mod extra;
 mod raw;
+
+pub use arbys::ArbitrationBlock;
+pub use extra::{Sortie, SteelPath, Trader};
 
 use crate::error::AppResult;
 use chrono::Utc;
@@ -59,19 +64,19 @@ pub struct Fissure {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Baro {
-    pub active: bool,
-    pub activation: Option<String>, // ISO — arrival
-    pub expiry: Option<String>,     // ISO — departure
-    pub location: Option<String>,
-    pub character: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Worldstate {
     pub cycles: Vec<Cycle>,
     pub fissures: Vec<Fissure>,
-    pub baro: Option<Baro>,
+    /// Baro Ki'Teer — `Trader` carries the inventory too (empty until active).
+    pub baro: Option<Trader>,
+    /// Varzia (prime resurgence) — inventory prices are AYA in `ducats`.
+    pub varzia: Option<Trader>,
+    pub sortie: Option<Sortie>,
+    /// The weekly archon hunt — same shape as the sortie (no modifiers).
+    pub archon_hunt: Option<Sortie>,
+    pub steel_path: Option<SteelPath>,
+    /// Community-precomputed schedule (browse.wf); None when unavailable.
+    pub arbitration: Option<ArbitrationBlock>,
     pub fetched_at: String,
     /// warframe­stat.us's own snapshot time (ISO). When this lags real time the
     /// source is stale — every fissure/cycle reads as expired through no fault of
@@ -99,8 +104,17 @@ struct RawWorld {
     duviri_cycle: Option<RawCycle>,
     #[serde(default)]
     fissures: Vec<RawFissure>,
+    // Extra blocks land untyped and are parsed in `extra` with from_value().ok()
+    // — a shape change in one block must never fail the whole payload.
     #[serde(rename = "voidTrader")]
-    void_trader: Option<RawTrader>,
+    void_trader: Option<serde_json::Value>,
+    #[serde(rename = "vaultTrader")]
+    vault_trader: Option<serde_json::Value>,
+    sortie: Option<serde_json::Value>,
+    #[serde(rename = "archonHunt")]
+    archon_hunt: Option<serde_json::Value>,
+    #[serde(rename = "steelPath")]
+    steel_path: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -127,14 +141,6 @@ struct RawFissure {
     is_storm: bool,
 }
 
-#[derive(Deserialize)]
-struct RawTrader {
-    activation: Option<String>,
-    expiry: Option<String>,
-    location: Option<String>,
-    character: Option<String>,
-}
-
 // ---------------------------------------------------------------------------
 // Client.
 // ---------------------------------------------------------------------------
@@ -144,6 +150,9 @@ pub struct WorldstateClient {
     http: Client,
     last_call: Arc<Mutex<Instant>>,
     cache: Arc<Mutex<Option<(Instant, Worldstate)>>>,
+    /// Arbitration schedule client — its own (12h) cache; browse.wf is hit
+    /// twice a day, not on the 45s worldstate cadence.
+    arbys: Arc<arbys::ArbysClient>,
 }
 
 impl Default for WorldstateClient {
@@ -163,6 +172,7 @@ impl WorldstateClient {
             http,
             last_call: Arc::new(Mutex::new(Instant::now() - Duration::from_secs(60))),
             cache: Arc::new(Mutex::new(None)),
+            arbys: Arc::new(arbys::ArbysClient::default()),
         }
     }
 
@@ -232,39 +242,48 @@ impl WorldstateClient {
     async fn fetch(&self) -> AppResult<Worldstate> {
         self.throttled().await;
         let (ws, de) = tokio::join!(self.fetch_warframestat(), raw::fetch(&self.http));
-        match (ws, de) {
+        let mut ws = match (ws, de) {
             (Ok(mut ws), Ok(de)) => {
                 cross_check(&ws.fissures, &de.fissures);
                 ws.fissures = de.fissures;
                 ws.fissure_source = "de".into();
-                Ok(ws)
+                ws
             }
             (Ok(ws), Err(e)) => {
                 tracing::warn!(error = %e, "DE worldstate unreachable; fissures from warframestat");
-                Ok(ws)
+                ws
             }
             (Err(e), Ok(de)) => {
                 // warframestat down: fissures stay accurate; carry the last-known
-                // cycles/Baro forward (their countdowns just won't refresh).
+                // cycles/extras forward (their countdowns just won't refresh).
                 tracing::warn!(error = %e, "warframestat unreachable; serving DE fissures");
                 let prev = self.cache.lock().as_ref().map(|(_, w)| w.clone());
-                Ok(Worldstate {
+                Worldstate {
                     cycles: prev.as_ref().map(|p| p.cycles.clone()).unwrap_or_default(),
                     fissures: de.fissures,
-                    baro: prev.and_then(|p| p.baro),
+                    baro: prev.as_ref().and_then(|p| p.baro.clone()),
+                    varzia: prev.as_ref().and_then(|p| p.varzia.clone()),
+                    sortie: prev.as_ref().and_then(|p| p.sortie.clone()),
+                    archon_hunt: prev.as_ref().and_then(|p| p.archon_hunt.clone()),
+                    steel_path: prev.and_then(|p| p.steel_path),
+                    arbitration: None, // attached below — independent of warframestat
                     fetched_at: Utc::now().to_rfc3339(),
                     source_timestamp: de
                         .time
                         .and_then(|t| chrono::DateTime::from_timestamp(t, 0))
                         .map(|t| t.to_rfc3339()),
                     fissure_source: "de".into(),
-                })
+                }
             }
             (Err(e), Err(de_err)) => {
                 tracing::warn!(error = %de_err, "DE worldstate also unreachable");
-                Err(e)
+                return Err(e);
             }
-        }
+        };
+        // Arbitration rides every payload but comes from its own schedule cache
+        // (12h TTL) — after the first download this is an in-memory scan.
+        ws.arbitration = self.arbys.block(&self.http, 10).await;
+        Ok(ws)
     }
 
     async fn fetch_warframestat(&self) -> AppResult<Worldstate> {
@@ -310,28 +329,15 @@ impl WorldstateClient {
             })
             .collect();
 
-        let baro = raw.void_trader.map(|t| {
-            let now = Utc::now();
-            let parse = |s: &str| chrono::DateTime::parse_from_rfc3339(s).ok();
-            let active = match (t.activation.as_deref(), t.expiry.as_deref()) {
-                (Some(a), Some(e)) => {
-                    matches!((parse(a), parse(e)), (Some(a), Some(e)) if a <= now && now < e)
-                }
-                _ => false,
-            };
-            Baro {
-                active,
-                activation: t.activation,
-                expiry: t.expiry,
-                location: t.location,
-                character: t.character,
-            }
-        });
-
         Ok(Worldstate {
             cycles,
             fissures,
-            baro,
+            baro: extra::trader_from(raw.void_trader),
+            varzia: extra::trader_from(raw.vault_trader),
+            sortie: extra::sortie_from(raw.sortie),
+            archon_hunt: extra::sortie_from(raw.archon_hunt),
+            steel_path: extra::steel_path_from(raw.steel_path),
+            arbitration: None, // attached in fetch()
             fetched_at: Utc::now().to_rfc3339(),
             source_timestamp: raw.timestamp,
             fissure_source: "warframestat".into(),

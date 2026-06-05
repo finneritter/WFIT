@@ -95,6 +95,21 @@ export const countdown = (iso: string | null | undefined, now: number = Date.now
   return `${s}s`;
 };
 
+/** Next occurrence of `hour`:00 UTC (optionally on a given UTC weekday,
+ *  0=Sunday) as an ISO string — drives the game-reset countdowns. */
+export const nextUtc = (hour: number, weekday?: number): string => {
+  const d = new Date();
+  d.setUTCHours(hour, 0, 0, 0);
+  if (weekday === undefined) {
+    if (d.getTime() <= Date.now()) d.setUTCDate(d.getUTCDate() + 1);
+  } else {
+    let ahead = (weekday - d.getUTCDay() + 7) % 7;
+    if (ahead === 0 && d.getTime() <= Date.now()) ahead = 7;
+    d.setUTCDate(d.getUTCDate() + ahead);
+  }
+  return d.toISOString();
+};
+
 export const CATEGORY_LABELS: Record<string, string> = {
   warframe: "Warframe",
   weapon: "Weapon",

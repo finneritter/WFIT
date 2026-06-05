@@ -58,6 +58,34 @@ fetch error) + the **Rotation** screen (`src/routes/Rotation.tsx`). Two gotchas 
 Live freshness can be checked with the `worldstate::tests::ws_probe` `#[ignore]` test (prints source
 lag + fissure source) and `worldstate::raw::tests::de_probe` (DE raw lag + decoded sample).
 
+### Game-info hub expansion (2026-06-05)
+
+The Rotation screen is now a three-sub-tab hub: **Overview** (cycles, arbitration, sortie, archon
+hunt, Steel Path weekly, reset timers) · **Fissures** (the original UI, unchanged) · **Vendors**
+(Baro + Varzia inventories). Backend additions, all riding the existing fetch/caches:
+
+- **`worldstate/extra.rs`** — sortie / archon hunt / `steelPath` / `voidTrader` (Baro) /
+  `vaultTrader` (Varzia) parsed **from the same warframestat `/pc/` response** (zero extra
+  requests). Each block lands as an untyped `serde_json::Value` and is parsed with
+  `from_value(..).ok()`, so a shape change in one block degrades that block to `None` instead of
+  failing the payload. Quirks: the archon hunt uses `missions[].type` where the sortie uses
+  `variants[].missionType`; **Varzia's `inventory[].ducats` actually holds the AYA cost** (the
+  wrapper reuses the key — label it "Aya"), and her vault-pack names arrive mangled
+  ("M P V Rhino Prime Single Pack" — the `M P V ` prefix is stripped).
+- **`worldstate/arbys.rs`** — arbitrations. warframestat's `arbitration` field is **broken**
+  (always expired, epoch timestamps; DE doesn't publish arbitrations at all). Source instead:
+  **`https://browse.wf/arbys.txt`** — a community-precomputed schedule (CSV `unix_ts,NodeId`, one
+  per hour, years ahead; free to use, attribution shown in the UI). Node ids match
+  `sol_nodes.tsv`, so name/faction/mission decode locally. Tier ratings (S–D, by the Arbitration
+  Goons) are snapshotted into `worldstate/data/arby_tiers.tsv`; regenerate from
+  `https://browse.wf/supplemental-data/arbyTiers.js` when stale. The schedule has its own
+  **12h-TTL in-memory cache** (don't ride the 45s worldstate cadence — the file is ~1MB); fetch
+  failures serve the stale schedule or drop the block to `None` ("unavailable" panel), never error.
+  Probe: `worldstate::arbys::tests::arbys_probe`.
+- Weekly/daily **reset timers are computed client-side** (`nextUtc()` in `src/lib/format.ts`) from
+  fixed UTC rules (daily 00:00, weekly Mon 00:00, sortie 16:00) plus the data expiries
+  (archon/Teshin/Baro/Varzia). Observed live: archon hunt + Teshin expire Monday 00:00 UTC.
+
 ---
 
 ## 1. Two ways to get worldstate (use the parsed one)
