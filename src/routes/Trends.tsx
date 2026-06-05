@@ -43,7 +43,7 @@ function SignalRow({
         </span>
         <RangeBar pos={row.range_pos} low={row.range_low} high={row.range_high} />
       </span>
-      <Spark data={row.spark} />
+      <Spark data={row.spark} up={row.delta >= 0} />
       <span className="sr">
         <span className="sp num">{fmt(row.median_plat)}p</span>
         <Move delta={row.delta} z={row.z} />

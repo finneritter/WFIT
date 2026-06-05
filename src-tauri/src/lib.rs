@@ -44,7 +44,7 @@ const LISTINGS_SYNC_TICKS: u64 = 13; // listings piggyback every ~10 min (1 call
 // Bump whenever the price-derivation logic changes. On launch a mismatch wipes the
 // derived price caches and recomputes them, so fixes take effect without a manual
 // "rebuild cache" and stale old-logic prices can't survive behind the TTL.
-const PRICING_VERSION: &str = "3";
+const PRICING_VERSION: &str = "4"; // 4: delta_7d = None (not 0%) when there's no prior window
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

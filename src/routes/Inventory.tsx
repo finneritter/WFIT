@@ -112,8 +112,8 @@ const ChipItem = memo(function ChipItem({
   onOpen: (slug: string) => void;
 }) {
   const plat = row.median_plat;
-  const d = row.delta_7d ?? 0;
-  const up = d >= 0;
+  const d = row.delta_7d;
+  const up = (d ?? 0) >= 0;
   return (
     <button
       type="button"
@@ -122,7 +122,7 @@ const ChipItem = memo(function ChipItem({
       title={
         row.excluded
           ? `${row.display_name} — excluded from portfolio value`
-          : `${row.display_name} — ${row.part_type}\n${fmt(plat)} p · ${pct(d)} 7d · ×${row.qty}`
+          : `${row.display_name} — ${row.part_type}\n${fmt(plat)} p · ${d == null ? "—" : pct(d)} 7d · ×${row.qty}`
       }
     >
       <span className="ci-gl">
@@ -150,9 +150,9 @@ const ChipItem = memo(function ChipItem({
               {plat == null ? "—" : fmt(plat)}
               <span className="u">p</span>
             </span>
-            <span className={clsx("ci-d num", up ? "pos" : "neg")}>
-              {up ? "+" : ""}
-              {Math.round(d)}%{row.qty > 1 ? <span className="ci-q"> ×{row.qty}</span> : null}
+            <span className={clsx("ci-d num", d == null ? "muted" : up ? "pos" : "neg")}>
+              {d == null ? "—" : `${up ? "+" : ""}${Math.round(d)}%`}
+              {row.qty > 1 ? <span className="ci-q"> ×{row.qty}</span> : null}
             </span>
           </>
         )}
@@ -183,8 +183,8 @@ const InvTable = memo(function InvTable({
       <tbody>
         {rows.map((row) => {
           const plat = row.median_plat;
-          const d = row.delta_7d ?? 0;
-          const up = d >= 0;
+          const d = row.delta_7d;
+          const up = d == null ? undefined : d >= 0;
           return (
             <tr
               key={row.slug}
@@ -207,11 +207,15 @@ const InvTable = memo(function InvTable({
               </td>
               <td className="r">
                 <span className="tcell">
-                  <Spark data={row.spark} w={56} h={20} />
-                  <span className={up ? "pos" : "neg"}>
-                    {up ? "+" : ""}
-                    {Math.round(d)}%
-                  </span>
+                  <Spark data={row.spark} w={56} h={20} up={up} />
+                  {d == null ? (
+                    <span className="muted">—</span>
+                  ) : (
+                    <span className={up ? "pos" : "neg"}>
+                      {up ? "+" : ""}
+                      {Math.round(d)}%
+                    </span>
+                  )}
                 </span>
               </td>
               <td className="r num">×{row.qty}</td>

@@ -2,10 +2,18 @@
 // No deps — just polylines, matching the wireframe's monochrome look.
 import { memo, useMemo } from "react";
 
-function points(data: number[], w: number, h: number, pad = 1): string {
+function points(data: number[], w: number, h: number, pad = 1, minSpanFrac = 0): string {
   if (data.length === 0) return "";
-  const min = Math.min(...data);
-  const max = Math.max(...data);
+  let min = Math.min(...data);
+  let max = Math.max(...data);
+  // Floor the y-domain at a fraction of the series center so a flat series with
+  // ±1p noise doesn't auto-scale into a full-height spike (it must LOOK flat).
+  const floor = ((min + max) / 2) * minSpanFrac;
+  if (max - min < floor) {
+    const mid = (min + max) / 2;
+    min = mid - floor / 2;
+    max = mid + floor / 2;
+  }
   const span = max - min || 1;
   const step = data.length > 1 ? (w - pad * 2) / (data.length - 1) : 0;
   return data
@@ -21,17 +29,21 @@ export const Spark = memo(function Spark({
   data,
   w = 60,
   h = 18,
+  up: upProp,
 }: {
   data: number[];
   w?: number;
   h?: number;
+  /** Color override — pass the sign of the trend % shown next to the spark so
+   *  graph color and number always agree. Falls back to first-vs-last. */
+  up?: boolean;
 }) {
   if (!data || data.length < 2) return <svg width={w} height={h} />;
-  const up = data[data.length - 1] >= data[0];
+  const up = upProp ?? data[data.length - 1] >= data[0];
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
       <polyline
-        points={points(data, w, h)}
+        points={points(data, w, h, 1, 0.12)}
         fill="none"
         stroke={up ? "var(--pos)" : "var(--neg)"}
         strokeWidth="1.3"

@@ -274,15 +274,14 @@ impl Market {
         let recent: Vec<f64> = medians.iter().rev().take(7).copied().collect();
         let prior: Vec<f64> = medians.iter().rev().skip(7).take(7).copied().collect();
         let recent_avg = avg(&recent);
-        let prior_avg = if prior.is_empty() {
-            recent_avg
-        } else {
-            avg(&prior)
-        };
-        let delta_7d = if prior_avg > 0.0 {
-            Some((recent_avg - prior_avg) / prior_avg * 100.0)
-        } else {
+        // No prior window (≤7 trade days of history) → the 7d move is UNKNOWN,
+        // not 0% — emitting 0 made sparse items show "+0%" next to a spiking
+        // sparkline. None renders as "—" in the UI.
+        let delta_7d = if prior.is_empty() {
             None
+        } else {
+            let prior_avg = avg(&prior);
+            (prior_avg > 0.0).then(|| (recent_avg - prior_avg) / prior_avg * 100.0)
         };
         let trend = match delta_7d {
             Some(d) if d > 5.0 => "up",

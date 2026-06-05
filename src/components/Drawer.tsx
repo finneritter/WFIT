@@ -115,7 +115,7 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
   }
 
   const owned = item.owned_qty > 0;
-  const delta = item.delta_7d ?? 0;
+  const delta = item.delta_7d;
   const price = item.median_plat;
   // Mods/arcanes carry a rank-aware stack value; otherwise median × owned.
   const stack = item.value_plat ?? (price != null ? price * item.owned_qty : null);
@@ -150,7 +150,9 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
             {fmt(price)}
             <span className="u"> p</span>
           </div>
-          <div className={clsx("num", delta >= 0 ? "pos" : "neg")}>{pct(delta)}</div>
+          <div className={clsx("num", delta == null ? "muted" : delta >= 0 ? "pos" : "neg")}>
+            {delta == null ? "—" : pct(delta)}
+          </div>
         </div>
         <div className="price-sub">
           {item.trend ? `trend ${item.trend}` : "no recent trend"} · synced from warframe.market

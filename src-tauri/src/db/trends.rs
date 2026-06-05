@@ -295,7 +295,9 @@ fn median(v: &mut [f64]) -> f64 {
 
 /// Clamp gross outliers in a daily price series toward the item's own center,
 /// using a robust median ± k·(scaled MAD) band. Leaves normal series untouched.
-fn winsorize(series: &mut [i64]) {
+/// Also used by `prices::recent_medians_for` so row sparklines match the
+/// winsorized trend % they sit next to.
+pub(crate) fn winsorize(series: &mut [i64]) {
     if series.len() < 4 {
         return;
     }
