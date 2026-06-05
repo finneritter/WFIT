@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import { AddItems } from "./components/AddItems";
 import { Drawer } from "./components/Drawer";
 import { Icon } from "./components/Icon";
@@ -14,6 +14,7 @@ import {
   useSummary,
 } from "./hooks/queries";
 import { clsx } from "./lib/format";
+import { attachSmoothScroll } from "./lib/smoothScroll";
 import { Arcanes } from "./routes/Arcanes";
 // Routes are imported eagerly. This is a local desktop app — the bundle loads
 // from disk, so code-splitting saves nothing at startup and only adds a chunk-
@@ -66,6 +67,12 @@ export default function App() {
   // Stable identity so memoized rows in every screen don't re-render when App
   // re-renders (e.g. the summary badge updating every 2s during a price sync).
   const open = useCallback((slug: string) => setDrawer(slug), []);
+
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!contentRef.current) return;
+    return attachSmoothScroll(contentRef.current);
+  }, []);
 
   const badges: Partial<Record<ScreenId, number>> = {
     inventory: summary?.distinct_count || undefined,
@@ -132,7 +139,7 @@ export default function App() {
             ) : null}
           </div>
 
-          <div className="content">
+          <div className="content" ref={contentRef}>
             {/* Inventory stays mounted and is just hidden when inactive — its
                 ~800-tile grid is expensive to mount, so re-creating it on every
                 navigation caused a visible freeze. Hidden → instant show. */}
