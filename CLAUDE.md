@@ -69,6 +69,9 @@ Retired (do not build from): `reference/design/` (old "Primely" hi-fi),
 
 ## Commands
 
+- **Session start: `git pull` before doing anything else.** This repo is worked on from two
+  machines (Linux desktop + Mac laptop), so the local checkout may be behind `main`. If the working
+  tree is dirty or the pull reports a divergence, stop and ask instead of merging/rebasing blindly.
 - `npm run tauri:dev` — run the desktop app (bakes in the WebKitGTK/Wayland env vars; plain
   `tauri dev` crashes on this box). `npm run dev` — frontend only. `scripts/install.sh` — build an
   optimized release and install it as a launchable app (search "WFIT" in KRunner).
