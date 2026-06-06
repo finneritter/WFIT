@@ -7,10 +7,24 @@ export interface Prefs {
   theme: Theme;
   dense: boolean;
   flatDeltas: boolean;
+  /** IANA zone for clock-time displays (Rotation schedules), or "auto" =
+   *  follow the PC's zone. Countdowns are relative and unaffected. */
+  timezone: string;
 }
 
 const KEY = "wfit.prefs";
-const DEFAULTS: Prefs = { theme: "dark", dense: false, flatDeltas: false };
+const DEFAULTS: Prefs = { theme: "dark", dense: false, flatDeltas: false, timezone: "auto" };
+
+/** The PC's current IANA zone (what "auto" resolves to). */
+export const systemTimezone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/** All selectable zones; falls back to a minimal list on older webviews. */
+export function timezoneOptions(): string[] {
+  const intl = Intl as unknown as { supportedValuesOf?: (key: string) => string[] };
+  return typeof intl.supportedValuesOf === "function"
+    ? intl.supportedValuesOf("timeZone")
+    : ["UTC", systemTimezone()];
+}
 
 export function loadPrefs(): Prefs {
   try {

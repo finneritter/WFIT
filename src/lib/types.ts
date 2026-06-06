@@ -392,6 +392,30 @@ export interface Arbitration {
 export interface ArbitrationBlock {
   current: Arbitration | null;
   upcoming: Arbitration[];
+  /** Next few S/A-tier arbitrations from the whole schedule (can be days out). */
+  notable: Arbitration[];
+}
+export interface NightwaveChallenge {
+  title: string;
+  desc: string | null;
+  reputation: number;
+  is_daily: boolean;
+  is_elite: boolean;
+  expiry: string | null;
+}
+export interface Nightwave {
+  season: number | null;
+  expiry: string | null; // season end
+  challenges: NightwaveChallenge[]; // biggest standing first
+}
+export interface Invasion {
+  node: string;
+  attacker: string;
+  defender: string;
+  attacker_reward: string | null;
+  defender_reward: string | null;
+  completion: number; // attacker-side progress, 0–100
+  eta: string | null;
 }
 export interface PricingProgress {
   active: boolean;
@@ -410,6 +434,8 @@ export interface Worldstate {
   sortie: Sortie | null;
   archon_hunt: Sortie | null;
   steel_path: SteelPath | null;
+  nightwave: Nightwave | null;
+  invasions: Invasion[];
   arbitration: ArbitrationBlock | null;
   fetched_at: string;
   source_timestamp: string | null; // warframestat.us snapshot time; null if absent

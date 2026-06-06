@@ -47,7 +47,11 @@ pub(super) fn derive(cetus_night_end: i64, now: i64) -> Vec<Cycle> {
     let pos = (now - cetus_night_end).rem_euclid(CETUS_PERIOD);
     let day = pos < CETUS_PERIOD - CETUS_NIGHT;
     let cycle_end = now - pos + CETUS_PERIOD;
-    let cetus_expiry = if day { cycle_end - CETUS_NIGHT } else { cycle_end };
+    let cetus_expiry = if day {
+        cycle_end - CETUS_NIGHT
+    } else {
+        cycle_end
+    };
 
     let vpos = (now - VALLIS_EPOCH).rem_euclid(VALLIS_PERIOD);
     let warm = vpos < VALLIS_WARM;
@@ -57,8 +61,18 @@ pub(super) fn derive(cetus_night_end: i64, now: i64) -> Vec<Cycle> {
     let mood = DUVIRI_MOODS[dphase.rem_euclid(5) as usize];
 
     vec![
-        cycle("cetus", "Cetus", if day { "day" } else { "night" }, cetus_expiry),
-        cycle("vallis", "Orb Vallis", if warm { "warm" } else { "cold" }, vallis_expiry),
+        cycle(
+            "cetus",
+            "Cetus",
+            if day { "day" } else { "night" },
+            cetus_expiry,
+        ),
+        cycle(
+            "vallis",
+            "Orb Vallis",
+            if warm { "warm" } else { "cold" },
+            vallis_expiry,
+        ),
         cycle(
             "cambion",
             "Cambion Drift",

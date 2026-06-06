@@ -1,11 +1,22 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { useWorldstate } from "../hooks/queries";
-import { clsx, countdown, fmt, glyph, msUntil, nextUtc } from "../lib/format";
+import {
+  clsx,
+  countdown,
+  dayTime,
+  fmt,
+  glyph,
+  hhmm,
+  msUntil,
+  nextUtc,
+  tzLabel,
+} from "../lib/format";
 import type {
   ArbitrationBlock,
   Fissure,
+  Invasion,
+  Nightwave,
   Sortie,
-  SteelPath,
   Trader,
   VendorItem,
   Worldstate,
@@ -81,9 +92,6 @@ const Countdown = memo(function Countdown({
   return cls ? <span className={cls}>{text}</span> : <>{text}</>;
 });
 
-const hhmm = (iso: string): string =>
-  new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
 /** Community S–D arbitration rating (browse.wf / Arbitration Goons) as a grade box. */
 function TierBadge({ tier }: { tier: string | null }) {
   return (
@@ -111,18 +119,21 @@ function FissureWatchHero({ ws }: { ws: Worldstate }) {
     .sort((a, b) => msUntil(a.expiry) - msUntil(b.expiry))[0];
   const hit = cascade !== undefined;
   const focus = cascade ?? omnia;
-  const counts: Array<[string, number]> = [
+  const spOmnia = ground.filter((f) => f.is_hard && f.tier.toLowerCase() === "omnia").length;
+  const counts: Array<[string, number, boolean?]> = [
     ["Normal", ground.filter((f) => !f.is_hard).length],
     ["Steel Path", ground.filter((f) => f.is_hard).length],
+    ["SP Omnia", spOmnia, spOmnia > 0],
     ["Void Storms", live.filter((f) => f.is_storm).length],
-    ["Total live", live.length],
   ];
   return (
     <div className={clsx("fwx", hit && "hit")}>
       <div className="fwx-top">
         <span className="led" />
         <span className="lbl">Fissure Watch</span>
-        <span>Void Cascade · Omnia</span>
+        <span>
+          {focus ? `${focus.is_hard ? "Steel Path" : "Normal"} · ${focus.tier}` : "Omnia"}
+        </span>
         <span className="status">{hit ? "● ACTIVE NOW" : "○ NOT UP"}</span>
       </div>
       <div className="fwx-main">
@@ -131,10 +142,10 @@ function FissureWatchHero({ ws }: { ws: Worldstate }) {
           <div className="fwx-meta">
             {focus ? (
               <>
-                <span>{focus.node}</span>
-                <span className="muted">·</span>
-                <span>{focus.mission_type}</span>
+                <span className={clsx("ftier", `t-${focus.tier.toLowerCase()}`)}>{focus.tier}</span>
                 {focus.is_hard ? <span className="badge sp">Steel Path</span> : null}
+                <span className="muted">·</span>
+                <span>{focus.node}</span>
               </>
             ) : (
               <span className="muted">no omnia fissure live</span>
@@ -145,13 +156,13 @@ function FissureWatchHero({ ws }: { ws: Worldstate }) {
           <div className="big">
             <Countdown iso={focus?.expiry} warnMs={15 * 60_000} soonMs={5 * 60_000} />
           </div>
-          <div className="tl">{hit ? "time remaining" : "omnia rotates"}</div>
+          <div className="tl">{hit ? "remaining" : "omnia rotates"}</div>
         </div>
       </div>
       <div className="fwx-counts">
-        {counts.map(([k, v]) => (
+        {counts.map(([k, v, hot]) => (
           <div className="fwx-cell" key={k}>
-            <div className="v">{v}</div>
+            <div className={clsx("v", hot && "pos")}>{v}</div>
             <div className="k">{k}</div>
           </div>
         ))}
@@ -165,7 +176,7 @@ function ArbitrationPanel({ block }: { block: ArbitrationBlock | null }) {
     <div className="tpanel">
       <div className="tpanel-h">
         <h3>Arbitration</h3>
-        <span className="meta">rotates hourly</span>
+        <span className="meta">rotates hourly · {tzLabel()}</span>
       </div>
       {!block ? (
         <div className="empty">Schedule unavailable (browse.wf unreachable).</div>
@@ -196,6 +207,29 @@ function ArbitrationPanel({ block }: { block: ArbitrationBlock | null }) {
               <span className="arb-rm">{a.mission_type}</span>
             </div>
           ))}
+          {block.notable.length > 0 ? (
+            <>
+              <div className="fgroup-h">Ones of note · S/A</div>
+              {block.notable.map((a) => (
+                <div className="arbn-row" key={`n-${a.activation}`}>
+                  <TierBadge tier={a.tier} />
+                  <div className="arbn-i">
+                    <div className="arbn-n">{a.node}</div>
+                    <div className="arbn-s">
+                      {a.mission_type}
+                      {a.enemy ? ` · ${a.enemy}` : ""}
+                    </div>
+                  </div>
+                  <div className="arbn-r">
+                    <div className="arbn-at num">{dayTime(a.activation)}</div>
+                    <div className="arbn-cd num">
+                      <Countdown iso={a.activation} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : null}
           <div className="src-note">schedule + tiers via browse.wf · Arbitration Goons</div>
         </>
       )}
@@ -216,7 +250,7 @@ function SortiePanel({ title, data }: { title: string; data: Sortie | null }) {
         ) : null}
       </div>
       {!data ? (
-        <div className="empty">No data.</div>
+        <div className="empty">No data from either source right now.</div>
       ) : (
         <>
           <div className="srt-boss">
@@ -238,138 +272,116 @@ function SortiePanel({ title, data }: { title: string; data: Sortie | null }) {
   );
 }
 
-function SteelPathPanel({ sp }: { sp: SteelPath | null }) {
+/** Active Nightwave challenges, biggest standing first. Player rank/standing
+ *  is account data the worldstate doesn't carry, so it isn't shown. */
+function NightwavePanel({ nw }: { nw: Nightwave | null }) {
   return (
     <div className="tpanel">
       <div className="tpanel-h">
-        <h3>Steel Path · Teshin</h3>
-        {sp?.expiry ? (
+        <h3>Nightwave</h3>
+        {nw?.expiry ? (
           <span className="meta num">
-            <Countdown iso={sp.expiry} />
+            season ends <Countdown iso={nw.expiry} />
           </span>
         ) : null}
       </div>
-      {!sp ? (
-        <div className="empty">No data.</div>
+      {!nw ? (
+        <div className="empty">
+          No season data — api.warframestat.us is unreachable. Fills in automatically when it
+          recovers (DE's feed doesn't carry Nightwave).
+        </div>
       ) : (
-        <>
-          <div className="sp-now">
-            <span className="sp-name">{sp.current_reward?.name ?? "—"}</span>
-            {sp.current_reward?.cost != null ? (
-              <span className="sp-cost num">{sp.current_reward.cost} essence</span>
-            ) : null}
+        nw.challenges.map((c) => (
+          <div className="nw-row" key={c.title} title={c.desc ?? undefined}>
+            <span className={clsx("tag", !c.is_daily && "weekly")}>
+              {c.is_daily ? "daily" : c.is_elite ? "elite" : "weekly"}
+            </span>
+            <span className="nw-t">{c.title}</span>
+            <b className="num">{fmt(c.reputation)}</b>
           </div>
-          {sp.rotation.map((r) => (
-            <div key={r.name} className={clsx("sp-r", r.name === sp.current_reward?.name && "on")}>
-              <span>{r.name}</span>
-              <span className="num">{r.cost ?? "—"}</span>
-            </div>
-          ))}
-        </>
+        ))
       )}
     </div>
   );
 }
 
-/** Fixed UTC reset rules + the data-driven rotations, one countdown per row.
- *  Baro/Varzia live in the Void Traders panel, not here. */
-function ResetsPanel({ ws }: { ws: Worldstate }) {
-  const rows: Array<[string, string | null]> = [
-    ["Daily reset", nextUtc(0)],
-    ["Sortie", ws.sortie?.expiry ?? nextUtc(16)],
-    ["Weekly reset", nextUtc(0, 1)],
-    ["Archon hunt", ws.archon_hunt?.expiry ?? nextUtc(0, 1)],
-    ["Teshin reward", ws.steel_path?.expiry ?? null],
-  ];
+/** Live invasions: both sides' rewards, node · factions, attacker progress. */
+function InvasionsPanel({ invasions }: { invasions: Invasion[] }) {
+  const shown = invasions.slice(0, 6);
   return (
     <div className="tpanel">
       <div className="tpanel-h">
-        <h3>Resets</h3>
-        <span className="meta">UTC schedule</span>
+        <h3>Invasions</h3>
+        <span className="meta">{invasions.length} active</span>
       </div>
-      {rows.map(([label, iso]) => (
-        <div className="reset-row" key={label}>
-          <span>{label}</span>
-          <b className="num">
-            <Countdown iso={iso} />
-          </b>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** Compact trader status — full stock lives on the Vendors tab. */
-function TradersPanel({ ws }: { ws: Worldstate }) {
-  const rows: Array<{ name: string; trader: Trader | null; sub: string }> = [
-    {
-      name: "Baro Ki'Teer",
-      trader: ws.baro,
-      sub: ws.baro?.active ? (ws.baro.location ?? "here now") : "away",
-    },
-    {
-      name: "Varzia",
-      trader: ws.varzia,
-      sub: "prime resurgence",
-    },
-  ];
-  return (
-    <div className="tpanel">
-      <div className="tpanel-h">
-        <h3>Void Traders</h3>
-        <span className="meta">stock on Vendors tab</span>
-      </div>
-      {rows.map(({ name, trader, sub }) => (
-        <div className="vend-row" key={name}>
-          <span className={clsx("vdot", trader?.active && "on")} />
-          <div className="vi">
-            <div className="vn">{name}</div>
-            <div className="vs">{sub}</div>
+      {shown.length === 0 ? (
+        <div className="empty">No active invasions.</div>
+      ) : (
+        shown.map((i) => (
+          <div className="inv-row" key={`${i.node}-${i.attacker_reward}-${i.defender_reward}`}>
+            <div className="inv-i">
+              <div className="inv-r">
+                {[i.attacker_reward, i.defender_reward].filter(Boolean).join(" · ") || "—"}
+              </div>
+              <div className="inv-s">
+                {i.node} · {i.attacker} vs {i.defender}
+              </div>
+            </div>
+            <b className="num">{Math.round(i.completion)}%</b>
           </div>
-          <b className="num">
-            <Countdown
-              iso={trader ? (trader.active ? trader.expiry : trader.activation) : null}
-              warnMs={3_600_000}
-              soonMs={15 * 60_000}
-            />
-          </b>
-        </div>
-      ))}
+        ))
+      )}
     </div>
   );
 }
 
 function OverviewTab({ ws }: { ws: Worldstate }) {
+  // The right-side reset strip: fixed UTC game resets + the data-driven ends.
+  const resets: Array<[string, string | null]> = [
+    ["Daily reset", nextUtc(0)],
+    ["Sortie", ws.sortie?.expiry ?? nextUtc(16)],
+    ["Nightwave", ws.nightwave?.expiry ?? null],
+    ["Weekly reset", nextUtc(0, 1)],
+  ];
   return (
     <>
-      <div className="cyclebar">
-        {ws.cycles.map((c) => (
-          <div
-            className="cyc"
-            key={c.id}
-            style={{ "--cc": CYCLE_CC[c.state.toLowerCase()] } as React.CSSProperties}
-          >
-            <div className="cyc-st">{c.state}</div>
-            <div className="cyc-pl">{c.name}</div>
-            <div className="cyc-end num">
-              <Countdown iso={c.expiry} fallback={c.time_left ?? "—"} />
+      <div className="rot-top">
+        <FissureWatchHero ws={ws} />
+        <div className="cycgrid">
+          {ws.cycles.map((c) => (
+            <div
+              className="cyc"
+              key={c.id}
+              style={{ "--cc": CYCLE_CC[c.state.toLowerCase()] } as React.CSSProperties}
+            >
+              <div className="cyc-st">{c.state}</div>
+              <div className="cyc-pl">{c.name}</div>
+              <div className="cyc-end num">
+                <Countdown iso={c.expiry} fallback={c.time_left ?? "—"} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="rsetbar">
+        {resets.map(([label, iso]) => (
+          <div className="rsetbox" key={label}>
+            <div className="k">{label}</div>
+            <div className="v">
+              <Countdown iso={iso} />
             </div>
           </div>
         ))}
       </div>
-      <FissureWatchHero ws={ws} />
-      <div className="rot-cols">
+      <div className="rot-grid v2">
         <div className="rot-col">
           <ArbitrationPanel block={ws.arbitration} />
+          <NightwavePanel nw={ws.nightwave} />
+        </div>
+        <div className="rot-col">
           <SortiePanel title="Sortie" data={ws.sortie} />
-        </div>
-        <div className="rot-col">
           <SortiePanel title="Archon Hunt" data={ws.archon_hunt} />
-          <SteelPathPanel sp={ws.steel_path} />
-        </div>
-        <div className="rot-col">
-          <ResetsPanel ws={ws} />
-          <TradersPanel ws={ws} />
+          <InvasionsPanel invasions={ws.invasions} />
         </div>
       </div>
     </>
@@ -608,8 +620,7 @@ function FissuresTab({ ws, deVerified }: { ws: Worldstate; deVerified: boolean }
         <div className="tpanel-h">
           <h3>Void Fissures</h3>
           <span className="meta">
-            {fissures.length} active · as of{" "}
-            {new Date(ws.fetched_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {fissures.length} active · as of {hhmm(ws.fetched_at)}
             {deVerified ? " · DE-verified" : " · unverified (DE unreachable)"}
           </span>
         </div>

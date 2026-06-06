@@ -9,7 +9,8 @@
 //!
 //! Tier ratings (S–D) are the Arbitration Goons' per-node map, snapshotted to
 //! `data/arby_tiers.tsv` from `browse.wf/supplemental-data/arbyTiers.js`.
-//! Unrated nodes → `tier: None` (UI shows "—").
+//! Nodes absent from the map are graded "F" — the Goons only bother rating
+//! nodes worth running, so unlisted ≈ bottom tier.
 
 use super::raw;
 use once_cell::sync::Lazy;
@@ -45,7 +46,7 @@ pub struct Arbitration {
     pub node: String,
     pub mission_type: String,
     pub enemy: Option<String>,
-    pub tier: Option<String>, // "S".."D" (community rating) or None
+    pub tier: Option<String>, // "S".."F" (community rating; unlisted = "F")
     pub activation: String,   // ISO
     pub expiry: String,       // ISO
 }
@@ -54,7 +55,14 @@ pub struct Arbitration {
 pub struct ArbitrationBlock {
     pub current: Option<Arbitration>,
     pub upcoming: Vec<Arbitration>,
+    /// The next few S/A-tier arbitrations from the whole precomputed schedule
+    /// (may reach days ahead) — the "ones of note" radar. Can overlap with
+    /// `upcoming` when a good one is close.
+    pub notable: Vec<Arbitration>,
 }
+
+/// How many S/A-tier entries the "ones of note" radar surfaces.
+const NOTABLE_N: usize = 5;
 
 // ---------------------------------------------------------------------------
 // Client — own cache, own cadence; failures degrade to None, never error.
@@ -128,7 +136,8 @@ fn parse_schedule(text: &str) -> Schedule {
     v
 }
 
-/// Pure lookup: the entry covering `now` (if any) + the next `n`.
+/// Pure lookup: the entry covering `now` (if any), the next `n`, and the next
+/// `NOTABLE_N` S/A-rated entries from the rest of the schedule.
 fn block_at(sched: &[(i64, String)], now: i64, n: usize) -> ArbitrationBlock {
     // First entry strictly after now — its predecessor is the live one.
     let next_idx = sched.partition_point(|(ts, _)| *ts <= now);
@@ -141,7 +150,17 @@ fn block_at(sched: &[(i64, String)], now: i64, n: usize) -> ArbitrationBlock {
         .iter()
         .map(|(ts, node)| decode(*ts, node))
         .collect();
-    ArbitrationBlock { current, upcoming }
+    let notable = sched[next_idx..]
+        .iter()
+        .filter(|(_, node)| matches!(TIERS.get(node.as_str()).copied(), Some("S" | "A")))
+        .take(NOTABLE_N)
+        .map(|(ts, node)| decode(*ts, node))
+        .collect();
+    ArbitrationBlock {
+        current,
+        upcoming,
+        notable,
+    }
 }
 
 fn decode(ts: i64, node_id: &str) -> Arbitration {
@@ -158,7 +177,7 @@ fn decode(ts: i64, node_id: &str) -> Arbitration {
             .filter(|m| !m.is_empty())
             .unwrap_or_else(|| "—".into()),
         enemy: info.map(|i| i.enemy.to_string()).filter(|e| !e.is_empty()),
-        tier: TIERS.get(node_id).map(|t| (*t).to_string()),
+        tier: Some(TIERS.get(node_id).copied().unwrap_or("F").to_string()),
         activation: iso(ts),
         expiry: iso(ts + HOUR),
     }
@@ -187,13 +206,26 @@ mod tests {
         assert_eq!(cur.expiry, iso(1780693200));
         assert_eq!(b.upcoming.len(), 2); // only 2 remain in the fixture
 
-        // SolNode64 is S-tier in the bundled map; unknown node degrades.
+        // SolNode64 is S-tier in the bundled map; an unlisted node grades "F".
         let first = block_at(&sched, 1780686000, 10);
         assert_eq!(first.current.unwrap().tier.as_deref(), Some("S"));
         let unknown = &b.upcoming[1];
         assert_eq!(unknown.node, "SolNodeBrandNew");
-        assert!(unknown.tier.is_none());
+        assert_eq!(unknown.tier.as_deref(), Some("F"));
         assert_eq!(unknown.mission_type, "—");
+    }
+
+    #[test]
+    fn notable_scans_ahead_for_rated_nodes() {
+        let sched = parse_schedule(FIXTURE);
+        // Before everything: SolNode64 (S) is still ahead → on the radar.
+        let b = block_at(&sched, 1780686000 - 1, 2);
+        assert_eq!(b.upcoming.len(), 2); // capped at n…
+        assert_eq!(b.notable.len(), 1); // …but the radar scans the whole tail
+        assert_eq!(b.notable[0].tier.as_deref(), Some("S"));
+        // After it has started, nothing rated remains in the fixture.
+        let b = block_at(&sched, 1780686000 + 1, 2);
+        assert!(b.notable.is_empty());
     }
 
     #[test]

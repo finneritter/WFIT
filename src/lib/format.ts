@@ -1,5 +1,7 @@
 // Presentation helpers ported from the wireframe.
 
+import { loadPrefs } from "./prefs";
+
 export const clsx = (...a: (string | false | null | undefined)[]) => a.filter(Boolean).join(" ");
 
 // One shared formatter instance — constructing Intl.NumberFormat per call is
@@ -75,6 +77,58 @@ export const syncedAgo = (iso: string | null): string => {
 /** ms remaining until an ISO timestamp (negative if past). */
 export const msUntil = (iso: string | null | undefined): number =>
   iso ? new Date(iso).getTime() - Date.now() : Number.NEGATIVE_INFINITY;
+
+/** Short label of the active display zone — "EDT", "GMT+2", … — i.e. the
+ *  detected PC zone on "auto", or the configured override. Pairs with hhmm(). */
+export const tzLabel = (): string => {
+  const tz = loadPrefs().timezone;
+  try {
+    return (
+      new Intl.DateTimeFormat([], {
+        timeZone: tz === "auto" ? undefined : tz,
+        timeZoneName: "short",
+      })
+        .formatToParts(new Date())
+        .find((p) => p.type === "timeZoneName")?.value ?? "local"
+    );
+  } catch {
+    return "local";
+  }
+};
+
+/** "HH:MM" clock time in the configured display zone (Prefs.timezone;
+ *  "auto" = the PC's zone). An invalid stored zone falls back to local. */
+export const hhmm = (iso: string): string => {
+  const tz = loadPrefs().timezone;
+  const opts: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
+  if (tz !== "auto") {
+    try {
+      return new Date(iso).toLocaleTimeString([], { ...opts, timeZone: tz });
+    } catch {
+      // unknown zone string — fall through to the local clock
+    }
+  }
+  return new Date(iso).toLocaleTimeString([], opts);
+};
+
+/** "Sat 03:00" — weekday + clock time in the configured display zone, for
+ *  schedule entries that can be days out (arbitration "ones of note"). */
+export const dayTime = (iso: string): string => {
+  const tz = loadPrefs().timezone;
+  const opts: Intl.DateTimeFormatOptions = {
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  };
+  if (tz !== "auto") {
+    try {
+      return new Date(iso).toLocaleString([], { ...opts, timeZone: tz });
+    } catch {
+      // unknown zone string — fall through to the local clock
+    }
+  }
+  return new Date(iso).toLocaleString([], opts);
+};
 
 /** Live countdown to an ISO timestamp: "2d 3h 04m" / "1h 23m 05s" / "45s". */
 export const countdown = (iso: string | null | undefined, now: number = Date.now()): string => {

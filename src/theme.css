@@ -49,6 +49,13 @@
   --plat: #6fa8d8;
   --aya: #6fb3c9;
   --essence: #b08fd6;
+  /* arbitration grade ramp — S gold, A green, B yellow, C blue, D orange, F red */
+  --g-s: #d6b748;
+  --g-a: #5fc27e;
+  --g-b: #d9cc4f;
+  --g-c: #5b90d8;
+  --g-d: #e0883c;
+  --g-f: #e0685c;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
   --nav: 182px;
@@ -100,6 +107,11 @@ body {
   font-size: 12px;
   line-height: 1.35;
   -webkit-font-smoothing: antialiased;
+  /* native widgets (select popups, scrollbars) follow the active palette */
+  color-scheme: dark;
+}
+body.light {
+  color-scheme: light;
 }
 .num {
   font-family: var(--mono);
@@ -1079,8 +1091,9 @@ body.flat-deltas .neg {
   color: var(--neg);
 }
 
-/* arbitration grade box — bordered mono letter in a fixed square.
-   S/A green, B blue, C soft, D/F/— faint. */
+/* arbitration grade box — bordered mono letter in a fixed square; every
+   grade owns a color: S gold · A green · B yellow · C blue · D orange · F red.
+   Unrated ("—") stays faint. */
 .tierb {
   display: inline-grid;
   place-items: center;
@@ -1094,23 +1107,29 @@ body.flat-deltas .neg {
   color: var(--faint);
   background: var(--panel-2);
 }
-.tierb.t-s,
+.tierb.t-s {
+  color: var(--g-s);
+  border-color: var(--g-s);
+}
 .tierb.t-a {
-  color: var(--pos);
-  border-color: var(--pos);
+  color: var(--g-a);
+  border-color: var(--g-a);
 }
 .tierb.t-b {
-  color: var(--blue);
-  border-color: var(--blue);
+  color: var(--g-b);
+  border-color: var(--g-b);
 }
 .tierb.t-c {
-  color: var(--soft);
-  border-color: var(--line-2);
+  color: var(--g-c);
+  border-color: var(--g-c);
 }
-.tierb.t-d,
+.tierb.t-d {
+  color: var(--g-d);
+  border-color: var(--g-d);
+}
 .tierb.t-f {
-  color: var(--faint);
-  border-color: var(--line-2);
+  color: var(--g-f);
+  border-color: var(--g-f);
 }
 
 /* arbitration panel: live mission + upcoming schedule rows */
@@ -1920,6 +1939,19 @@ code {
   font-family: var(--mono);
   opacity: 0.7;
   margin-left: 4px;
+}
+/* stroked inline icon in a filter chip (e.g. the Vaulted lock) */
+.chip svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  vertical-align: -2px;
+  margin-right: 5px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .filters .sp {
   flex: 1;
@@ -2750,6 +2782,29 @@ code {
 .set-num .u {
   color: var(--faint);
   font-size: 11px;
+}
+/* timezone picker — native select skinned to match the settings inputs.
+   The popup list is OS-rendered: color-scheme (set on body) makes it dark,
+   and the explicit option colors cover engines that ignore it. */
+.tz-select {
+  max-width: 220px;
+  height: 30px;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: 0;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 0 8px;
+  cursor: pointer;
+}
+.tz-select:focus {
+  outline: none;
+  border-color: var(--soft);
+}
+.tz-select option {
+  background: var(--panel);
+  color: var(--ink);
 }
 .tpanel.danger {
   border-color: var(--neg);
@@ -3769,4 +3824,181 @@ code {
   font-family: var(--mono);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+/* overview top row — hero left (2fr), cycle 2×2 grid + reset strip right (1fr) */
+.rot-top {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 10px;
+  align-items: stretch;
+  margin-bottom: 10px;
+}
+.rot-top .fwx {
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rot-top .fwx-main {
+  flex: 1;
+  align-items: center;
+}
+.rot-top .fwx-counts {
+  margin-top: auto;
+}
+/* the cycle 2×2 grid fills the whole right side of the top row */
+.cycgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
+  gap: 10px;
+  min-width: 0;
+}
+.cycgrid .cyc {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+@media (max-width: 1180px) {
+  .rot-top {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* reset timers — a full-width row of four boxes of their own */
+.rsetbar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.rsetbox {
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  padding: 8px 12px;
+  min-width: 0;
+}
+.rsetbox .k {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.rsetbox .v {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
+/* nightwave challenge rows */
+.nw-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--line);
+}
+.tpanel-h + .nw-row {
+  border-top: none;
+}
+.nw-row .nw-t {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nw-row > b {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--soft);
+}
+.tag.weekly {
+  color: var(--hot);
+  border-color: var(--hot);
+}
+
+/* invasion rows — rewards bold, node · factions sub, attacker % right */
+.inv-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--line);
+}
+.tpanel-h + .inv-row {
+  border-top: none;
+}
+.inv-row .inv-i {
+  flex: 1;
+  min-width: 0;
+}
+.inv-row .inv-r {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.inv-row .inv-s {
+  font-size: 10.5px;
+  color: var(--faint);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.inv-row > b {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* arbitration "ones of note" — upcoming S/A rows with full info */
+.arbn-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-top: 1px dotted var(--line);
+}
+.fgroup-h + .arbn-row {
+  border-top: none;
+}
+.arbn-i {
+  flex: 1;
+  min-width: 0;
+}
+.arbn-n {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.arbn-s {
+  font-size: 10.5px;
+  color: var(--faint);
+  margin-top: 1px;
+}
+.arbn-r {
+  text-align: right;
+  flex: none;
+}
+.arbn-at {
+  font-size: 11px;
+  color: var(--soft);
+}
+.arbn-cd {
+  font-size: 10px;
+  color: var(--faint);
+  margin-top: 1px;
 }

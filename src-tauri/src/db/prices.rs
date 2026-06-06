@@ -233,9 +233,9 @@ pub fn recent_medians_for(
     }
     for series in out.values_mut() {
         series.reverse(); // DESC fetch → chronological
-        // Clamp troll-print spikes the same way the cached trend % does
-        // (market.rs winsorizes before deriving delta_7d) — otherwise the
-        // sparkline draws a spike the number next to it deliberately ignores.
+                          // Clamp troll-print spikes the same way the cached trend % does
+                          // (market.rs winsorizes before deriving delta_7d) — otherwise the
+                          // sparkline draws a spike the number next to it deliberately ignores.
         super::trends::winsorize(series);
     }
     Ok(out)

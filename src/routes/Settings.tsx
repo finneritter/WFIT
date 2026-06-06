@@ -26,7 +26,14 @@ const CAT_FLOORS: [string, string][] = [
 ];
 import { wipeApp } from "../lib/api";
 import { syncedAgo } from "../lib/format";
-import { type Prefs, type Theme, loadPrefs, savePrefs } from "../lib/prefs";
+import {
+  type Prefs,
+  type Theme,
+  loadPrefs,
+  savePrefs,
+  systemTimezone,
+  timezoneOptions,
+} from "../lib/prefs";
 
 function Row({
   label,
@@ -237,6 +244,23 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
             ]}
             onChange={(v) => update({ flatDeltas: v === "flat" })}
           />
+        </Row>
+        <Row
+          label="Time zone"
+          hint={`Clock times on the Rotation screen (arbitration schedule, data age). Countdowns are unaffected. Auto follows the PC's zone (${systemTimezone()}).`}
+        >
+          <select
+            className="tz-select"
+            value={prefs.timezone}
+            onChange={(e) => update({ timezone: e.target.value })}
+          >
+            <option value="auto">Auto (PC time zone)</option>
+            {timezoneOptions().map((tz) => (
+              <option key={tz} value={tz}>
+                {tz}
+              </option>
+            ))}
+          </select>
         </Row>
       </section>
 

@@ -1,6 +1,7 @@
-//! Extra warframestat blocks — sortie, archon hunt, Steel Path (Teshin) and the
-//! two traders (Baro / Varzia). All parsed from the SAME `/pc/` response the
-//! cycles/fissures already come from, so they cost zero additional requests.
+//! Extra warframestat blocks — sortie, archon hunt, Steel Path (Teshin), the
+//! two traders (Baro / Varzia), Nightwave and invasions. All parsed from the
+//! SAME `/pc/` response the cycles/fissures already come from, so they cost
+//! zero additional requests.
 //!
 //! Each block arrives as an untyped `serde_json::Value` and is parsed here with
 //! `from_value(..).ok()` — a shape change in one block degrades that block to
@@ -64,6 +65,36 @@ pub struct Trader {
     pub location: Option<String>,
     pub character: Option<String>,
     pub inventory: Vec<VendorItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NightwaveChallenge {
+    pub title: String,
+    pub desc: Option<String>,
+    pub reputation: i64,
+    pub is_daily: bool,
+    pub is_elite: bool,
+    pub expiry: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Nightwave {
+    pub season: Option<i64>,
+    pub expiry: Option<String>, // season end
+    /// Active challenges, biggest standing first (elite → weekly → daily).
+    pub challenges: Vec<NightwaveChallenge>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Invasion {
+    pub node: String,
+    pub attacker: String, // faction
+    pub defender: String,
+    pub attacker_reward: Option<String>, // "2 Fieldron" — None on the infested side
+    pub defender_reward: Option<String>,
+    /// Attacker-side progress, 0–100.
+    pub completion: f64,
+    pub eta: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +161,49 @@ struct RawVendorItem {
     item: Option<String>,
     ducats: Option<i64>,
     credits: Option<i64>,
+}
+
+#[derive(Deserialize)]
+struct RawNightwave {
+    season: Option<i64>,
+    expiry: Option<String>,
+    #[serde(default, rename = "activeChallenges")]
+    active_challenges: Vec<RawNwChallenge>,
+}
+
+#[derive(Deserialize)]
+struct RawNwChallenge {
+    title: Option<String>,
+    desc: Option<String>,
+    reputation: Option<i64>,
+    #[serde(default, rename = "isDaily")]
+    is_daily: bool,
+    #[serde(default, rename = "isElite")]
+    is_elite: bool,
+    expiry: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RawInvasion {
+    node: Option<String>,
+    #[serde(default)]
+    completed: bool,
+    completion: Option<f64>,
+    eta: Option<String>,
+    attacker: Option<RawInvSide>,
+    defender: Option<RawInvSide>,
+}
+
+#[derive(Deserialize)]
+struct RawInvSide {
+    faction: Option<String>,
+    reward: Option<RawInvReward>,
+}
+
+#[derive(Deserialize)]
+struct RawInvReward {
+    #[serde(rename = "asString")]
+    as_string: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -221,6 +295,68 @@ pub(super) fn trader_from(v: Option<Value>) -> Option<Trader> {
     })
 }
 
+pub(super) fn nightwave_from(v: Option<Value>) -> Option<Nightwave> {
+    let raw: RawNightwave = serde_json::from_value(v?).ok()?;
+    let mut challenges: Vec<NightwaveChallenge> = raw
+        .active_challenges
+        .into_iter()
+        .filter_map(|c| {
+            Some(NightwaveChallenge {
+                title: c.title?,
+                desc: c.desc,
+                reputation: c.reputation.unwrap_or(0),
+                is_daily: c.is_daily,
+                is_elite: c.is_elite,
+                expiry: c.expiry,
+            })
+        })
+        .collect();
+    if challenges.is_empty() {
+        return None; // between seasons / shape drift — hide the panel
+    }
+    // Biggest standing first: elite weeklies → weeklies → dailies.
+    challenges.sort_by_key(|c| std::cmp::Reverse(c.reputation));
+    Some(Nightwave {
+        season: raw.season,
+        expiry: raw.expiry,
+        challenges,
+    })
+}
+
+/// Live (uncompleted) invasions; an unparseable payload degrades to empty.
+pub(super) fn invasions_from(v: Option<Value>) -> Vec<Invasion> {
+    let Some(v) = v else { return Vec::new() };
+    let raw: Vec<RawInvasion> = serde_json::from_value(v).unwrap_or_default();
+    let reward = |s: &Option<RawInvSide>| {
+        s.as_ref()
+            .and_then(|x| x.reward.as_ref())
+            .and_then(|r| r.as_string.clone())
+            .filter(|s| !s.is_empty())
+    };
+    raw.into_iter()
+        .filter(|i| !i.completed)
+        .filter_map(|i| {
+            Some(Invasion {
+                node: i.node?,
+                attacker: i
+                    .attacker
+                    .as_ref()
+                    .and_then(|s| s.faction.clone())
+                    .unwrap_or_default(),
+                defender: i
+                    .defender
+                    .as_ref()
+                    .and_then(|s| s.faction.clone())
+                    .unwrap_or_default(),
+                attacker_reward: reward(&i.attacker),
+                defender_reward: reward(&i.defender),
+                completion: i.completion.unwrap_or(0.0).clamp(0.0, 100.0),
+                eta: i.eta,
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -296,6 +432,41 @@ mod tests {
     }
 
     #[test]
+    fn parses_nightwave_sorted_by_standing() {
+        let nw = nightwave_from(Some(json!({
+            "season": 8, "expiry": "2026-07-01T00:00:00.000Z",
+            "activeChallenges": [
+                {"title": "Complete 3 different missions", "reputation": 1000, "isDaily": true},
+                {"title": "Complete 3 Sorties or Archon Hunt missions", "reputation": 7000, "isElite": true},
+                {"title": "Kill 150 enemies with a status effect", "reputation": 4500}
+            ]
+        })))
+        .expect("nightwave");
+        assert_eq!(nw.season, Some(8));
+        assert_eq!(nw.challenges.len(), 3);
+        assert_eq!(nw.challenges[0].reputation, 7000); // elite first
+        assert!(nw.challenges[0].is_elite);
+        assert!(nw.challenges[2].is_daily);
+    }
+
+    #[test]
+    fn parses_invasions_and_drops_completed() {
+        let inv = invasions_from(Some(json!([
+            {"node": "Sangeru (Sedna)", "completed": false, "completion": 62.4,
+             "attacker": {"faction": "Grineer", "reward": {"asString": "2 Fieldron"}},
+             "defender": {"faction": "Corpus", "reward": {"asString": "2 Detonite Injector"}}},
+            {"node": "Naeglar (Eris)", "completed": false, "completion": 10.0,
+             "attacker": {"faction": "Infested", "reward": null},
+             "defender": {"faction": "Corpus", "reward": {"asString": "3 Mutagen Mass"}}},
+            {"node": "Done (Mars)", "completed": true, "completion": 100.0}
+        ])));
+        assert_eq!(inv.len(), 2);
+        assert_eq!(inv[0].attacker_reward.as_deref(), Some("2 Fieldron"));
+        assert_eq!(inv[1].attacker_reward, None); // infested side pays nothing
+        assert_eq!(inv[1].defender_reward.as_deref(), Some("3 Mutagen Mass"));
+    }
+
+    #[test]
     fn bad_shapes_degrade_to_none() {
         assert!(sortie_from(None).is_none());
         assert!(sortie_from(Some(json!("not an object"))).is_none());
@@ -303,5 +474,9 @@ mod tests {
         assert!(trader_from(Some(json!([]))).is_none());
         // sortie with no missions at all → None (panel hidden)
         assert!(sortie_from(Some(json!({"boss": "X", "variants": [], "missions": []}))).is_none());
+        // nightwave with no challenges → None; junk invasions → empty
+        assert!(nightwave_from(Some(json!({"season": 8, "activeChallenges": []}))).is_none());
+        assert!(invasions_from(Some(json!("junk"))).is_empty());
+        assert!(invasions_from(None).is_empty());
     }
 }

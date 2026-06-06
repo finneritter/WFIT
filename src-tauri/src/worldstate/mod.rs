@@ -15,7 +15,7 @@ mod extra;
 mod raw;
 
 pub use arbys::ArbitrationBlock;
-pub use extra::{Sortie, SteelPath, Trader};
+pub use extra::{Invasion, Nightwave, Sortie, SteelPath, Trader};
 
 use crate::error::AppResult;
 use chrono::Utc;
@@ -76,6 +76,11 @@ pub struct Worldstate {
     /// The weekly archon hunt — same shape as the sortie (no modifiers).
     pub archon_hunt: Option<Sortie>,
     pub steel_path: Option<SteelPath>,
+    /// Active Nightwave season: challenges + season end (no player standing —
+    /// that's account data the worldstate doesn't carry).
+    pub nightwave: Option<Nightwave>,
+    /// Live (uncompleted) invasions.
+    pub invasions: Vec<Invasion>,
     /// Community-precomputed schedule (browse.wf); None when unavailable.
     pub arbitration: Option<ArbitrationBlock>,
     pub fetched_at: String,
@@ -116,6 +121,8 @@ struct RawWorld {
     archon_hunt: Option<serde_json::Value>,
     #[serde(rename = "steelPath")]
     steel_path: Option<serde_json::Value>,
+    nightwave: Option<serde_json::Value>,
+    invasions: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -263,11 +270,19 @@ impl WorldstateClient {
         self.throttled().await;
         let (ws, de) = tokio::join!(self.fetch_warframestat(), raw::fetch(&self.http));
         // Remember the bounty anchor whenever DE responds — the derived cycle
-        // clock below outlives any single fetch.
+        // clock below outlives any single fetch. Keep DE's sortie/archon/
+        // invasion decodes too: they backfill whatever warframestat couldn't
+        // provide (its origin has served empty 200s for hours at a time).
+        let mut de_extras = None;
         if let Ok(de) = &de {
             if let Some(a) = de.cetus_night_end {
                 *self.cetus_anchor.lock() = Some(a);
             }
+            de_extras = Some((
+                de.sortie.clone(),
+                de.archon_hunt.clone(),
+                de.invasions.clone(),
+            ));
         }
         let mut ws = match (ws, de) {
             (Ok(mut ws), Ok(de)) => {
@@ -292,6 +307,11 @@ impl WorldstateClient {
                     varzia: prev.as_ref().and_then(|p| p.varzia.clone()),
                     sortie: prev.as_ref().and_then(|p| p.sortie.clone()),
                     archon_hunt: prev.as_ref().and_then(|p| p.archon_hunt.clone()),
+                    nightwave: prev.as_ref().and_then(|p| p.nightwave.clone()),
+                    invasions: prev
+                        .as_ref()
+                        .map(|p| p.invasions.clone())
+                        .unwrap_or_default(),
                     steel_path: prev.and_then(|p| p.steel_path),
                     arbitration: None, // attached below — independent of warframestat
                     fetched_at: Utc::now().to_rfc3339(),
@@ -307,6 +327,22 @@ impl WorldstateClient {
                 return Err(e);
             }
         };
+        // DE fallbacks: when warframestat is down its blocks land as None/empty
+        // — fill sortie / archon hunt / invasions from DE's own worldstate so
+        // those panels survive wrapper outages. warframestat wins when present
+        // (friendlier modifier descriptions); DE only plugs the gaps. There is
+        // no DE equivalent for Nightwave (challenge names live client-side).
+        if let Some((de_sortie, de_archon, de_invasions)) = de_extras {
+            if ws.sortie.is_none() {
+                ws.sortie = de_sortie;
+            }
+            if ws.archon_hunt.is_none() {
+                ws.archon_hunt = de_archon;
+            }
+            if ws.invasions.is_empty() {
+                ws.invasions = de_invasions;
+            }
+        }
         // Cycles are deterministic clocks — once we have a bounty anchor from
         // DE, derive them locally rather than trusting warframestat's snapshot
         // (its origin has been observed hours stale, leaving every cycle card
@@ -317,7 +353,7 @@ impl WorldstateClient {
         }
         // Arbitration rides every payload but comes from its own schedule cache
         // (12h TTL) — after the first download this is an in-memory scan.
-        ws.arbitration = self.arbys.block(&self.http, 10).await;
+        ws.arbitration = self.arbys.block(&self.http, 5).await;
         Ok(ws)
     }
 
@@ -372,6 +408,8 @@ impl WorldstateClient {
             sortie: extra::sortie_from(raw.sortie),
             archon_hunt: extra::sortie_from(raw.archon_hunt),
             steel_path: extra::steel_path_from(raw.steel_path),
+            nightwave: extra::nightwave_from(raw.nightwave),
+            invasions: extra::invasions_from(raw.invasions),
             arbitration: None, // attached in fetch()
             fetched_at: Utc::now().to_rfc3339(),
             source_timestamp: raw.timestamp,

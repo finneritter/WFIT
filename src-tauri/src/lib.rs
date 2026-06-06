@@ -41,9 +41,9 @@ const HEARTBEAT_ORDER_BATCH: usize = 6; // max order-book calls per tick
 const WATCH_FRESH_MINS: i64 = 10; // watchlist targets are the time-sensitive tier
 const OWNED_FRESH_MINS: i64 = 60; // owned drives the headline value
 const LISTINGS_SYNC_TICKS: u64 = 13; // listings piggyback every ~10 min (1 call)
-// Bump whenever the price-derivation logic changes. On launch a mismatch wipes the
-// derived price caches and recomputes them, so fixes take effect without a manual
-// "rebuild cache" and stale old-logic prices can't survive behind the TTL.
+                                     // Bump whenever the price-derivation logic changes. On launch a mismatch wipes the
+                                     // derived price caches and recomputes them, so fixes take effect without a manual
+                                     // "rebuild cache" and stale old-logic prices can't survive behind the TTL.
 const PRICING_VERSION: &str = "4"; // 4: delta_7d = None (not 0%) when there's no prior window
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
