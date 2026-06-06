@@ -39,4 +39,4 @@ chmod +x "$DESKTOP"
 update-desktop-database "$(dirname "$DESKTOP")" 2>/dev/null || true
 gtk-update-icon-cache -t -f "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
 
-echo "==> Installed. Launch it by searching \"WFIT\" in KRunner (Alt+Space)."
+echo "==> Installed. Launch it by searching \"WFIT\" in App Launcher (Alt+Space)."
