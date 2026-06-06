@@ -138,7 +138,7 @@ const ChipItem = memo(function ChipItem({
           {row.trend === "up" ? <span className="hot">▲ </span> : null}
           {row.excluded ? "excluded · " : ""}
           {row.part_type}
-          {row.is_vaulted ? <span className="vault">🔒</span> : null}
+          {row.is_vaulted ? <span className="vault">VAULT</span> : null}
         </span>
       </span>
       <span className="ci-r">
@@ -298,7 +298,7 @@ const Section = memo(function Section({
       </div>
       {open ? (
         rows.length === 0 ? (
-          <div className="empty">No parts match.</div>
+          <div className="empty">No items match.</div>
         ) : view === "chips" ? (
           <div className="chips">
             {rows.map((r) => (
@@ -535,7 +535,7 @@ export function Inventory({
         />
         <StatBox k="Total Ducats" v={fmt(summary?.total_ducats)} unit="d" />
         <StatBox
-          k="Parts"
+          k="Items"
           v={fmt(summary?.part_count)}
           d={`${fmt(summary?.distinct_count)} distinct`}
           dcls="muted"
@@ -570,7 +570,7 @@ export function Inventory({
           onClick={() => setVaulted((v) => !v)}
           title="Show only vaulted items (no longer farmable)"
         >
-          🔒 Vaulted
+          <Icon name="lock" /> Vaulted
         </button>
         <Dropdown
           icon="filter"
@@ -618,7 +618,7 @@ export function Inventory({
               Nothing here yet. Use <b>+ Add items</b> to start tracking what you own.
             </>
           ) : (
-            "No parts match."
+            "No items match."
           )}
         </div>
       ) : (
