@@ -1,12 +1,13 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { useWorldstate } from "../hooks/queries";
-import { clsx, countdown, fmt, msUntil, nextUtc } from "../lib/format";
+import { clsx, countdown, fmt, glyph, msUntil, nextUtc } from "../lib/format";
 import type {
   ArbitrationBlock,
   Fissure,
   Sortie,
   SteelPath,
   Trader,
+  VendorItem,
   Worldstate,
 } from "../lib/types";
 
@@ -21,6 +22,21 @@ const TIERS = ["All", "Lith", "Meso", "Neo", "Axi", "Requiem", "Omnia"] as const
 // Order for the per-type refresh strip. Omnia last + highlighted: it's the
 // rotating Zariman type, the only place to crack relics in Void Cascade.
 const FISSURE_TIERS = ["Lith", "Meso", "Neo", "Axi", "Requiem", "Omnia"] as const;
+
+// World-cycle state → the 3px left-edge stripe color on cycle cards.
+const CYCLE_CC: Record<string, string> = {
+  day: "var(--c-day)",
+  night: "var(--c-night)",
+  warm: "var(--c-warm)",
+  cold: "var(--c-cold)",
+  fass: "var(--c-fass)",
+  vome: "var(--c-vome)",
+  joy: "var(--c-joy)",
+  anger: "var(--c-anger)",
+  envy: "var(--c-envy)",
+  sorrow: "var(--c-sorrow)",
+  fear: "var(--c-fear)",
+};
 
 // One shared 1s interval drives every live countdown; leaves subscribe so only
 // the timer cells re-render each second — not the whole fissure table + summary.
@@ -42,23 +58,33 @@ function subscribeTick(fn: () => void): () => void {
   };
 }
 
-/** A self-ticking countdown leaf — re-renders itself each second, in isolation. */
+/** A self-ticking countdown leaf — re-renders itself each second, in isolation.
+ *  Recolors as it crosses thresholds: ink → --hot (warn) → --neg (soon).
+ *  Hero/vendor timers pass larger (hours-scale) thresholds. */
 const Countdown = memo(function Countdown({
   iso,
   fallback = "—",
+  warnMs = 5 * 60_000,
+  soonMs = 90_000,
 }: {
   iso: string | null | undefined;
   fallback?: string;
+  warnMs?: number;
+  soonMs?: number;
 }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => subscribeTick(() => setNow(Date.now())), []);
-  return <>{iso ? countdown(iso, now) : fallback}</>;
+  if (!iso) return <>{fallback}</>;
+  const ms = new Date(iso).getTime() - now;
+  const cls = ms > 0 && ms <= soonMs ? "cd-soon" : ms > 0 && ms <= warnMs ? "cd-warn" : null;
+  const text = countdown(iso, now);
+  return cls ? <span className={cls}>{text}</span> : <>{text}</>;
 });
 
 const hhmm = (iso: string): string =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-/** Community S–D arbitration rating (browse.wf / Arbitration Goons). */
+/** Community S–D arbitration rating (browse.wf / Arbitration Goons) as a grade box. */
 function TierBadge({ tier }: { tier: string | null }) {
   return (
     <span className={clsx("tierb", tier && `t-${tier.toLowerCase()}`)} title="community rating">
@@ -68,8 +94,71 @@ function TierBadge({ tier }: { tier: string | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// Overview panels
+// Overview: fissure-watch hero + panel columns
 // ---------------------------------------------------------------------------
+
+/** The screen's one most-important answer: is Void Cascade up?
+ *  Green "hit" tint when it is; otherwise counts down the Omnia rotation. */
+function FissureWatchHero({ ws }: { ws: Worldstate }) {
+  const live = ws.fissures.filter((f) => msUntil(f.expiry) > 0);
+  const ground = live.filter((f) => !f.is_storm);
+  // If both Normal + Steel Path cascades are up, show the longer-lived one.
+  const cascade = ground
+    .filter((f) => /cascade/i.test(f.mission_type))
+    .sort((a, b) => msUntil(b.expiry) - msUntil(a.expiry))[0];
+  const omnia = ground
+    .filter((f) => f.tier.toLowerCase() === "omnia")
+    .sort((a, b) => msUntil(a.expiry) - msUntil(b.expiry))[0];
+  const hit = cascade !== undefined;
+  const focus = cascade ?? omnia;
+  const counts: Array<[string, number]> = [
+    ["Normal", ground.filter((f) => !f.is_hard).length],
+    ["Steel Path", ground.filter((f) => f.is_hard).length],
+    ["Void Storms", live.filter((f) => f.is_storm).length],
+    ["Total live", live.length],
+  ];
+  return (
+    <div className={clsx("fwx", hit && "hit")}>
+      <div className="fwx-top">
+        <span className="led" />
+        <span className="lbl">Fissure Watch</span>
+        <span>Void Cascade · Omnia</span>
+        <span className="status">{hit ? "● ACTIVE NOW" : "○ NOT UP"}</span>
+      </div>
+      <div className="fwx-main">
+        <div>
+          <div className="fwx-title">{hit ? "Void Cascade" : "No Cascade Up"}</div>
+          <div className="fwx-meta">
+            {focus ? (
+              <>
+                <span>{focus.node}</span>
+                <span className="muted">·</span>
+                <span>{focus.mission_type}</span>
+                {focus.is_hard ? <span className="badge sp">Steel Path</span> : null}
+              </>
+            ) : (
+              <span className="muted">no omnia fissure live</span>
+            )}
+          </div>
+        </div>
+        <div className="fwx-timer">
+          <div className="big">
+            <Countdown iso={focus?.expiry} warnMs={15 * 60_000} soonMs={5 * 60_000} />
+          </div>
+          <div className="tl">{hit ? "time remaining" : "omnia rotates"}</div>
+        </div>
+      </div>
+      <div className="fwx-counts">
+        {counts.map(([k, v]) => (
+          <div className="fwx-cell" key={k}>
+            <div className="v">{v}</div>
+            <div className="k">{k}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ArbitrationPanel({ block }: { block: ArbitrationBlock | null }) {
   return (
@@ -182,7 +271,8 @@ function SteelPathPanel({ sp }: { sp: SteelPath | null }) {
   );
 }
 
-/** Fixed UTC reset rules + the data-driven rotations, one countdown per row. */
+/** Fixed UTC reset rules + the data-driven rotations, one countdown per row.
+ *  Baro/Varzia live in the Void Traders panel, not here. */
 function ResetsPanel({ ws }: { ws: Worldstate }) {
   const rows: Array<[string, string | null]> = [
     ["Daily reset", nextUtc(0)],
@@ -190,11 +280,6 @@ function ResetsPanel({ ws }: { ws: Worldstate }) {
     ["Weekly reset", nextUtc(0, 1)],
     ["Archon hunt", ws.archon_hunt?.expiry ?? nextUtc(0, 1)],
     ["Teshin reward", ws.steel_path?.expiry ?? null],
-    [
-      ws.baro?.active ? "Baro leaves" : "Baro arrives",
-      ws.baro ? (ws.baro.active ? ws.baro.expiry : ws.baro.activation) : null,
-    ],
-    ["Varzia rotation", ws.varzia?.expiry ?? null],
   ];
   return (
     <div className="tpanel">
@@ -214,12 +299,56 @@ function ResetsPanel({ ws }: { ws: Worldstate }) {
   );
 }
 
+/** Compact trader status — full stock lives on the Vendors tab. */
+function TradersPanel({ ws }: { ws: Worldstate }) {
+  const rows: Array<{ name: string; trader: Trader | null; sub: string }> = [
+    {
+      name: "Baro Ki'Teer",
+      trader: ws.baro,
+      sub: ws.baro?.active ? (ws.baro.location ?? "here now") : "away",
+    },
+    {
+      name: "Varzia",
+      trader: ws.varzia,
+      sub: "prime resurgence",
+    },
+  ];
+  return (
+    <div className="tpanel">
+      <div className="tpanel-h">
+        <h3>Void Traders</h3>
+        <span className="meta">stock on Vendors tab</span>
+      </div>
+      {rows.map(({ name, trader, sub }) => (
+        <div className="vend-row" key={name}>
+          <span className={clsx("vdot", trader?.active && "on")} />
+          <div className="vi">
+            <div className="vn">{name}</div>
+            <div className="vs">{sub}</div>
+          </div>
+          <b className="num">
+            <Countdown
+              iso={trader ? (trader.active ? trader.expiry : trader.activation) : null}
+              warnMs={3_600_000}
+              soonMs={15 * 60_000}
+            />
+          </b>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function OverviewTab({ ws }: { ws: Worldstate }) {
   return (
     <>
       <div className="cyclebar">
         {ws.cycles.map((c) => (
-          <div className="cyc" key={c.id}>
+          <div
+            className="cyc"
+            key={c.id}
+            style={{ "--cc": CYCLE_CC[c.state.toLowerCase()] } as React.CSSProperties}
+          >
             <div className="cyc-st">{c.state}</div>
             <div className="cyc-pl">{c.name}</div>
             <div className="cyc-end num">
@@ -228,109 +357,143 @@ function OverviewTab({ ws }: { ws: Worldstate }) {
           </div>
         ))}
       </div>
-      <div className="rot-grid">
-        <ArbitrationPanel block={ws.arbitration} />
-        <SortiePanel title="Sortie" data={ws.sortie} />
-        <SortiePanel title="Archon Hunt" data={ws.archon_hunt} />
-        <SteelPathPanel sp={ws.steel_path} />
-        <ResetsPanel ws={ws} />
+      <FissureWatchHero ws={ws} />
+      <div className="rot-cols">
+        <div className="rot-col">
+          <ArbitrationPanel block={ws.arbitration} />
+          <SortiePanel title="Sortie" data={ws.sortie} />
+        </div>
+        <div className="rot-col">
+          <SortiePanel title="Archon Hunt" data={ws.archon_hunt} />
+          <SteelPathPanel sp={ws.steel_path} />
+        </div>
+        <div className="rot-col">
+          <ResetsPanel ws={ws} />
+          <TradersPanel ws={ws} />
+        </div>
       </div>
     </>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Vendors
+// Vendors: Baro-arrival hero + currency-colored stock tables
 // ---------------------------------------------------------------------------
 
-function VendorPanel({
-  title,
-  trader,
-  priceLabel,
-  activeLabel,
-  emptyNote,
-}: {
-  title: string;
-  trader: Trader | null;
-  priceLabel: string; // "Ducats" (Baro) or "Aya" (Varzia — wrapper reuses the key)
-  activeLabel: string;
-  emptyNote: string;
-}) {
+/** §7.12 hero — the Vendors screen's one answer: is Baro here, and for how long? */
+function BaroHero({ baro }: { baro: Trader | null }) {
+  const active = baro?.active ?? false;
   return (
-    <div className="tpanel">
-      <div className="tpanel-h">
-        <h3>{title}</h3>
-        {trader && trader.inventory.length > 0 ? (
-          <span className="meta">{trader.inventory.length} items</span>
-        ) : null}
+    <div className={clsx("fwx", active && "hit")}>
+      <div className="fwx-top">
+        <span className="led" />
+        <span className="lbl">Void Trader</span>
+        <span>bi-weekly relay visit</span>
+        <span className="status">{active ? "● HERE NOW" : "away"}</span>
       </div>
-      {!trader ? (
-        <div className="empty">No data right now.</div>
-      ) : (
-        <>
-          <div className="baro">
-            <div className="baro-cd">
-              <span className="num">
-                <Countdown iso={trader.active ? trader.expiry : trader.activation} />
-              </span>
-              <span className="bl">{trader.active ? activeLabel : "until arrival"}</span>
-            </div>
-            <div className="baro-meta">
-              <b>{trader.location ?? "Unknown location"}</b>
-              <div className="muted">{trader.active ? "here now" : "not yet arrived"}</div>
-            </div>
+      <div className="fwx-main">
+        <div>
+          <div className="fwx-title">Baro Ki'Teer</div>
+          <div className="fwx-meta">
+            <span>{baro?.location ?? "location unknown"}</span>
+            <span className="muted">·</span>
+            <span className="muted">
+              {active
+                ? `${baro?.inventory.length ?? 0} items in stock`
+                : "stock revealed on arrival"}
+            </span>
           </div>
-          {trader.inventory.length > 0 ? (
-            <table className="dtable vtable">
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th className="r">{priceLabel}</th>
-                  <th className="r">Credits</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trader.inventory.map((it, i) => (
-                  <tr key={`${it.item}-${i}`}>
-                    <td>{it.item}</td>
-                    <td className="r num">{it.ducats ?? "—"}</td>
-                    <td className="r num">{it.credits != null ? fmt(it.credits) : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="baro-note">{emptyNote}</div>
-          )}
-        </>
-      )}
+        </div>
+        <div className="fwx-timer">
+          <div className="big">
+            <Countdown
+              iso={baro ? (active ? baro.expiry : baro.activation) : null}
+              warnMs={12 * 3_600_000}
+              soonMs={2 * 3_600_000}
+            />
+          </div>
+          <div className="tl">{active ? "until departure" : "until arrival"}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** §7.13 stock table — glyph tile · name · currency (colored) · credits. */
+function VendorTable({ items, currency }: { items: VendorItem[]; currency: "ducats" | "aya" }) {
+  const aya = currency === "aya";
+  const costCls = aya ? "v-aya" : "v-ducat";
+  const totalCost = items.reduce((s, it) => s + (it.ducats ?? 0), 0);
+  const totalCred = items.reduce((s, it) => s + (it.credits ?? 0), 0);
+  return (
+    <div className={clsx("vt", aya && "aya")}>
+      <div className="vt-head">
+        <span />
+        <span>Item</span>
+        <span className="r">{aya ? "Aya" : "Ducats"}</span>
+        <span className="r">Credits</span>
+      </div>
+      {items.map((it, i) => (
+        <div className="vrow" key={`${it.item}-${i}`}>
+          <span className="vgl">{glyph(it.item)}</span>
+          <span className="vn">{it.item}</span>
+          <span className={costCls}>{it.ducats ?? "—"}</span>
+          <span className="v-cred">{it.credits != null ? fmt(it.credits) : "—"}</span>
+        </div>
+      ))}
+      <div className="vt-foot">
+        <span />
+        <span className="tk">Total</span>
+        <span className={costCls}>{fmt(totalCost)}</span>
+        <span className="v-cred">{totalCred > 0 ? fmt(totalCred) : "—"}</span>
+      </div>
     </div>
   );
 }
 
 function VendorsTab({ ws }: { ws: Worldstate }) {
   return (
-    <div className="rot-grid v2">
-      <VendorPanel
-        title="Baro Ki'Teer"
-        trader={ws.baro}
-        priceLabel="Ducats"
-        activeLabel="until departure"
-        emptyNote="Baro's stock is only known once he arrives — the worldstate doesn't expose it before then, so the inventory appears here when he's active."
-      />
-      <VendorPanel
-        title="Varzia · Prime Resurgence"
-        trader={ws.varzia}
-        priceLabel="Aya"
-        activeLabel="rotation ends"
-        emptyNote="No resurgence rotation listed right now."
-      />
-    </div>
+    <>
+      <BaroHero baro={ws.baro} />
+      <div className="rot-grid vend">
+        <div className="tpanel">
+          <div className="tpanel-h">
+            <h3>Baro · Stock</h3>
+            {ws.baro && ws.baro.inventory.length > 0 ? (
+              <span className="meta">{ws.baro.inventory.length} items</span>
+            ) : null}
+          </div>
+          {ws.baro && ws.baro.inventory.length > 0 ? (
+            <VendorTable items={ws.baro.inventory} currency="ducats" />
+          ) : (
+            <div className="baro-note">
+              Baro's stock is only known once he arrives — the worldstate doesn't expose it before
+              then, so the inventory appears here when he's active.
+            </div>
+          )}
+        </div>
+        <div className="tpanel">
+          <div className="tpanel-h">
+            <h3>Varzia · Prime Resurgence</h3>
+            {ws.varzia?.expiry ? (
+              <span className="meta num">
+                <Countdown iso={ws.varzia.expiry} /> left
+              </span>
+            ) : null}
+          </div>
+          {ws.varzia && ws.varzia.inventory.length > 0 ? (
+            <VendorTable items={ws.varzia.inventory} currency="aya" />
+          ) : (
+            <div className="baro-note">No resurgence rotation listed right now.</div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Fissures (the original Rotation content, unchanged behavior)
+// Fissures (the original Rotation content, restyled behavior-intact)
 // ---------------------------------------------------------------------------
 
 /** One fissure group's table (tier · mission · location · live time-left).
@@ -421,7 +584,7 @@ function FissuresTab({ ws, deVerified }: { ws: Worldstate; deVerified: boolean }
         {typeSummary.map((s) => (
           <div
             key={s.tier}
-            className={clsx("ftype", s.tier === "Omnia" && "omnia", s.cascade && "cascade")}
+            className={clsx("ftype", `t-${s.tier.toLowerCase()}`, s.cascade && "cascade")}
             title={s.missions.length ? s.missions.join(" · ") : undefined}
           >
             <div className="ft-h">
@@ -431,7 +594,7 @@ function FissuresTab({ ws, deVerified }: { ws: Worldstate; deVerified: boolean }
             <div className="ft-timer num">{s.count ? <Countdown iso={s.nextExpiry} /> : "—"}</div>
             {s.cascade ? (
               <div className="ft-missions">
-                <b>⚡ Void Cascade</b>
+                <b>Void Cascade</b>
                 <span className="ft-grp">{s.cascade.steel ? "Steel Path" : "Normal"}</span>
               </div>
             ) : (
@@ -514,12 +677,15 @@ export function Rotation() {
   // warframestat only feeds the cycle bar + extras, and is the fissure fallback.
   const deVerified = ws.fissure_source === "de";
 
-  // warframestat occasionally serves a frozen snapshot; when its own timestamp
-  // lags real time, whatever still depends on it reads as expired. Flag it so
-  // that doesn't look like a WFIT bug. 15 min tolerates normal update lag.
+  // warframestat occasionally serves a frozen snapshot — but it now only feeds
+  // the slow-moving extras (sortie/vendors/steel path); fissures AND cycles are
+  // derived from DE directly. So an old snapshot is only worth a warning once
+  // its own daily content has lapsed (sortie expired ⇒ the rest is suspect),
+  // or when DE is also unreachable and everything leans on it.
   const sourceAgeMs = ws.source_timestamp ? -msUntil(ws.source_timestamp) : 0;
   const staleMins = Math.floor(sourceAgeMs / 60000);
-  const sourceStale = staleMins >= 15;
+  const sortieExpired = ws.sortie?.expiry != null && msUntil(ws.sortie.expiry) <= 0;
+  const sourceStale = staleMins >= 15 && (!deVerified || sortieExpired);
   const staleFor = staleMins >= 120 ? `${Math.floor(staleMins / 60)}h` : `${staleMins}m`;
 
   return (
@@ -528,14 +694,14 @@ export function Rotation() {
         <div className="ws-stale">
           {deVerified ? (
             <>
-              ⚠ api.warframestat.us is lagging ({staleFor} old), so the cycle bar, vendors and
-              sortie info may be off. Fissures are unaffected — they're verified against DE's
-              worldstate directly.
+              api.warframestat.us is lagging ({staleFor} old) and its daily content has expired —
+              sortie and vendor info may be off until it recovers. Fissures and world cycles are
+              unaffected: they're computed from DE's worldstate directly.
             </>
           ) : (
             <>
-              ⚠ Both world-state sources are degraded — api.warframestat.us is {staleFor} old and
-              DE's worldstate is unreachable, so fissures and cycles below may read as expired. This
+              Both world-state sources are degraded — api.warframestat.us is {staleFor} old and DE's
+              worldstate is unreachable, so fissures and cycles below may read as expired. This
               clears itself once a source recovers; WFIT is fine.
             </>
           )}
