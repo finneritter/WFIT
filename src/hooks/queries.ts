@@ -109,6 +109,16 @@ export const useWorldstate = () =>
     // refetching for unfocused windows, which froze this page mid-session.
     refetchIntervalInBackground: true,
   });
+// Hard reset: the backend discards its worldstate + arbitration caches and
+// re-fetches from the live sources; the fresh payload lands in the query cache
+// immediately (no second round-trip). Errors only when every source is down.
+export const useWorldstateHardReset = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.forceWorldstateRefresh,
+    onSuccess: (ws) => qc.setQueryData(keys.worldstate, ws),
+  });
+};
 // Poll fast while a refresh is in flight, slow otherwise (to notice it starting).
 export const usePricingProgress = () =>
   useQuery({

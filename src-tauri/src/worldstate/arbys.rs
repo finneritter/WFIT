@@ -69,6 +69,12 @@ pub(super) struct ArbysClient {
 }
 
 impl ArbysClient {
+    /// Drop the cached schedule so the next `block()` re-downloads from
+    /// browse.wf (the Rotation screen's hard reset).
+    pub(super) fn clear(&self) {
+        *self.cache.lock() = None;
+    }
+
     /// Current + next `n` arbitrations, or None when the schedule is
     /// unavailable (first fetch failed) — the UI shows "unavailable".
     pub(super) async fn block(&self, http: &Client, n: usize) -> Option<ArbitrationBlock> {

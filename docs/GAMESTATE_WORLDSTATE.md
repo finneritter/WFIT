@@ -45,8 +45,9 @@ fetch error) + the **Rotation** screen (`src/routes/Rotation.tsx`). Two gotchas 
   `MT_*` table and `worldstate/data/sol_nodes.tsv`, regenerated with:
   `curl -s https://raw.githubusercontent.com/WFCD/warframe-worldstate-data/master/data/solNodes.json | jq -r 'to_entries|sort_by(.key)[]|[.key,(.value.value//.key),(.value.enemy//""),(.value.type//"")]|@tsv'`
   Per refresh both sources are fetched concurrently; **DE wins for fissures**
-  (`Worldstate.fissure_source: "de"`), warframestat still provides cycles/Baro and is the fissure
-  fallback; disagreements are logged (`cross_check`). Unknown node/mission IDs degrade to the raw ID
+  (`Worldstate.fissure_source: "de"`), warframestat provides the slow-moving extras
+  (sortie/Baro/Varzia/Steel Path) and is the fissure + cycle fallback; disagreements are logged
+  (`cross_check`). Unknown node/mission IDs degrade to the raw ID
   (new content stays visible) — refresh the tsv when that shows up. Dates are Mongo-export style
   (`{"$date":{"$numberLong":"<ms>"}}`); Void Storm mission types live on the *node* (sol_nodes `type`
   column), not the storm entry.
@@ -57,6 +58,27 @@ fetch error) + the **Rotation** screen (`src/routes/Rotation.tsx`). Two gotchas 
 
 Live freshness can be checked with the `worldstate::tests::ws_probe` `#[ignore]` test (prints source
 lag + fissure source) and `worldstate::raw::tests::de_probe` (DE raw lag + decoded sample).
+
+### Locally derived cycles (2026-06-06)
+
+warframestat's origin was observed serving a **5h-stale snapshot** (every cycle card read as
+expired, and no cache-buster can fix an upstream that isn't ingesting). Open-world cycles are
+deterministic clocks, so `worldstate/cycles.rs` now derives all four locally and overrides the
+wrapper's whenever an anchor is known:
+
+- **Cetus / Cambion Drift** — anchored to DE's `SyndicateMissions[Tag=CetusSyndicate].Expiry`
+  (= end of the current Cetus night; 150-min cycle, 100 day / 50 night; Cambion mirrors day↔fass,
+  night↔vome). The anchor is cached in `WorldstateClient.cetus_anchor` and, being periodic
+  (`rem_euclid`), stays valid across DE outages once seen.
+- **Orb Vallis** — fixed 1600s loop (400 warm / 1200 cold) from the community epoch `1541837628`.
+- **Duviri** — five moods × 2h on even UTC boundaries; the mood array in `cycles.rs` bakes in the
+  epoch phase (verified against warframestat's own derivation).
+
+Consequently the frontend's stale-source banner (`Rotation.tsx`) only fires when warframestat's
+own *content* has lapsed (sortie expiry in the past) or when DE is also unreachable — a merely-old
+snapshot with valid daily content no longer warns. The Rotation topbar refresh button doubles as a
+**hard reset** (`force_worldstate_refresh`): flushes the worldstate + arbys caches and re-fetches
+every source immediately, bypassing the TTL.
 
 ### Game-info hub expansion (2026-06-05)
 

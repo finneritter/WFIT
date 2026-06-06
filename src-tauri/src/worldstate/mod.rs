@@ -10,6 +10,7 @@
 //!   cross-checked against the wrapper and preferred whenever it responds.
 
 mod arbys;
+mod cycles;
 mod extra;
 mod raw;
 
@@ -153,6 +154,10 @@ pub struct WorldstateClient {
     /// Arbitration schedule client — its own (12h) cache; browse.wf is hit
     /// twice a day, not on the 45s worldstate cadence.
     arbys: Arc<arbys::ArbysClient>,
+    /// Last seen Cetus night-end (DE bounty expiry, unix seconds) — anchors the
+    /// locally derived cycle clock (`cycles::derive`). Periodic, so it stays
+    /// valid across DE outages once set.
+    cetus_anchor: Arc<Mutex<Option<i64>>>,
 }
 
 impl Default for WorldstateClient {
@@ -173,6 +178,7 @@ impl WorldstateClient {
             last_call: Arc::new(Mutex::new(Instant::now() - Duration::from_secs(60))),
             cache: Arc::new(Mutex::new(None)),
             arbys: Arc::new(arbys::ArbysClient::default()),
+            cetus_anchor: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -235,6 +241,20 @@ impl WorldstateClient {
         }
     }
 
+    /// Hard reset (the Rotation screen's force-refresh button): flush the
+    /// arbitration schedule cache and re-fetch everything from the live
+    /// sources right now, bypassing the TTL. Unlike `get()`, a total failure
+    /// errors instead of degrading to stale — the user explicitly asked for
+    /// fresh data, so pretending old data is fresh would be a lie. The old
+    /// cache is only replaced on success, so `get()` still degrades gracefully
+    /// afterwards.
+    pub async fn force_refresh(&self) -> AppResult<Worldstate> {
+        self.arbys.clear();
+        let ws = self.fetch().await?;
+        *self.cache.lock() = Some((Instant::now(), ws.clone()));
+        Ok(ws)
+    }
+
     /// Combined fetch: warframestat (cycles/Baro/fissure fallback) and DE's raw
     /// worldstate (authoritative fissures), concurrently. DE wins for fissures
     /// whenever it responds — its CDN copy is ≤43s old, while warframestat's
@@ -242,6 +262,13 @@ impl WorldstateClient {
     async fn fetch(&self) -> AppResult<Worldstate> {
         self.throttled().await;
         let (ws, de) = tokio::join!(self.fetch_warframestat(), raw::fetch(&self.http));
+        // Remember the bounty anchor whenever DE responds — the derived cycle
+        // clock below outlives any single fetch.
+        if let Ok(de) = &de {
+            if let Some(a) = de.cetus_night_end {
+                *self.cetus_anchor.lock() = Some(a);
+            }
+        }
         let mut ws = match (ws, de) {
             (Ok(mut ws), Ok(de)) => {
                 cross_check(&ws.fissures, &de.fissures);
@@ -280,6 +307,14 @@ impl WorldstateClient {
                 return Err(e);
             }
         };
+        // Cycles are deterministic clocks — once we have a bounty anchor from
+        // DE, derive them locally rather than trusting warframestat's snapshot
+        // (its origin has been observed hours stale, leaving every cycle card
+        // "expired"). Without an anchor (DE down since launch) the wrapper's
+        // cycles stand as the fallback.
+        if let Some(anchor) = *self.cetus_anchor.lock() {
+            ws.cycles = cycles::derive(anchor, Utc::now().timestamp());
+        }
         // Arbitration rides every payload but comes from its own schedule cache
         // (12h TTL) — after the first download this is an in-memory scan.
         ws.arbitration = self.arbys.block(&self.http, 10).await;

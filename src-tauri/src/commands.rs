@@ -777,6 +777,15 @@ pub async fn get_worldstate(
     state.worldstate.get().await
 }
 
+/// Hard reset for the Rotation screen: discard the cached worldstate +
+/// arbitration schedule and re-fetch everything from the live sources now.
+#[tauri::command]
+pub async fn force_worldstate_refresh(
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<crate::worldstate::Worldstate> {
+    state.worldstate.force_refresh().await
+}
+
 // ===========================================================================
 // warframe.market account (Listings) — read-only in v1
 // ===========================================================================

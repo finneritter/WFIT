@@ -138,6 +138,7 @@ pub fn run() {
             commands::wipe_app,
             // worldstate
             commands::get_worldstate,
+            commands::force_worldstate_refresh,
             // wfm account
             commands::get_wfm_account,
             commands::wfm_connect,

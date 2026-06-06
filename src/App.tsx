@@ -12,6 +12,7 @@ import {
   usePricesRefresh,
   usePricingProgress,
   useSummary,
+  useWorldstateHardReset,
 } from "./hooks/queries";
 import { clsx } from "./lib/format";
 import { attachSmoothScroll } from "./lib/smoothScroll";
@@ -57,6 +58,9 @@ export default function App() {
   );
   const { data: summary } = useSummary();
   const refresh = usePricesRefresh();
+  // On the Rotation screen the topbar refresh button repurposes itself as the
+  // world-state hard reset (discard backend caches, re-fetch every source).
+  const wsReset = useWorldstateHardReset();
   const { data: progress } = usePricingProgress();
   // Refetch value-bearing views the moment the backend heartbeat lands new data.
   useLivePriceEvents();
@@ -144,10 +148,17 @@ export default function App() {
             <SyncNow />
             <button
               type="button"
-              className={clsx("icon-btn", syncing && "spinning")}
-              title="Refresh prices"
-              onClick={() => refresh.mutate({})}
-              disabled={refresh.isPending}
+              className={clsx(
+                "icon-btn",
+                (screen === "rotation" ? wsReset.isPending : syncing) && "spinning",
+              )}
+              title={
+                screen === "rotation"
+                  ? "Hard reset — discard cached world-state and re-fetch everything now"
+                  : "Refresh prices"
+              }
+              onClick={() => (screen === "rotation" ? wsReset.mutate() : refresh.mutate({}))}
+              disabled={screen === "rotation" ? wsReset.isPending : refresh.isPending}
             >
               <Icon name="refresh" />
             </button>

@@ -148,6 +148,18 @@ struct RawWorld {
     active_missions: Vec<RawMission>,
     #[serde(default, rename = "VoidStorms")]
     void_storms: Vec<RawStorm>,
+    #[serde(default, rename = "SyndicateMissions")]
+    syndicate_missions: Vec<RawSyndicate>,
+}
+
+/// Bounty rotation windows. The Ostron (CetusSyndicate) expiry doubles as the
+/// Cetus day/night clock anchor — bounties rotate exactly at night's end.
+#[derive(Deserialize)]
+struct RawSyndicate {
+    #[serde(rename = "Tag")]
+    tag: Option<String>,
+    #[serde(rename = "Expiry")]
+    expiry: Option<RawDate>,
 }
 
 #[derive(Deserialize)]
@@ -179,6 +191,9 @@ pub struct DeWorld {
     /// DE's snapshot time (unix seconds); how fresh the ground truth itself is.
     pub time: Option<i64>,
     pub fissures: Vec<Fissure>,
+    /// CetusSyndicate bounty expiry (unix seconds) = the end of the current
+    /// Cetus night — the anchor for the derived Cetus/Cambion cycle clock.
+    pub cetus_night_end: Option<i64>,
 }
 
 fn parse(raw: RawWorld) -> DeWorld {
@@ -225,9 +240,18 @@ fn parse(raw: RawWorld) -> DeWorld {
         });
     }
 
+    let cetus_night_end = raw
+        .syndicate_missions
+        .iter()
+        .find(|s| s.tag.as_deref() == Some("CetusSyndicate"))
+        .and_then(|s| s.expiry.as_ref())
+        .and_then(|d| d.date.ms.parse::<i64>().ok())
+        .map(|ms| ms / 1000);
+
     DeWorld {
         time: raw.time,
         fissures,
+        cetus_night_end,
     }
 }
 

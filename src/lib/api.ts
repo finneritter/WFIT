@@ -100,6 +100,8 @@ export const getItemOrders = (slug: string) => invoke<ItemOrders>("get_item_orde
 
 // worldstate
 export const getWorldstate = () => invoke<Worldstate>("get_worldstate");
+// Hard reset: discard the backend's worldstate + arbitration caches and re-fetch.
+export const forceWorldstateRefresh = () => invoke<Worldstate>("force_worldstate_refresh");
 
 // wfm account
 export const getWfmAccount = () => invoke<WfmAccount>("get_wfm_account");

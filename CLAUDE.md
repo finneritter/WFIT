@@ -28,8 +28,10 @@ cheap-item exclusion. The app now has **11 screens** (Arcanes added beyond the 9
 - **`docs/GAMESTATE_WORLDSTATE.md`** — the Rotation screen's sources (isolated + read-only).
   **Fissures = DE's raw `api.warframe.com/cdn/worldState.php`** (authoritative; minimally parsed in
   `worldstate/raw.rs`, decoded via the bundled `sol_nodes.tsv` + `MT_*` maps), cross-checked against /
-  falling back to `api.warframestat.us` (which still feeds cycles/Baro — fetch the canonical `/pc/`
-  with a cache-buster; its origin lags minutes). A 3-min backend refresher keeps it fresh even while
+  falling back to `api.warframestat.us` (which feeds the slow-moving extras: sortie/Baro/Varzia/Steel
+  Path — fetch the canonical `/pc/` with a cache-buster; its origin has been seen hours stale).
+  **World cycles are derived locally** (`worldstate/cycles.rs`: DE bounty-window anchor + deterministic
+  clocks), not taken from warframestat. A 3-min backend refresher keeps it fresh even while
   the webview throttles. Fissures are grouped Normal / Steel Path / Void Storm.
 - **`docs/ARCANE_DISSOLUTION.md`** — the Arcanes screen's domain reference (Loid Vosfor collections,
   drop tables, per-arcane Vosfor, the collection-EV + keep/dissolve methodology). Bundled dataset.
