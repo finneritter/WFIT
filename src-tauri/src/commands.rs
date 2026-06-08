@@ -9,6 +9,7 @@ use crate::types::*;
 use crate::wfm_account;
 use crate::AppState;
 use chrono::{Duration, Utc};
+use rusqlite::OptionalExtension;
 use std::sync::Arc;
 use tauri::State;
 
@@ -1023,6 +1024,99 @@ pub async fn wfm_set_status(
     state.market.set_status(&jwt, &status).await?;
     wfm::set_status(&state.db, &status)?;
     get_wfm_account(state)
+}
+
+/// The lowball-resistant recommended sell price for an item at a given rank.
+/// Read-only over the cached robust signals; drives the ListingForm prefill.
+#[tauri::command]
+pub fn get_recommended_price(
+    state: State<'_, Arc<AppState>>,
+    slug: String,
+    rank: Option<i64>,
+) -> AppResult<Option<i64>> {
+    state.db.read(|c| prices::fair_sell_price(c, &slug, rank))
+}
+
+/// Preview a bulk reprice: every current sell order with its recommended new price.
+/// Rows whose item has no price signal are skipped. Does NOT write anything.
+#[tauri::command]
+pub async fn wfm_reprice_preview(state: State<'_, Arc<AppState>>) -> AppResult<Vec<RepriceRow>> {
+    let acct = wfm::get_account(&state.db)?;
+    let username = acct
+        .username
+        .ok_or_else(|| AppError::NotConnected("not connected".into()))?;
+    let jwt = wfm_account::load_jwt()?;
+    let orders = state
+        .market
+        .fetch_user_orders(&username, jwt.as_deref())
+        .await?;
+    let id_to_slug = catalog::id_slug_map(&state.db)?;
+
+    state.db.read(|c| {
+        let mut meta = c.prepare(
+            "SELECT display_name, part_type, thumbnail_url FROM catalog_items WHERE slug = ?1",
+        )?;
+        let mut out = Vec::new();
+        for o in &orders {
+            if o.order_type != "sell" {
+                continue;
+            }
+            let Some(slug) = id_to_slug.get(&o.item_id) else {
+                continue;
+            };
+            let Some(new_price) = prices::fair_sell_price(c, slug, o.rank)? else {
+                continue; // no price signal — can't recommend, skip
+            };
+            let row = meta
+                .query_row(rusqlite::params![slug], |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, Option<String>>(2)?,
+                    ))
+                })
+                .optional()?;
+            let Some((display_name, part_type, thumbnail_url)) = row else {
+                continue;
+            };
+            out.push(RepriceRow {
+                order_id: o.id.clone(),
+                slug: slug.clone(),
+                display_name,
+                part_type,
+                thumbnail_url,
+                qty: o.quantity.unwrap_or(1),
+                visible: o.visible,
+                current_price: o.platinum,
+                new_price,
+            });
+        }
+        out.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+        Ok(out)
+    })
+}
+
+/// Apply user-confirmed reprices: update each order, then re-sync the mirror once.
+#[tauri::command]
+pub async fn wfm_reprice_apply(
+    state: State<'_, Arc<AppState>>,
+    orders: Vec<RepriceApply>,
+) -> AppResult<usize> {
+    let jwt = require_jwt()?;
+    let mut n = 0;
+    for o in &orders {
+        if o.platinum <= 0 || o.quantity < 1 {
+            continue;
+        }
+        state
+            .market
+            .update_order(&jwt, &o.order_id, o.platinum, o.quantity, o.visible)
+            .await
+            .inspect_err(|e| tracing::warn!(order = %o.order_id, error = %e, "reprice failed"))?;
+        n += 1;
+    }
+    sync_listings_impl(state.inner()).await?;
+    Ok(n)
 }
 
 // ===========================================================================

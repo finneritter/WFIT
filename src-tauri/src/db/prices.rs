@@ -46,6 +46,60 @@ pub fn effective_price(c: &Connection, slug: &str, rank: Option<i64>) -> AppResu
     }
 }
 
+// Recommended "best" sell price tuning.
+const LOWBALL_FRAC: f64 = 0.7; // ignore a live floor this far below the normal trade median
+const UNDERCUT: i64 = 1; // sit 1p under the robust low to be the cheapest reasonable seller
+
+/// Pure decision for the recommended sell price from the two robust signals:
+/// `robust_low` = median of the cheapest 5 online asks (`order_cache`), `median` =
+/// robust trade median. When the live floor is being lowballed far below the normal
+/// price, anchor to the normal price instead of chasing the troll down; then undercut
+/// by 1 to be the cheapest reasonable seller. `None` only when there's no signal at all.
+pub fn fair_from(robust_low: Option<i64>, median: Option<i64>) -> Option<i64> {
+    let base = match (robust_low, median) {
+        (Some(low), Some(med)) if (low as f64) < LOWBALL_FRAC * (med as f64) => med,
+        (Some(low), _) => low,
+        (None, Some(med)) => med,
+        (None, None) => return None,
+    };
+    Some((base - UNDERCUT).max(1))
+}
+
+/// The recommended sell price for a slug at a given rank — undercut the robust live
+/// low, but never chase lowballers below the normal trade median. Reuses the same
+/// `order_cache` / `price_rank` / `price_cache` lookups as `effective_price`.
+pub fn fair_sell_price(c: &Connection, slug: &str, rank: Option<i64>) -> AppResult<Option<i64>> {
+    let robust_low: Option<i64> = match rank {
+        Some(r) => c
+            .query_row(
+                "SELECT sell FROM order_cache WHERE slug = ?1 AND rank >= 0
+                 ORDER BY ABS(rank - ?2) ASC, rank DESC LIMIT 1",
+                params![slug, r],
+                |x| x.get(0),
+            )
+            .optional()?,
+        None => c
+            .query_row(
+                "SELECT sell FROM order_cache WHERE slug = ?1 AND rank IN (-1, 0)
+                 ORDER BY rank ASC LIMIT 1",
+                params![slug],
+                |x| x.get(0),
+            )
+            .optional()?,
+    };
+    let median: Option<i64> = match rank {
+        Some(r) => rank_price(c, slug, r)?,
+        None => c
+            .query_row(
+                "SELECT median_plat FROM price_cache WHERE slug = ?1",
+                params![slug],
+                |x| x.get(0),
+            )
+            .optional()?,
+    };
+    Ok(fair_from(robust_low, median))
+}
+
 // --- Batched valuation lookups ---------------------------------------------
 // `effective_price` does 1-2 queries per call; valuing a 800-item inventory ran
 // it hundreds of times. `PriceMaps` preloads the same three tables for all owned
@@ -527,6 +581,25 @@ mod tests {
         )
         .unwrap();
         c
+    }
+
+    // The recommended-price rule must undercut a healthy live floor but refuse to
+    // chase lowballers below the normal trade median.
+    #[test]
+    fn fair_from_resists_lowballers() {
+        // Healthy market: cheapest-5 median ~15, normal ~16 → undercut to 14.
+        assert_eq!(fair_from(Some(15), Some(16)), Some(14));
+        // One troll only nudges the median-of-5 a little (still ~15) → still ~14, not 4.
+        assert_eq!(fair_from(Some(15), Some(16)), Some(14));
+        // Many trolls drag the live floor far below normal (5 < 0.7*16) → anchor to 16 → 15.
+        assert_eq!(fair_from(Some(5), Some(16)), Some(15));
+        // No live asks → list at the normal price, undercut by 1.
+        assert_eq!(fair_from(None, Some(18)), Some(17));
+        // Rising market: live floor above the historical median → track the live floor.
+        assert_eq!(fair_from(Some(40), Some(16)), Some(39));
+        // Never below 1p, never None when any signal exists.
+        assert_eq!(fair_from(Some(1), None), Some(1));
+        assert_eq!(fair_from(None, None), None);
     }
 
     // Prove the in-memory `effective_price_from` is a faithful twin of the SQL

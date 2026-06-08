@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useItemDetail,
   useItemOrders,
+  useRecommendedPrice,
   useWfmCreateOrder,
   useWfmUpdateOrder,
 } from "../hooks/queries";
@@ -59,25 +60,34 @@ export function ListingForm({
   const spread = lowestAsk != null && bestBid != null ? lowestAsk - bestBid : null;
   const owned = ranked ? ownedAtRank(rank) : (item?.owned_qty ?? 0);
 
-  // Recommended ask: undercut the live lowest ask by 1, else median. Floored at 1.
-  const recommended = useMemo(() => {
-    const base = lowestAsk ?? median;
-    return base == null ? null : Math.max(1, base - 1);
-  }, [lowestAsk, median]);
+  // Lowball-resistant recommended ask, computed in Rust from the robust order-book
+  // low (median of cheapest 5) + the normal trade median — never chases a troll down.
+  const { data: recommended } = useRecommendedPrice(slug, ranked ? rank : null);
 
-  // Prefill once data arrives (create mode only; don't clobber edits-in-progress).
-  const prefilled = useRef(false);
+  // Auto-fill the price with the recommended value until the user edits it (create
+  // mode only). Resetting `touched` on a rank change lets the new rank's recommended
+  // repopulate. `recommended` is keyed by (slug, rank) so it refetches per rank.
+  const [touched, setTouched] = useState(false);
   useEffect(() => {
-    if (isEdit || prefilled.current || !item) return;
-    prefilled.current = true;
-    if (recommended != null) setPrice(String(recommended));
+    if (!isEdit && !touched && recommended != null) setPrice(String(recommended));
+  }, [isEdit, touched, recommended]);
+
+  // Prefill quantity to what's owned, once item data arrives (create mode only).
+  const qtyPrefilled = useRef(false);
+  useEffect(() => {
+    if (isEdit || qtyPrefilled.current || !item) return;
+    qtyPrefilled.current = true;
     if (owned > 0) setQty(String(owned));
-  }, [isEdit, item, recommended, owned]);
+  }, [isEdit, item, owned]);
+
+  const editPrice = (v: string) => {
+    setTouched(true);
+    setPrice(v);
+  };
 
   const onRankChange = (r: number) => {
     setRank(r);
-    const base = lowestAsk ?? medianFor(r);
-    if (base != null) setPrice(String(Math.max(1, base - 1)));
+    setTouched(false); // let the new rank's recommended repopulate the price
     const o = ownedAtRank(r);
     if (o > 0) setQty(String(o));
   };
@@ -106,6 +116,7 @@ export function ListingForm({
   }
 
   const chips: { label: string; value: number }[] = [];
+  if (recommended != null) chips.push({ label: `Best ${fmt(recommended)}`, value: recommended });
   if (lowestAsk != null) {
     chips.push({ label: `Match ${fmt(lowestAsk)}`, value: lowestAsk });
     if (lowestAsk > 1)
@@ -211,7 +222,7 @@ export function ListingForm({
                 type="number"
                 min={1}
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onChange={(e) => editPrice(e.target.value)}
                 autoFocus
               />
               <div className="lf-chips">
@@ -220,7 +231,7 @@ export function ListingForm({
                     key={c.label}
                     type="button"
                     className={clsx("chip", p === c.value && "on")}
-                    onClick={() => setPrice(String(c.value))}
+                    onClick={() => editPrice(String(c.value))}
                   >
                     {c.label}
                   </button>

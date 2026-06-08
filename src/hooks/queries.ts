@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect } from "react";
 import * as api from "../lib/api";
-import type { CatalogRow, ScanApply } from "../lib/types";
+import type { CatalogRow, RepriceApply, ScanApply } from "../lib/types";
 
 type QC = ReturnType<typeof useQueryClient>;
 
@@ -444,6 +444,22 @@ export function useWfmSetStatus() {
   return useMutation({
     mutationFn: (status: string) => api.wfmSetStatus(status),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.wfmAccount }),
+  });
+}
+
+// Lowball-resistant recommended sell price for an item at a rank (null = non-ranked).
+export const useRecommendedPrice = (slug: string, rank: number | null) =>
+  useQuery({
+    queryKey: ["recommendedPrice", slug, rank],
+    queryFn: () => api.getRecommendedPrice(slug, rank),
+    staleTime: 60_000,
+  });
+
+export function useWfmRepriceApply() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orders: RepriceApply[]) => api.wfmRepriceApply(orders),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.listings }),
   });
 }
 

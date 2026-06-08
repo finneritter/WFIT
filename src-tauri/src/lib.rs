@@ -152,6 +152,9 @@ pub fn run() {
             commands::wfm_update_order,
             commands::wfm_delete_order,
             commands::wfm_set_status,
+            commands::get_recommended_price,
+            commands::wfm_reprice_preview,
+            commands::wfm_reprice_apply,
             // set composition (Pass B)
             commands::sets_refresh,
             // game inventory import (memory-scan)

@@ -671,6 +671,9 @@ pub struct RawOrder {
     pub visible: bool,
     #[serde(rename = "itemId")]
     pub item_id: String,
+    /// Present for ranked goods (mods/arcanes); absent → non-ranked.
+    #[serde(default)]
+    pub rank: Option<i64>,
 }
 
 fn avg(xs: &[f64]) -> f64 {

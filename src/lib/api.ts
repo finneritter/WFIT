@@ -13,6 +13,8 @@ import type {
   ItemOrders,
   ListingRow,
   PricingProgress,
+  RepriceApply,
+  RepriceRow,
   SaleRow,
   ScanApply,
   ScanDiffRow,
@@ -128,6 +130,11 @@ export const wfmUpdateOrder = (args: {
 }) => invoke<number>("wfm_update_order", args);
 export const wfmDeleteOrder = (orderId: string) => invoke<number>("wfm_delete_order", { orderId });
 export const wfmSetStatus = (status: string) => invoke<WfmAccount>("wfm_set_status", { status });
+export const getRecommendedPrice = (slug: string, rank: number | null) =>
+  invoke<number | null>("get_recommended_price", { slug, rank });
+export const wfmRepricePreview = () => invoke<RepriceRow[]>("wfm_reprice_preview");
+export const wfmRepriceApply = (orders: RepriceApply[]) =>
+  invoke<number>("wfm_reprice_apply", { orders });
 
 // game inventory import (memory-scan) — opt-in, consent-gated, Linux-only
 export const gameScanStatus = () => invoke<GameScanStatus>("game_scan_status");

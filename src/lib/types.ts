@@ -297,6 +297,25 @@ export interface ImportRow {
   current_qty: number;
 }
 
+export interface RepriceRow {
+  order_id: string;
+  slug: string;
+  display_name: string;
+  part_type: string;
+  thumbnail_url: string | null;
+  qty: number;
+  visible: boolean;
+  current_price: number | null;
+  new_price: number;
+}
+
+export interface RepriceApply {
+  order_id: string;
+  platinum: number;
+  quantity: number;
+  visible: boolean;
+}
+
 // Game inventory import (memory-scan) — opt-in, consent-gated, Linux-only.
 export interface GameScanStatus {
   supported: boolean;

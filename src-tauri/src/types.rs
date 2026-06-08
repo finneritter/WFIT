@@ -382,6 +382,30 @@ pub struct ListingRow {
     pub thumbnail_url: Option<String>,
 }
 
+/// A reviewable bulk-reprice row (preview): one current sell order with the
+/// recommended new price. `new_price == current_price` means no change.
+#[derive(Debug, Clone, Serialize)]
+pub struct RepriceRow {
+    pub order_id: String,
+    pub slug: String,
+    pub display_name: String,
+    pub part_type: String,
+    pub thumbnail_url: Option<String>,
+    pub qty: i64,
+    pub visible: bool,
+    pub current_price: Option<i64>,
+    pub new_price: i64,
+}
+
+/// A user-confirmed reprice to apply to one order.
+#[derive(Debug, Clone, Deserialize)]
+pub struct RepriceApply {
+    pub order_id: String,
+    pub platinum: i64,
+    pub quantity: i64,
+    pub visible: bool,
+}
+
 /// A reviewable import row (preview), before the user confirms it into inventory.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportRow {

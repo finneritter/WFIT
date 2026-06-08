@@ -8,15 +8,16 @@ import {
   useWfmApplyImport,
   useWfmConnect,
   useWfmDeleteOrder,
+  useWfmRepriceApply,
   useWfmSetSession,
   useWfmSetStatus,
   useWfmSignout,
   useWfmSync,
   useWfmUpdateOrder,
 } from "../hooks/queries";
-import { wfmFetchListings } from "../lib/api";
+import { wfmFetchListings, wfmRepricePreview } from "../lib/api";
 import { clsx, fmt } from "../lib/format";
-import type { ImportRow, ListingRow } from "../lib/types";
+import type { ImportRow, ListingRow, RepriceRow } from "../lib/types";
 
 // UI status segment → warframe.market API status; "Offline" = invisible.
 const STATUS_OPTS = [
@@ -258,6 +259,98 @@ function ImportPanel({ rows, onClose }: { rows: ImportRow[]; onClose: () => void
   );
 }
 
+/** Preview + confirm a bulk reprice to the recommended (best) price per listing. */
+function RepricePanel({ rows, onClose }: { rows: RepriceRow[]; onClose: () => void }) {
+  const apply = useWfmRepriceApply();
+  const changes = rows.filter((r) => r.new_price !== r.current_price);
+  return (
+    <div className="tpanel" style={{ marginBottom: 12 }}>
+      <div className="tpanel-h">
+        <h3>Reprice to best — review changes</h3>
+        <span style={{ flex: 1 }} />
+        <button type="button" className="x" onClick={onClose}>
+          ✕
+        </button>
+      </div>
+      <table className="dtable">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th className="r">Current</th>
+            <th className="r">New</th>
+            <th className="r">Δ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const changed = r.new_price !== r.current_price;
+            const delta = r.current_price == null ? null : r.new_price - r.current_price;
+            return (
+              <tr key={r.order_id} className={changed ? undefined : "row-hidden"}>
+                <td>
+                  <div className="dnm">
+                    <Glyph name={r.display_name} plat={r.new_price} thumb={r.thumbnail_url} />
+                    <div className="di">
+                      <span className="nm">{r.display_name}</span>
+                      <span className="sub">{r.part_type}</span>
+                    </div>
+                  </div>
+                </td>
+                <td className="r num">{fmt(r.current_price)}p</td>
+                <td className="r num">{fmt(r.new_price)}p</td>
+                <td className="r num">
+                  {delta == null || delta === 0 ? (
+                    <span className="muted">—</span>
+                  ) : (
+                    <span className={delta > 0 ? "pos" : "neg"}>
+                      {delta > 0 ? "+" : ""}
+                      {fmt(delta)}p
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="modal-f">
+        <div className="info">
+          {changes.length} will change · {rows.length - changes.length} unchanged
+        </div>
+        <span className="sp" style={{ flex: 1 }} />
+        {apply.isError ? (
+          <span className="muted neg" style={{ marginRight: 8 }}>
+            {(apply.error as Error).message}
+          </span>
+        ) : null}
+        <button type="button" className="btn" onClick={onClose} disabled={apply.isPending}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn pri"
+          disabled={changes.length === 0 || apply.isPending}
+          onClick={() =>
+            apply.mutate(
+              changes.map((r) => ({
+                order_id: r.order_id,
+                platinum: r.new_price,
+                quantity: r.qty,
+                visible: r.visible,
+              })),
+              { onSuccess: onClose },
+            )
+          }
+        >
+          {apply.isPending
+            ? "Applying…"
+            : `Apply ${changes.length} change${changes.length === 1 ? "" : "s"}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
   const { data: account } = useWfmAccount();
   const { data: listings = [] } = useListings();
@@ -267,6 +360,8 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
   const update = useWfmUpdateOrder();
   const del = useWfmDeleteOrder();
   const [importRows, setImportRows] = useState<ImportRow[] | null>(null);
+  const [repriceRows, setRepriceRows] = useState<RepriceRow[] | null>(null);
+  const [repricing, setRepricing] = useState(false);
   const [creating, setCreating] = useState<string | null>(null); // slug being created
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState<ListingRow | null>(null);
@@ -335,6 +430,22 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
         <button
           type="button"
           className="btn sm"
+          disabled={!session || repricing || listings.length === 0}
+          title={writeHint}
+          onClick={async () => {
+            setRepricing(true);
+            try {
+              setRepriceRows(await wfmRepricePreview());
+            } finally {
+              setRepricing(false);
+            }
+          }}
+        >
+          {repricing ? "Pricing…" : "Set best prices"}
+        </button>
+        <button
+          type="button"
+          className="btn sm"
           onClick={() => sync.mutate()}
           disabled={sync.isPending}
         >
@@ -353,6 +464,10 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
       </div>
 
       {importRows ? <ImportPanel rows={importRows} onClose={() => setImportRows(null)} /> : null}
+
+      {repriceRows ? (
+        <RepricePanel rows={repriceRows} onClose={() => setRepriceRows(null)} />
+      ) : null}
 
       {!session && !sessionDismissed ? (
         <SessionCard onSkip={() => setSessionDismissed(true)} />
