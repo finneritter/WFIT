@@ -27,6 +27,8 @@ const CAT_FLOORS: [string, string][] = [
 import { wipeApp } from "../lib/api";
 import { syncedAgo } from "../lib/format";
 import {
+  FONTS,
+  type Font,
   type Prefs,
   type Theme,
   loadPrefs,
@@ -223,6 +225,19 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
               ["light", "Light"],
             ]}
             onChange={(v) => update({ theme: v as Theme })}
+          />
+        </Row>
+        <Row
+          label="Font"
+          hint={
+            FONTS.find((f) => f.value === prefs.font)?.hint ??
+            "UI typeface — numbers stay monospaced"
+          }
+        >
+          <Seg
+            value={prefs.font}
+            options={FONTS.map((f) => [f.value, f.label] as [string, string])}
+            onChange={(v) => update({ font: v as Font })}
           />
         </Row>
         <Row label="Density" hint="Tile size in the inventory grid">

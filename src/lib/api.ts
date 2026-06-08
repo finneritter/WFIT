@@ -129,6 +129,7 @@ export const wfmUpdateOrder = (args: {
   visible: boolean;
 }) => invoke<number>("wfm_update_order", args);
 export const wfmDeleteOrder = (orderId: string) => invoke<number>("wfm_delete_order", { orderId });
+export const wfmMarkSold = (orderId: string) => invoke<number>("wfm_mark_sold", { orderId });
 export const wfmSetStatus = (status: string) => invoke<WfmAccount>("wfm_set_status", { status });
 export const getRecommendedPrice = (slug: string, rank: number | null) =>
   invoke<number | null>("get_recommended_price", { slug, rank });

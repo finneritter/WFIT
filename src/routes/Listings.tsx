@@ -8,6 +8,7 @@ import {
   useWfmApplyImport,
   useWfmConnect,
   useWfmDeleteOrder,
+  useWfmMarkSold,
   useWfmRepriceApply,
   useWfmSetSession,
   useWfmSetStatus,
@@ -359,6 +360,7 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
   const setStatus = useWfmSetStatus();
   const update = useWfmUpdateOrder();
   const del = useWfmDeleteOrder();
+  const markSold = useWfmMarkSold();
   const [importRows, setImportRows] = useState<ImportRow[] | null>(null);
   const [repriceRows, setRepriceRows] = useState<RepriceRow[] | null>(null);
   const [repricing, setRepricing] = useState(false);
@@ -568,6 +570,15 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
                         </span>
                       ) : (
                         <span className="lf-actions">
+                          <button
+                            type="button"
+                            className="btn sm pos"
+                            disabled={markSold.isPending}
+                            title="Sold one — drops qty by 1 on warframe.market and logs the sale"
+                            onClick={() => markSold.mutate(l.order_id)}
+                          >
+                            {markSold.isPending ? "…" : "Sold"}
+                          </button>
                           <button
                             type="button"
                             className="btn sm"

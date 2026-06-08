@@ -1011,6 +1011,65 @@ pub async fn wfm_delete_order(
     sync_listings_impl(state.inner()).await
 }
 
+/// Mark one unit of a listing sold: drop the order's quantity by 1 on
+/// warframe.market (deleting it once it hits 0), log a single-unit sale at the
+/// listed price so it counts toward plat-earned, decrement owned inventory, then
+/// re-sync the mirror. Each press sells one.
+#[tauri::command]
+pub async fn wfm_mark_sold(state: State<'_, Arc<AppState>>, order_id: String) -> AppResult<usize> {
+    let jwt = require_jwt()?;
+
+    // Read the current order from the mirror (price/qty/visibility/slug).
+    let (slug, price, qty, visible): (String, Option<i64>, i64, bool) = state.db.with(|c| {
+        c.query_row(
+            "SELECT slug, your_price, qty, visible FROM market_listings WHERE order_id = ?1",
+            rusqlite::params![order_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get::<_, i64>(3)? != 0)),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => {
+                AppError::NotFound(format!("no listing for order {order_id}"))
+            }
+            other => AppError::Sqlite(other),
+        })
+    })?;
+
+    // Apply the sale to warframe.market: one fewer in stock, or close the order.
+    let remaining = qty - 1;
+    if remaining >= 1 {
+        state
+            .market
+            .update_order(
+                &jwt,
+                &order_id,
+                price.unwrap_or(1).max(1),
+                remaining,
+                visible,
+            )
+            .await?;
+    } else {
+        state.market.delete_order(&jwt, &order_id).await?;
+    }
+
+    // Log it locally at the price it sold for, decrementing inventory.
+    let category: Option<String> = state.db.with(|c| {
+        Ok(c.query_row(
+            "SELECT category FROM catalog_items WHERE slug = ?1",
+            rusqlite::params![slug],
+            |r| r.get(0),
+        )
+        .ok())
+    })?;
+    let members = if category.as_deref() == Some("set") {
+        inventory::set_members(&state.db, &slug)?
+    } else {
+        Vec::new()
+    };
+    sales::record_sold(&state.db, &slug, price, &members)?;
+
+    sync_listings_impl(state.inner()).await
+}
+
 /// Set the account's market presence so orders show active to buyers.
 #[tauri::command]
 pub async fn wfm_set_status(

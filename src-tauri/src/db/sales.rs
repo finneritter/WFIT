@@ -80,6 +80,64 @@ pub fn record(db: &Db, sale: SaleRecord) -> AppResult<i64> {
     })
 }
 
+/// Record a single-unit sale of a listed item being marked sold on the Listings
+/// screen: writes one sale_events row at `plat_per_unit` (falling back to the
+/// cached median) so it counts toward plat-earned, and decrements owned
+/// inventory by one if present. For a set, decrements each member part instead.
+/// Tolerant by design — listings and inventory are independent, so a missing
+/// inventory row is fine and never an error.
+pub fn record_sold(
+    db: &Db,
+    slug: &str,
+    plat_per_unit: Option<i64>,
+    members: &[String],
+) -> AppResult<()> {
+    db.with_mut(|conn| {
+        let tx = conn.transaction()?;
+        let cached_median: Option<i64> = tx
+            .query_row(
+                "SELECT median_plat FROM price_cache WHERE slug = ?1",
+                params![slug],
+                |r| r.get(0),
+            )
+            .ok();
+        let plat = plat_per_unit.or(cached_median);
+        let now = Utc::now().to_rfc3339();
+        tx.execute(
+            "INSERT INTO sale_events
+                (slug, qty, plat_per_unit, market_median_at_sale_time, sold_at, notes)
+             VALUES (?1, 1, ?2, ?3, ?4, NULL)",
+            params![slug, plat, cached_median, now],
+        )?;
+        // A set is owned as its member parts; otherwise decrement the slug itself.
+        let owned: Vec<&str> = if members.is_empty() {
+            vec![slug]
+        } else {
+            members.iter().map(String::as_str).collect()
+        };
+        for s in owned {
+            let q: i64 = tx
+                .query_row(
+                    "SELECT qty FROM inventory_items WHERE slug = ?1",
+                    params![s],
+                    |r| r.get(0),
+                )
+                .unwrap_or(0);
+            if q <= 1 {
+                // q == 0 → not tracked → no-op; q == 1 → last copy → remove.
+                tx.execute("DELETE FROM inventory_items WHERE slug = ?1", params![s])?;
+            } else {
+                tx.execute(
+                    "UPDATE inventory_items SET qty = ?1, last_modified_at = ?2 WHERE slug = ?3",
+                    params![q - 1, now, s],
+                )?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    })
+}
+
 /// Sell a complete set: verify each member part is owned, decrement one of each
 /// by `qty`, and record a single sale_events row against the set slug (priced at
 /// the set median). Returns `qty` sold.

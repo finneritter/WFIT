@@ -439,6 +439,20 @@ export function useWfmDeleteOrder() {
   });
 }
 
+export function useWfmMarkSold() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: string) => api.wfmMarkSold(orderId),
+    onSuccess: () => {
+      // Sale touches the order mirror, sales ledger, owned inventory, and totals.
+      qc.invalidateQueries({ queryKey: keys.listings });
+      qc.invalidateQueries({ queryKey: keys.sales });
+      qc.invalidateQueries({ queryKey: keys.inventory });
+      qc.invalidateQueries({ queryKey: keys.summary });
+    },
+  });
+}
+
 export function useWfmSetStatus() {
   const qc = useQueryClient();
   return useMutation({

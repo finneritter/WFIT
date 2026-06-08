@@ -151,6 +151,7 @@ pub fn run() {
             commands::wfm_create_order,
             commands::wfm_update_order,
             commands::wfm_delete_order,
+            commands::wfm_mark_sold,
             commands::wfm_set_status,
             commands::get_recommended_price,
             commands::wfm_reprice_preview,
