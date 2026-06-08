@@ -66,97 +66,118 @@ function NewListingModal({
   );
 }
 
+/** Step 1 of 2: connect by public username (validated against warframe.market). */
 function SignInCard() {
   const connect = useWfmConnect();
-  const setSession = useWfmSetSession();
   const [username, setUsername] = useState("");
-  const [jwt, setJwt] = useState("");
+
+  const submit = () => {
+    const u = username.trim();
+    if (u && !connect.isPending) connect.mutate(u);
+  };
 
   return (
     <div className="tpanel" style={{ maxWidth: 520 }}>
       <div className="tpanel-h">
         <h3>Connect warframe.market</h3>
+        <span style={{ flex: 1 }} />
+        <span className="muted">Step 1 of 2</span>
       </div>
       <div className="content" style={{ padding: 14 }}>
         <p className="muted" style={{ marginTop: 0 }}>
           Read-only. WFIT imports your <b>listings</b> (orders), not your in-game inventory —
-          there's no DE inventory API. Tier 1 needs only your public username.
+          there's no DE inventory API. This first step needs only your public username.
         </p>
         <div className="search" style={{ marginBottom: 8 }}>
           <input
+            autoFocus
             placeholder="warframe.market username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
           />
         </div>
         <button
           type="button"
           className="btn pri"
           disabled={!username.trim() || connect.isPending}
-          onClick={() => connect.mutate(username.trim())}
+          onClick={submit}
         >
-          {connect.isPending ? "Connecting…" : "Connect"}
+          {connect.isPending ? "Checking…" : "Next →"}
         </button>
         {connect.isError ? (
           <div className="conn-note" style={{ marginTop: 8 }}>
             {(connect.error as Error).message}
           </div>
         ) : null}
-
-        <div className="grp" style={{ paddingLeft: 0 }}>
-          Optional · invisible orders
-        </div>
-        <div className="search" style={{ marginBottom: 8 }}>
-          <input
-            placeholder="paste JWT (stored in OS keychain)"
-            value={jwt}
-            onChange={(e) => setJwt(e.target.value)}
-          />
-        </div>
-        <button
-          type="button"
-          className="btn"
-          disabled={!jwt.trim() || setSession.isPending}
-          onClick={() => setSession.mutate(jwt.trim())}
-        >
-          {setSession.isPending ? "Validating…" : "Save session token"}
-        </button>
       </div>
     </div>
   );
 }
 
-/** Prompt to add a session token after connecting username-only (Tier 1 → Tier 2). */
-function SessionCard() {
+/** Step 2 of 2 (optional): paste the JWT cookie to unlock invisible orders + management. */
+function SessionCard({ onSkip }: { onSkip: () => void }) {
   const setSession = useWfmSetSession();
   const [jwt, setJwt] = useState("");
+
+  const submit = () => {
+    const t = jwt.trim();
+    if (t && !setSession.isPending) setSession.mutate(t, { onSuccess: () => setJwt("") });
+  };
+
   return (
-    <div className="tpanel" style={{ marginBottom: 12 }}>
+    <div className="tpanel" style={{ marginBottom: 12, maxWidth: 560 }}>
       <div className="tpanel-h">
-        <h3>Add a session token to manage orders</h3>
+        <h3>Add a session token</h3>
+        <span style={{ flex: 1 }} />
+        <span className="muted">Step 2 of 2 · optional</span>
       </div>
       <div className="content" style={{ padding: 14 }}>
         <p className="muted" style={{ marginTop: 0 }}>
-          You're connected by username (read-only). To create, edit, or delete orders and set your
-          status, paste your warframe.market <b>JWT</b> cookie. Get it from your browser while
-          logged in: DevTools (F12) → Application/Storage → Cookies → <b>warframe.market</b> → copy
-          the value of the <b>JWT</b> cookie. It's stored only in your OS keychain.
+          You're connected read-only. To see <b>invisible</b> orders and to create, edit, delete, or
+          set the status of orders, paste your warframe.market <b>JWT</b> cookie. No password is
+          ever entered — it's stored only in your OS keychain, never the database.
         </p>
+        <div className="grp" style={{ paddingLeft: 0 }}>
+          Where to find your JWT
+        </div>
+        <ol className="muted" style={{ margin: "4px 0 12px", paddingLeft: 18, lineHeight: 1.6 }}>
+          <li>
+            Open <b>warframe.market</b> in your browser and log in.
+          </li>
+          <li>
+            Open DevTools (<b>F12</b>, or <b>⌘⌥I</b>) → <b>Application</b> (Chrome) / <b>Storage</b>{" "}
+            (Firefox) tab.
+          </li>
+          <li>
+            <b>Cookies</b> → <b>https://warframe.market</b>.
+          </li>
+          <li>
+            Copy the value of the <b>JWT</b> cookie (a long string starting <code>eyJ…</code>).
+          </li>
+          <li>Paste it below.</li>
+        </ol>
         <div className="search" style={{ marginBottom: 8 }}>
           <input
             placeholder="paste JWT (eyJ…)"
             value={jwt}
             onChange={(e) => setJwt(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
           />
         </div>
-        <button
-          type="button"
-          className="btn pri"
-          disabled={!jwt.trim() || setSession.isPending}
-          onClick={() => setSession.mutate(jwt.trim(), { onSuccess: () => setJwt("") })}
-        >
-          {setSession.isPending ? "Validating…" : "Save session token"}
-        </button>
+        <div className="lf-actions">
+          <button
+            type="button"
+            className="btn pri"
+            disabled={!jwt.trim() || setSession.isPending}
+            onClick={submit}
+          >
+            {setSession.isPending ? "Validating…" : "Finish"}
+          </button>
+          <button type="button" className="btn" onClick={onSkip} disabled={setSession.isPending}>
+            Skip — stay read-only
+          </button>
+        </div>
         {setSession.isError ? (
           <div className="conn-note" style={{ marginTop: 8 }}>
             {(setSession.error as Error).message}
@@ -250,6 +271,7 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState<ListingRow | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [sessionDismissed, setSessionDismissed] = useState(false);
 
   if (!account?.connected) return <SignInCard />;
 
@@ -296,6 +318,11 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
           ))}
         </span>
         <span style={{ flex: 1 }} />
+        {!session && sessionDismissed ? (
+          <button type="button" className="btn sm" onClick={() => setSessionDismissed(false)}>
+            Add session token
+          </button>
+        ) : null}
         <button
           type="button"
           className="btn pri sm"
@@ -327,7 +354,9 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
 
       {importRows ? <ImportPanel rows={importRows} onClose={() => setImportRows(null)} /> : null}
 
-      {!session ? <SessionCard /> : null}
+      {!session && !sessionDismissed ? (
+        <SessionCard onSkip={() => setSessionDismissed(true)} />
+      ) : null}
 
       <div className="statband" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
         <StatBox k="Active listings" v={fmt(active)} />
