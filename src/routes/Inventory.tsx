@@ -4,7 +4,7 @@ import { Dropdown, type DropdownOption } from "../components/Dropdown";
 import { Icon } from "../components/Icon";
 import { Spark } from "../components/charts";
 import { Glyph, StatBox } from "../components/ui";
-import { useInventory, usePricingProgress, useSummary } from "../hooks/queries";
+import { useInventory, useListings, usePricingProgress, useSummary } from "../hooks/queries";
 import { CATEGORY_LABELS, clsx, fmt, fmtK, glyph, pct, tier, trendOf } from "../lib/format";
 import type { InventoryRow } from "../lib/types";
 
@@ -76,9 +76,11 @@ function usePersisted<T extends string>(key: string, fallback: T): [T, (v: T) =>
 const Tile = memo(function Tile({
   row,
   onOpen,
+  listed,
 }: {
   row: InventoryRow;
   onOpen: (slug: string) => void;
+  listed?: boolean;
 }) {
   const plat = row.median_plat;
   return (
@@ -92,6 +94,11 @@ const Tile = memo(function Tile({
       {row.is_vaulted ? (
         <span className="lock" title="Vaulted — no longer farmable">
           <Icon name="lock" />
+        </span>
+      ) : null}
+      {listed ? (
+        <span className="listed-mark" title="Listed on warframe.market">
+          <Icon name="tag" />
         </span>
       ) : null}
       <span className="qty num">×{row.qty}</span>
@@ -130,9 +137,11 @@ const Tile = memo(function Tile({
 const ChipItem = memo(function ChipItem({
   row,
   onOpen,
+  listed,
 }: {
   row: InventoryRow;
   onOpen: (slug: string) => void;
+  listed?: boolean;
 }) {
   const plat = row.median_plat;
   const d = row.delta_7d;
@@ -162,6 +171,7 @@ const ChipItem = memo(function ChipItem({
           {row.excluded ? "excluded · " : ""}
           {row.part_type}
           {row.is_vaulted ? <span className="vault">VAULT</span> : null}
+          {listed ? <span className="listed-tag">LISTED</span> : null}
         </span>
       </span>
       <span className="ci-r">
@@ -223,11 +233,13 @@ const InvTable = memo(function InvTable({
   onOpen,
   colSort,
   onSort,
+  listed,
 }: {
   rows: InventoryRow[];
   onOpen: (slug: string) => void;
   colSort: ColSort | null;
   onSort: (key: ColKey) => void;
+  listed: Set<string>;
 }) {
   return (
     <table className="dtable inv-tbl">
@@ -260,6 +272,7 @@ const InvTable = memo(function InvTable({
                       {row.trend === "up" ? <span className="hot">▲ HOT</span> : null}
                       {row.excluded ? <span className="excl-tag">EXCL</span> : null}
                       {row.is_vaulted ? <span className="vault">VAULT</span> : null}
+                      {listed.has(row.slug) ? <span className="listed-tag">LISTED</span> : null}
                     </span>
                     <span className="sub">{row.part_type}</span>
                   </span>
@@ -289,50 +302,6 @@ const InvTable = memo(function InvTable({
   );
 });
 
-// "What's driving your value" — the few holdings that actually matter, so a
-// junk-heavy inventory shows where its real value lives (index-composition, §2.5).
-function Composition({ rows, onOpen }: { rows: InventoryRow[]; onOpen: (slug: string) => void }) {
-  const [open, setOpen] = usePersisted<"1" | "0">("wfit-inv-compo", "1");
-  const ranked = [...rows].sort((a, b) => realValue(b) - realValue(a));
-  const total = ranked.reduce((s, r) => s + realValue(r), 0);
-  const top = ranked.filter((r) => realValue(r) > 0).slice(0, 6);
-  if (total <= 0 || top.length === 0) return null;
-  const isOpen = open !== "0";
-  return (
-    <div className="tpanel compo">
-      <div className="tpanel-h" onClick={() => setOpen(isOpen ? "0" : "1")}>
-        <span className={clsx("tw", isOpen && "open")}>▸</span>
-        <h3>What's driving your value</h3>
-        <span className="meta">
-          top {top.length} of {ranked.length}
-        </span>
-      </div>
-      {isOpen
-        ? top.map((r) => {
-            const v = realValue(r);
-            const share = Math.round((v / total) * 100);
-            return (
-              <button
-                type="button"
-                className="compo-row"
-                key={r.slug}
-                onClick={() => onOpen(r.slug)}
-              >
-                <span className="compo-name">{r.display_name}</span>
-                <span className="compo-bar">
-                  <span className="compo-fill" style={{ width: `${Math.max(2, share)}%` }} />
-                </span>
-                <span className="compo-val num">
-                  {fmt(v)}p<span className="u"> · {share}%</span>
-                </span>
-              </button>
-            );
-          })
-        : null}
-    </div>
-  );
-}
-
 const Section = memo(function Section({
   title,
   rows,
@@ -340,6 +309,7 @@ const Section = memo(function Section({
   view,
   colSort,
   onSort,
+  listed,
 }: {
   title: string;
   rows: InventoryRow[];
@@ -347,6 +317,7 @@ const Section = memo(function Section({
   view: ViewKey;
   colSort: ColSort | null;
   onSort: (key: ColKey) => void;
+  listed: Set<string>;
 }) {
   const [open, setOpen] = useState(true);
   const stack = rows.reduce((s, r) => s + realValue(r), 0);
@@ -366,15 +337,15 @@ const Section = memo(function Section({
         ) : view === "chips" ? (
           <div className="chips">
             {rows.map((r) => (
-              <ChipItem key={r.slug} row={r} onOpen={onOpen} />
+              <ChipItem key={r.slug} row={r} onOpen={onOpen} listed={listed.has(r.slug)} />
             ))}
           </div>
         ) : view === "list" ? (
-          <InvTable rows={rows} onOpen={onOpen} colSort={colSort} onSort={onSort} />
+          <InvTable rows={rows} onOpen={onOpen} colSort={colSort} onSort={onSort} listed={listed} />
         ) : (
           <div className="grid">
             {rows.map((r) => (
-              <Tile key={r.slug} row={r} onOpen={onOpen} />
+              <Tile key={r.slug} row={r} onOpen={onOpen} listed={listed.has(r.slug)} />
             ))}
           </div>
         )
@@ -477,6 +448,9 @@ export function Inventory({
 }) {
   const { data: inv = [], isLoading } = useInventory();
   const { data: summary } = useSummary();
+  // Slugs with an active warframe.market sell order → "LISTED" tag on the tiles.
+  const { data: listings = [] } = useListings();
+  const listedSlugs = useMemo(() => new Set(listings.map((l) => l.slug)), [listings]);
   const { data: progress } = usePricingProgress();
   const qc = useQueryClient();
   // While the throttled refresh is in flight, the portfolio value climbs as items
@@ -627,10 +601,6 @@ export function Inventory({
         <StatBox k="Sold · 7d" v={fmt(summary?.sold_7d)} unit="p" />
       </div>
 
-      {cat === "all" && !hot && !vaulted && !query ? (
-        <Composition rows={inv} onOpen={onOpen} />
-      ) : null}
-
       <div className="filters">
         <button
           type="button"
@@ -712,6 +682,7 @@ export function Inventory({
             view={view}
             colSort={colSort}
             onSort={cycleSort}
+            listed={listedSlugs}
           />
         ))
       )}

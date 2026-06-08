@@ -1721,6 +1721,32 @@ body.flat-deltas .neg {
 .lf-modal {
   max-width: 460px;
   width: 460px;
+  /* The scrim stretches children full-height; this compact panel shrink-wraps
+     and centers instead, so there's no dead space below the content. */
+  align-self: center;
+}
+
+/* New-listing picker: inventory-first, filterable, with a scrolling list. */
+.np-modal {
+  max-width: 460px;
+  width: 460px;
+  align-self: center;
+  max-height: 80vh;
+}
+.np-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--line);
+}
+.np-divider {
+  padding: 8px 14px 5px;
+  border-top: 1px solid var(--line);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--faint);
 }
 .lf-head {
   display: flex;
@@ -2095,58 +2121,6 @@ code {
   color: var(--faint);
 }
 
-/* composition — "what's driving your value" */
-.compo {
-  margin-bottom: 12px;
-}
-.compo > .tpanel-h {
-  cursor: pointer;
-  user-select: none;
-}
-.compo > .tpanel-h .tw {
-  color: var(--faint);
-  font-size: 10px;
-  width: 10px;
-}
-.compo-row {
-  display: grid;
-  grid-template-columns: 1fr 84px auto;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  border-top: 1px solid var(--line);
-  padding: 6px 14px;
-  cursor: pointer;
-  color: var(--ink);
-  font: inherit;
-}
-.compo-row:hover {
-  background: var(--hover);
-}
-.compo-name {
-  font-size: 12.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.compo-bar {
-  height: 5px;
-  background: var(--line);
-}
-.compo-fill {
-  display: block;
-  height: 100%;
-  background: var(--soft);
-}
-.compo-val {
-  font-size: 12px;
-  color: var(--soft);
-  white-space: nowrap;
-}
-
 /* drawer rank breakdown (mods/arcanes) */
 .rankbox {
   margin: 12px 0;
@@ -2358,6 +2332,23 @@ code {
   font-family: var(--mono);
   font-size: 9px;
   color: var(--faint);
+}
+/* "Listed on warframe.market" marker — bottom-left, clear of TL/TC/TR marks. */
+.tile .listed-mark {
+  position: absolute;
+  left: 2px;
+  bottom: 15px;
+  z-index: 3;
+  line-height: 0;
+}
+.tile .listed-mark svg {
+  width: 9px;
+  height: 9px;
+  stroke: var(--plat);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 /* value bar */
 .tile .vbar {
@@ -2726,6 +2717,18 @@ code {
   margin-left: 4px;
 }
 .inv-tbl .nm .vault {
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+  letter-spacing: .04em;
+}
+/* "LISTED" tag in chips/list (the tag icon handles the grid). */
+.chip-it .ci-sub .listed-tag,
+.inv-tbl .nm .listed-tag {
+  color: var(--plat);
+  font-size: 9px;
+  margin-left: 4px;
+}
+.inv-tbl .nm .listed-tag {
   border: 1px solid var(--line-2);
   padding: 0 3px;
   letter-spacing: .04em;

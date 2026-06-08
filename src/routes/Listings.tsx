@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ListingForm } from "../components/ListingForm";
-import { SearchResults } from "../components/SearchResults";
 import { Glyph, StatBox } from "../components/ui";
 import {
+  useInventory,
   useListings,
+  useSearchCatalog,
   useWfmAccount,
   useWfmApplyImport,
   useWfmConnect,
@@ -17,8 +18,8 @@ import {
   useWfmUpdateOrder,
 } from "../hooks/queries";
 import { wfmFetchListings, wfmRepricePreview } from "../lib/api";
-import { clsx, fmt } from "../lib/format";
-import type { ImportRow, ListingRow, RepriceRow } from "../lib/types";
+import { CATEGORY_LABELS, clsx, fmt } from "../lib/format";
+import type { ImportRow, InventoryRow, ListingRow, RepriceRow } from "../lib/types";
 
 // UI status segment → warframe.market API status; "Offline" = invisible.
 const STATUS_OPTS = [
@@ -27,7 +28,36 @@ const STATUS_OPTS = [
   { api: "ingame", label: "In Game", dot: "ingame" },
 ] as const;
 
-/** Search-and-pick an item to create a brand-new listing for. */
+/** A pickable row (shared by the owned list and the catalog fallback). */
+function PickRow({
+  slug,
+  name,
+  sub,
+  plat,
+  thumb,
+  onPick,
+}: {
+  slug: string;
+  name: string;
+  sub: string;
+  plat: number | null;
+  thumb: string | null;
+  onPick: (slug: string) => void;
+}) {
+  return (
+    <button type="button" className="sr-row" onClick={() => onPick(slug)}>
+      <Glyph name={name} plat={plat} thumb={thumb} />
+      <span className="sr-i">
+        <span className="sr-n">{name}</span>
+        <span className="sr-s">{sub}</span>
+      </span>
+      <span className="sr-p num">{plat == null ? "—" : `${fmt(plat)}p`}</span>
+    </button>
+  );
+}
+
+/** Pick an item to list — your inventory first (filterable), with a catalog
+ *  fallback so you can still list something you don't currently track. */
 function NewListingModal({
   onPick,
   onClose,
@@ -35,14 +65,37 @@ function NewListingModal({
   onPick: (slug: string) => void;
   onClose: () => void;
 }) {
+  const { data: inv = [] } = useInventory();
   const [q, setQ] = useState("");
+  const query = q.trim().toLowerCase();
+
+  // Owned items, filtered by the query, richest first (what you'd most likely sell).
+  const owned = useMemo(() => {
+    const worth = (r: InventoryRow) =>
+      r.realizable_plat ?? r.value_plat ?? (r.median_plat ?? 0) * r.qty;
+    const matches = query
+      ? inv.filter(
+          (r) =>
+            r.display_name.toLowerCase().includes(query) ||
+            r.part_type.toLowerCase().includes(query),
+        )
+      : inv;
+    return [...matches].sort((a, b) => worth(b) - worth(a));
+  }, [inv, query]);
+
+  // Fallback: catalog matches you don't own, so non-tracked items stay listable.
+  const { data: catalog = [] } = useSearchCatalog(query.length >= 2 ? q.trim() : "");
+  const others = useMemo(() => {
+    if (query.length < 2) return [];
+    const ownedSlugs = new Set(inv.map((r) => r.slug));
+    return catalog.filter((r) => !ownedSlugs.has(r.slug)).slice(0, 8);
+  }, [catalog, inv, query]);
+
+  const empty = owned.length === 0 && others.length === 0;
+
   return (
     <div className="modal-scrim" onClick={onClose}>
-      <div
-        className="modal"
-        style={{ maxWidth: 520, overflow: "visible" }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="modal np-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-h">
           <h2>New listing</h2>
           <span style={{ flex: 1 }} />
@@ -50,18 +103,43 @@ function NewListingModal({
             ✕
           </button>
         </div>
-        <div style={{ padding: 14 }}>
-          <div style={{ position: "relative" }}>
-            <div className="search">
-              <input
-                autoFocus
-                placeholder="Search items to list…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
+        <div className="search" style={{ margin: 14 }}>
+          <input
+            autoFocus
+            placeholder="Filter your inventory…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+        <div className="np-list">
+          {empty ? (
+            <div className="sr-empty">
+              {query ? "Nothing matches — try fewer letters." : "Your inventory is empty."}
             </div>
-            <SearchResults query={q} onOpen={onPick} />
-          </div>
+          ) : null}
+          {owned.map((r) => (
+            <PickRow
+              key={r.slug}
+              slug={r.slug}
+              name={r.display_name}
+              sub={`${r.part_type} · ${CATEGORY_LABELS[r.category]} · own ×${r.qty}`}
+              plat={r.median_plat}
+              thumb={r.thumbnail_url}
+              onPick={onPick}
+            />
+          ))}
+          {others.length ? <div className="np-divider">Not in your inventory</div> : null}
+          {others.map((r) => (
+            <PickRow
+              key={r.slug}
+              slug={r.slug}
+              name={r.display_name}
+              sub={`${r.part_type} · ${CATEGORY_LABELS[r.category]}`}
+              plat={r.median_plat}
+              thumb={r.thumbnail_url}
+              onPick={onPick}
+            />
+          ))}
         </div>
       </div>
     </div>
