@@ -819,15 +819,16 @@ pub async fn wfm_set_session(
     state: State<'_, Arc<AppState>>,
     jwt: String,
 ) -> AppResult<WfmAccount> {
-    let acct = wfm::get_account(&state.db)?;
-    let username = acct
+    let _ = wfm::get_account(&state.db)?
         .username
         .ok_or_else(|| AppError::NotConnected("connect a username first".into()))?;
-    // Validate the token by making one authenticated call.
-    let _ = state
+    // Validate against an authenticated endpoint so a bad/expired token is caught now,
+    // not later on the first write (the public orders endpoint can't tell us this).
+    state
         .market
-        .fetch_user_orders(&username, Some(jwt.trim()))
-        .await?;
+        .fetch_me(jwt.trim())
+        .await
+        .map_err(|e| AppError::Invalid(format!("session token rejected: {e}")))?;
     wfm_account::store_jwt(jwt.trim())?;
     get_wfm_account(state)
 }
@@ -857,28 +858,16 @@ pub(crate) async fn sync_listings_impl(state: &Arc<AppState>) -> AppResult<usize
         .fetch_user_orders(&username, jwt.as_deref())
         .await?;
 
-    // Keep only orders that map to a tracked catalog slug.
+    // Resolve warframe.market item ids -> our catalog slugs; drop untracked items.
+    let id_to_slug = catalog::id_slug_map(&state.db)?;
     let mirror: Vec<ListingMirror> = orders
         .into_iter()
         .filter_map(|o| {
-            let known: bool = state
-                .db
-                .with(|c| {
-                    let n: i64 = c.query_row(
-                        "SELECT COUNT(*) FROM catalog_items WHERE slug = ?1",
-                        rusqlite::params![o.item.url_name],
-                        |r| r.get(0),
-                    )?;
-                    Ok(n > 0)
-                })
-                .unwrap_or(false);
-            if !known {
-                return None;
-            }
+            let slug = id_to_slug.get(&o.item_id)?.clone();
             Some(ListingMirror {
                 order_id: o.id,
-                slug: o.item.url_name,
-                order_type: "sell".into(),
+                slug,
+                order_type: o.order_type,
                 your_price: o.platinum,
                 qty: o.quantity.unwrap_or(1),
                 visible: o.visible,
@@ -906,10 +895,16 @@ pub async fn wfm_fetch_listings(state: State<'_, Arc<AppState>>) -> AppResult<Ve
         .fetch_user_orders(&username, jwt.as_deref())
         .await?;
 
+    let id_to_slug = catalog::id_slug_map(&state.db)?;
     let mut out = Vec::new();
     for o in orders {
-        let row = catalog::get(&state.db, &o.item.url_name)?;
-        if let Some(r) = row {
+        if o.order_type != "sell" {
+            continue;
+        }
+        let Some(slug) = id_to_slug.get(&o.item_id) else {
+            continue;
+        };
+        if let Some(r) = catalog::get(&state.db, slug)? {
             out.push(ImportRow {
                 slug: r.slug,
                 display_name: r.display_name,
@@ -931,6 +926,103 @@ pub fn wfm_apply_import(
     let n = wfm::apply_import(&state.db, &rows)?;
     wfm::mark_imported(&state.db)?;
     Ok(n)
+}
+
+// ---------------------------------------------------------------------------
+// Order management (Tier 2 — writes; require a session JWT in the keychain)
+// ---------------------------------------------------------------------------
+
+/// Load the session JWT or fail with a clear "needs a session" error.
+fn require_jwt() -> AppResult<String> {
+    wfm_account::load_jwt()?
+        .ok_or_else(|| AppError::NotConnected("writing orders requires a session token".into()))
+}
+
+const STATUSES: [&str; 3] = ["ingame", "online", "invisible"];
+
+/// Create a sell order on warframe.market, then re-sync the mirror.
+#[tauri::command]
+pub async fn wfm_create_order(
+    state: State<'_, Arc<AppState>>,
+    slug: String,
+    platinum: i64,
+    quantity: i64,
+    rank: Option<i64>,
+    visible: bool,
+) -> AppResult<usize> {
+    if platinum <= 0 {
+        return Err(AppError::Invalid("price must be greater than 0".into()));
+    }
+    if quantity < 1 {
+        return Err(AppError::Invalid("quantity must be at least 1".into()));
+    }
+    let jwt = require_jwt()?;
+    let item_id = catalog::wfm_id_for(&state.db, &slug)?
+        .ok_or_else(|| AppError::NotFound(format!("no warframe.market id for {slug}")))?;
+    tracing::info!(
+        slug,
+        item_id,
+        platinum,
+        quantity,
+        ?rank,
+        visible,
+        "wfm_create_order"
+    );
+    state
+        .market
+        .create_order(&jwt, &item_id, "sell", platinum, quantity, rank, visible)
+        .await
+        .inspect_err(|e| tracing::warn!(error = %e, "wfm_create_order failed"))?;
+    sync_listings_impl(state.inner()).await
+}
+
+/// Edit an existing order's price / quantity / visibility, then re-sync the mirror.
+#[tauri::command]
+pub async fn wfm_update_order(
+    state: State<'_, Arc<AppState>>,
+    order_id: String,
+    platinum: i64,
+    quantity: i64,
+    visible: bool,
+) -> AppResult<usize> {
+    if platinum <= 0 {
+        return Err(AppError::Invalid("price must be greater than 0".into()));
+    }
+    if quantity < 1 {
+        return Err(AppError::Invalid("quantity must be at least 1".into()));
+    }
+    let jwt = require_jwt()?;
+    state
+        .market
+        .update_order(&jwt, &order_id, platinum, quantity, visible)
+        .await?;
+    sync_listings_impl(state.inner()).await
+}
+
+/// Delete an order, then re-sync the mirror.
+#[tauri::command]
+pub async fn wfm_delete_order(
+    state: State<'_, Arc<AppState>>,
+    order_id: String,
+) -> AppResult<usize> {
+    let jwt = require_jwt()?;
+    state.market.delete_order(&jwt, &order_id).await?;
+    sync_listings_impl(state.inner()).await
+}
+
+/// Set the account's market presence so orders show active to buyers.
+#[tauri::command]
+pub async fn wfm_set_status(
+    state: State<'_, Arc<AppState>>,
+    status: String,
+) -> AppResult<WfmAccount> {
+    if !STATUSES.contains(&status.as_str()) {
+        return Err(AppError::Invalid(format!("unknown status: {status}")));
+    }
+    let jwt = require_jwt()?;
+    state.market.set_status(&jwt, &status).await?;
+    wfm::set_status(&state.db, &status)?;
+    get_wfm_account(state)
 }
 
 // ===========================================================================

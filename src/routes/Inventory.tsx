@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Dropdown, type DropdownOption } from "../components/Dropdown";
 import { Icon } from "../components/Icon";
 import { Spark } from "../components/charts";
@@ -30,6 +30,29 @@ const rowValue = (r: InventoryRow) => r.value_plat ?? (r.median_plat ?? 0) * r.q
 // Liquidation-adjusted value — the honest worth. Drives totals + sort so illiquid
 // hoards sink instead of inflating the inventory.
 const realValue = (r: InventoryRow) => r.realizable_plat ?? rowValue(r);
+
+// Click-to-sort state for the List view's column headers. Each header cycles
+// asc → desc → off; when set it overrides the toolbar sort dropdown.
+type ColKey = "name" | "trend" | "qty" | "unit" | "stack";
+interface ColSort {
+  key: ColKey;
+  dir: "asc" | "desc";
+}
+// Ascending comparator for one List-view column; descending negates the result.
+const colCompare = (a: InventoryRow, b: InventoryRow, key: ColKey): number => {
+  switch (key) {
+    case "name":
+      return a.display_name.localeCompare(b.display_name);
+    case "trend":
+      return (a.delta_7d ?? 0) - (b.delta_7d ?? 0);
+    case "qty":
+      return a.qty - b.qty;
+    case "unit":
+      return (a.median_plat ?? 0) - (b.median_plat ?? 0);
+    default:
+      return realValue(a) - realValue(b);
+  }
+};
 
 // Persisted string UI state (view, tile size, label density). Survives reloads.
 function usePersisted<T extends string>(key: string, fallback: T): [T, (v: T) => void] {
@@ -162,22 +185,59 @@ const ChipItem = memo(function ChipItem({
 });
 
 // List view: the shared data table — Item | 7d (spark + %) | Qty | Unit | Stack.
+// A clickable List-view column header: cycles asc → desc → off and shows the
+// active-direction arrow. `right` mirrors the existing `.r` numeric alignment.
+function SortTh({
+  label,
+  col,
+  colSort,
+  onSort,
+  right,
+}: {
+  label: string;
+  col: ColKey;
+  colSort: ColSort | null;
+  onSort: (key: ColKey) => void;
+  right?: boolean;
+}) {
+  const active = colSort?.key === col;
+  return (
+    <th
+      className={clsx(right && "r")}
+      aria-sort={active ? (colSort?.dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button
+        type="button"
+        className={clsx("th-sort", active && "sorted")}
+        onClick={() => onSort(col)}
+      >
+        {label}
+        {active ? <span className="sort-arr">{colSort?.dir === "asc" ? "▲" : "▼"}</span> : null}
+      </button>
+    </th>
+  );
+}
+
 const InvTable = memo(function InvTable({
   rows,
   onOpen,
+  colSort,
+  onSort,
 }: {
   rows: InventoryRow[];
   onOpen: (slug: string) => void;
+  colSort: ColSort | null;
+  onSort: (key: ColKey) => void;
 }) {
   return (
     <table className="dtable inv-tbl">
       <thead>
         <tr>
-          <th>Item</th>
-          <th className="r">7d trend</th>
-          <th className="r">Qty</th>
-          <th className="r">Unit</th>
-          <th className="r">Stack</th>
+          <SortTh label="Item" col="name" colSort={colSort} onSort={onSort} />
+          <SortTh label="7d trend" col="trend" colSort={colSort} onSort={onSort} right />
+          <SortTh label="Qty" col="qty" colSort={colSort} onSort={onSort} right />
+          <SortTh label="Unit" col="unit" colSort={colSort} onSort={onSort} right />
+          <SortTh label="Stack" col="stack" colSort={colSort} onSort={onSort} right />
         </tr>
       </thead>
       <tbody>
@@ -278,11 +338,15 @@ const Section = memo(function Section({
   rows,
   onOpen,
   view,
+  colSort,
+  onSort,
 }: {
   title: string;
   rows: InventoryRow[];
   onOpen: (slug: string) => void;
   view: ViewKey;
+  colSort: ColSort | null;
+  onSort: (key: ColKey) => void;
 }) {
   const [open, setOpen] = useState(true);
   const stack = rows.reduce((s, r) => s + realValue(r), 0);
@@ -306,7 +370,7 @@ const Section = memo(function Section({
             ))}
           </div>
         ) : view === "list" ? (
-          <InvTable rows={rows} onOpen={onOpen} />
+          <InvTable rows={rows} onOpen={onOpen} colSort={colSort} onSort={onSort} />
         ) : (
           <div className="grid">
             {rows.map((r) => (
@@ -432,6 +496,16 @@ export function Inventory({
   const [hot, setHot] = useState(false);
   const [vaulted, setVaulted] = useState(false);
   const [sort, setSort] = usePersisted<SortKey>("wfit-inv-sort", "value-desc");
+  // List-view column-header sorting. Clicking a header cycles asc → desc → off;
+  // while active it overrides the toolbar sort dropdown (which clears it on change).
+  const [colSort, setColSort] = useState<ColSort | null>(null);
+  const cycleSort = useCallback((key: ColKey) => {
+    setColSort((cur) => {
+      if (!cur || cur.key !== key) return { key, dir: "asc" };
+      if (cur.dir === "asc") return { key, dir: "desc" };
+      return null;
+    });
+  }, []);
   const [view, setView] = usePersisted<ViewKey>("wfit-inv-view", "grid");
   const [size, setSize] = usePersisted<string>("wfit-inv-size", "");
   const [labels, setLabels] = usePersisted<string>("wfit-inv-labels", "");
@@ -466,6 +540,10 @@ export function Inventory({
     });
     const sorted = [...rows];
     sorted.sort((a, b) => {
+      if (colSort) {
+        const c = colCompare(a, b, colSort.key);
+        return colSort.dir === "asc" ? c : -c;
+      }
       switch (sort) {
         case "value-asc":
           return realValue(a) - realValue(b);
@@ -478,7 +556,7 @@ export function Inventory({
       }
     });
     return sorted;
-  }, [inv, query, hot, vaulted, sort, hideExcl]);
+  }, [inv, query, hot, vaulted, sort, colSort, hideExcl]);
 
   const byCat = useMemo(() => {
     const map = new Map<string, InventoryRow[]>();
@@ -586,7 +664,10 @@ export function Inventory({
           icon="sort"
           value={sort}
           options={SORT_OPTS}
-          onChange={(v) => setSort(v as SortKey)}
+          onChange={(v) => {
+            setSort(v as SortKey);
+            setColSort(null);
+          }}
           align="right"
           title="Sort items"
         />
@@ -629,6 +710,8 @@ export function Inventory({
             rows={byCat.get(c) ?? []}
             onOpen={onOpen}
             view={view}
+            colSort={colSort}
+            onSort={cycleSort}
           />
         ))
       )}

@@ -148,6 +148,10 @@ pub fn run() {
             commands::wfm_get_listings,
             commands::wfm_fetch_listings,
             commands::wfm_apply_import,
+            commands::wfm_create_order,
+            commands::wfm_update_order,
+            commands::wfm_delete_order,
+            commands::wfm_set_status,
             // set composition (Pass B)
             commands::sets_refresh,
             // game inventory import (memory-scan)

@@ -1,17 +1,70 @@
 import { useState } from "react";
+import { ListingForm } from "../components/ListingForm";
+import { SearchResults } from "../components/SearchResults";
 import { Glyph, StatBox } from "../components/ui";
 import {
   useListings,
   useWfmAccount,
   useWfmApplyImport,
   useWfmConnect,
+  useWfmDeleteOrder,
   useWfmSetSession,
+  useWfmSetStatus,
   useWfmSignout,
   useWfmSync,
+  useWfmUpdateOrder,
 } from "../hooks/queries";
 import { wfmFetchListings } from "../lib/api";
 import { clsx, fmt } from "../lib/format";
-import type { ImportRow } from "../lib/types";
+import type { ImportRow, ListingRow } from "../lib/types";
+
+// UI status segment → warframe.market API status; "Offline" = invisible.
+const STATUS_OPTS = [
+  { api: "invisible", label: "Offline", dot: "offline" },
+  { api: "online", label: "Online", dot: "online" },
+  { api: "ingame", label: "In Game", dot: "ingame" },
+] as const;
+
+/** Search-and-pick an item to create a brand-new listing for. */
+function NewListingModal({
+  onPick,
+  onClose,
+}: {
+  onPick: (slug: string) => void;
+  onClose: () => void;
+}) {
+  const [q, setQ] = useState("");
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <div
+        className="modal"
+        style={{ maxWidth: 520, overflow: "visible" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-h">
+          <h2>New listing</h2>
+          <span style={{ flex: 1 }} />
+          <button type="button" className="x" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <div style={{ padding: 14 }}>
+          <div style={{ position: "relative" }}>
+            <div className="search">
+              <input
+                autoFocus
+                placeholder="Search items to list…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </div>
+            <SearchResults query={q} onOpen={onPick} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function SignInCard() {
   const connect = useWfmConnect();
@@ -26,8 +79,8 @@ function SignInCard() {
       </div>
       <div className="content" style={{ padding: 14 }}>
         <p className="muted" style={{ marginTop: 0 }}>
-          Read-only. WFIT imports your <b>listings</b> (orders), not your in-game inventory — there's
-          no DE inventory API. Tier 1 needs only your public username.
+          Read-only. WFIT imports your <b>listings</b> (orders), not your in-game inventory —
+          there's no DE inventory API. Tier 1 needs only your public username.
         </p>
         <div className="search" style={{ marginBottom: 8 }}>
           <input
@@ -73,6 +126,47 @@ function SignInCard() {
   );
 }
 
+/** Prompt to add a session token after connecting username-only (Tier 1 → Tier 2). */
+function SessionCard() {
+  const setSession = useWfmSetSession();
+  const [jwt, setJwt] = useState("");
+  return (
+    <div className="tpanel" style={{ marginBottom: 12 }}>
+      <div className="tpanel-h">
+        <h3>Add a session token to manage orders</h3>
+      </div>
+      <div className="content" style={{ padding: 14 }}>
+        <p className="muted" style={{ marginTop: 0 }}>
+          You're connected by username (read-only). To create, edit, or delete orders and set your
+          status, paste your warframe.market <b>JWT</b> cookie. Get it from your browser while
+          logged in: DevTools (F12) → Application/Storage → Cookies → <b>warframe.market</b> → copy
+          the value of the <b>JWT</b> cookie. It's stored only in your OS keychain.
+        </p>
+        <div className="search" style={{ marginBottom: 8 }}>
+          <input
+            placeholder="paste JWT (eyJ…)"
+            value={jwt}
+            onChange={(e) => setJwt(e.target.value)}
+          />
+        </div>
+        <button
+          type="button"
+          className="btn pri"
+          disabled={!jwt.trim() || setSession.isPending}
+          onClick={() => setSession.mutate(jwt.trim(), { onSuccess: () => setJwt("") })}
+        >
+          {setSession.isPending ? "Validating…" : "Save session token"}
+        </button>
+        {setSession.isError ? (
+          <div className="conn-note" style={{ marginTop: 8 }}>
+            {(setSession.error as Error).message}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function ImportPanel({ rows, onClose }: { rows: ImportRow[]; onClose: () => void }) {
   const apply = useWfmApplyImport();
   const [sel, setSel] = useState<Record<string, number>>(
@@ -105,9 +199,16 @@ function ImportPanel({ rows, onClose }: { rows: ImportRow[]; onClose: () => void
               <td className="r">
                 <input
                   type="number"
-                  style={{ width: 48, background: "var(--panel)", color: "var(--ink)", border: "1px solid var(--line-2)" }}
+                  style={{
+                    width: 48,
+                    background: "var(--panel)",
+                    color: "var(--ink)",
+                    border: "1px solid var(--line-2)",
+                  }}
                   value={sel[r.slug] ?? 0}
-                  onChange={(e) => setSel((s) => ({ ...s, [r.slug]: parseInt(e.target.value, 10) || 0 }))}
+                  onChange={(e) =>
+                    setSel((s) => ({ ...s, [r.slug]: Number.parseInt(e.target.value, 10) || 0 }))
+                  }
                 />
               </td>
             </tr>
@@ -141,39 +242,83 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
   const { data: listings = [] } = useListings();
   const sync = useWfmSync();
   const signout = useWfmSignout();
+  const setStatus = useWfmSetStatus();
+  const update = useWfmUpdateOrder();
+  const del = useWfmDeleteOrder();
   const [importRows, setImportRows] = useState<ImportRow[] | null>(null);
+  const [creating, setCreating] = useState<string | null>(null); // slug being created
+  const [picking, setPicking] = useState(false);
+  const [editing, setEditing] = useState<ListingRow | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   if (!account?.connected) return <SignInCard />;
 
+  const session = account.has_session;
+  const writeHint = session ? undefined : "Add a session token to manage orders";
   const active = listings.length;
   const listedValue = listings.reduce((s, l) => s + (l.your_price ?? 0) * l.qty, 0);
-  const atBest = listings.filter((l) => l.market_low != null && (l.your_price ?? 0) <= l.market_low).length;
-  const undercut = listings.filter((l) => l.market_low != null && (l.your_price ?? 0) > l.market_low).length;
+  const atBest = listings.filter(
+    (l) => l.market_low != null && (l.your_price ?? 0) <= l.market_low,
+  ).length;
+  const undercut = listings.filter(
+    (l) => l.market_low != null && (l.your_price ?? 0) > l.market_low,
+  ).length;
+  const dot = STATUS_OPTS.find((o) => o.api === account.status)?.dot ?? "offline";
+
+  const toggleVisible = (l: ListingRow) =>
+    update.mutate({
+      orderId: l.order_id,
+      platinum: l.your_price ?? 1,
+      quantity: l.qty,
+      visible: !l.visible,
+    });
 
   return (
     <>
       <div className="conn">
-        <span className={clsx("cdot", account.status ?? "offline")} />
+        <span className={clsx("cdot", dot)} />
         <span className="cinfo">
-          Connected to <b>warframe.market</b> as <b>{account.username}</b>
-          {account.has_session ? " · session active" : " · public"}
+          <b>{account.username}</b>
+          {session ? " · session active" : " · public · read-only"}
         </span>
-        <span className="seg">
-          {(["offline", "online", "ingame"] as const).map((s) => (
-            <button key={s} type="button" className="segb" aria-pressed={account.status === s} disabled>
-              {s === "ingame" ? "In Game" : s.charAt(0).toUpperCase() + s.slice(1)}
+        <span className="seg" title={writeHint}>
+          {STATUS_OPTS.map((o) => (
+            <button
+              key={o.api}
+              type="button"
+              className="segb"
+              aria-pressed={account.status === o.api}
+              disabled={!session || setStatus.isPending}
+              onClick={() => setStatus.mutate(o.api)}
+            >
+              {o.label}
             </button>
           ))}
         </span>
-        <button type="button" className="btn sm" onClick={() => sync.mutate()} disabled={sync.isPending}>
-          {sync.isPending ? "Syncing…" : "Sync now"}
+        <span style={{ flex: 1 }} />
+        <button
+          type="button"
+          className="btn pri sm"
+          disabled={!session}
+          title={writeHint}
+          onClick={() => setPicking(true)}
+        >
+          + New listing
+        </button>
+        <button
+          type="button"
+          className="btn sm"
+          onClick={() => sync.mutate()}
+          disabled={sync.isPending}
+        >
+          {sync.isPending ? "Syncing…" : "Sync"}
         </button>
         <button
           type="button"
           className="btn sm"
           onClick={async () => setImportRows(await wfmFetchListings())}
         >
-          Import to inventory
+          Import
         </button>
         <button type="button" className="btn sm" onClick={() => signout.mutate()}>
           Disconnect
@@ -181,6 +326,8 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
       </div>
 
       {importRows ? <ImportPanel rows={importRows} onClose={() => setImportRows(null)} /> : null}
+
+      {!session ? <SessionCard /> : null}
 
       <div className="statband" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
         <StatBox k="Active listings" v={fmt(active)} />
@@ -196,26 +343,38 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
               <th>Item</th>
               <th className="r">Your price</th>
               <th className="r">Qty</th>
+              <th className="r">Value</th>
               <th className="r">Market low</th>
-              <th>Status</th>
+              <th>vs market</th>
+              <th className="r">Manage</th>
             </tr>
           </thead>
           <tbody>
             {listings.length === 0 ? (
               <tr>
-                <td colSpan={5} className="muted">
-                  No sell orders found. Hit <b>Sync now</b> to refresh from warframe.market.
+                <td colSpan={7} className="muted">
+                  No sell orders found. Hit <b>Sync</b> to refresh from warframe.market
+                  {session ? (
+                    <>
+                      , or <b>+ New listing</b> to post one.
+                    </>
+                  ) : (
+                    "."
+                  )}
                 </td>
               </tr>
             ) : (
               listings.map((l) => {
-                const best = l.market_low != null && (l.your_price ?? 0) <= l.market_low;
-                const over =
-                  l.market_low != null && (l.your_price ?? 0) > l.market_low
-                    ? (l.your_price ?? 0) - l.market_low
-                    : 0;
+                const yp = l.your_price ?? 0;
+                const best = l.market_low != null && yp <= l.market_low;
+                const over = l.market_low != null && yp > l.market_low ? yp - l.market_low : 0;
+                const confirming = confirmId === l.order_id;
                 return (
-                  <tr key={l.order_id} onClick={() => onOpen(l.slug)}>
+                  <tr
+                    key={l.order_id}
+                    onClick={() => onOpen(l.slug)}
+                    className={l.visible ? undefined : "row-hidden"}
+                  >
                     <td>
                       <div className="dnm">
                         <Glyph name={l.display_name} plat={l.your_price} thumb={l.thumbnail_url} />
@@ -225,14 +384,66 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
                         </div>
                       </div>
                     </td>
-                    <td className="r">{fmt(l.your_price)}p</td>
-                    <td className="r">{l.qty}</td>
-                    <td className="r">{fmt(l.market_low)}p</td>
+                    <td className="r num">{fmt(l.your_price)}p</td>
+                    <td className="r num">{l.qty}</td>
+                    <td className="r num">{fmt(yp * l.qty)}p</td>
+                    <td className="r num">{fmt(l.market_low)}p</td>
                     <td>
-                      {best ? (
-                        <span className="badge at">best price</span>
+                      {!l.visible ? (
+                        <span className="badge">hidden</span>
+                      ) : l.market_low == null ? (
+                        <span className="muted">—</span>
+                      ) : best ? (
+                        <span className="badge at">best</span>
                       ) : (
                         <span className="badge above">+{fmt(over)}p over</span>
+                      )}
+                    </td>
+                    <td className="r" onClick={(e) => e.stopPropagation()}>
+                      {!session ? (
+                        <span className="muted">—</span>
+                      ) : confirming ? (
+                        <span className="lf-actions">
+                          <button
+                            type="button"
+                            className="btn sm warn"
+                            disabled={del.isPending}
+                            onClick={() =>
+                              del.mutate(l.order_id, { onSuccess: () => setConfirmId(null) })
+                            }
+                          >
+                            {del.isPending ? "…" : "Confirm"}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn sm"
+                            onClick={() => setConfirmId(null)}
+                          >
+                            Cancel
+                          </button>
+                        </span>
+                      ) : (
+                        <span className="lf-actions">
+                          <button
+                            type="button"
+                            className="btn sm"
+                            disabled={update.isPending}
+                            title={l.visible ? "Hide from buyers" : "Show to buyers"}
+                            onClick={() => toggleVisible(l)}
+                          >
+                            {l.visible ? "Hide" : "Show"}
+                          </button>
+                          <button type="button" className="btn sm" onClick={() => setEditing(l)}>
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="btn sm warn"
+                            onClick={() => setConfirmId(l.order_id)}
+                          >
+                            Delete
+                          </button>
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -242,6 +453,29 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
           </tbody>
         </table>
       </div>
+
+      {picking ? (
+        <NewListingModal
+          onClose={() => setPicking(false)}
+          onPick={(slug) => {
+            setPicking(false);
+            setCreating(slug);
+          }}
+        />
+      ) : null}
+      {creating ? <ListingForm slug={creating} onClose={() => setCreating(null)} /> : null}
+      {editing ? (
+        <ListingForm
+          slug={editing.slug}
+          edit={{
+            orderId: editing.order_id,
+            price: editing.your_price,
+            qty: editing.qty,
+            visible: editing.visible,
+          }}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
     </>
   );
 }

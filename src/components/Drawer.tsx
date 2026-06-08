@@ -6,10 +6,12 @@ import {
   useItemOrders,
   useRecordSale,
   useRemoveItem,
+  useWfmAccount,
 } from "../hooks/queries";
 import { clsx, fmt, pct, tier } from "../lib/format";
 import type { HistoryPoint } from "../lib/types";
 import { openWiki } from "../lib/wiki";
+import { ListingForm } from "./ListingForm";
 import { type Candle, CandleChart } from "./charts";
 
 const TF = ["24h", "7d", "30d", "90d"] as const;
@@ -33,7 +35,9 @@ function toCandle(h: HistoryPoint): Candle | null {
 export function Drawer({ slug, onClose }: { slug: string; onClose: () => void }) {
   const { data: item } = useItemDetail(slug);
   const { data: orders } = useItemOrders(slug);
+  const { data: account } = useWfmAccount();
   const [tf, setTf] = useState<(typeof TF)[number]>("90d");
+  const [listing, setListing] = useState(false);
   const sell = useRecordSale();
   const watch = useAddWatch();
   const buy = useAddToBuyList();
@@ -325,6 +329,19 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
               </button>
               <button
                 type="button"
+                className="btn"
+                disabled={!account?.has_session}
+                title={
+                  account?.has_session
+                    ? "Post a sell order on warframe.market"
+                    : "Paste a warframe.market session token (Listings screen) to post orders"
+                }
+                onClick={() => setListing(true)}
+              >
+                List for sale
+              </button>
+              <button
+                type="button"
                 className="btn warn"
                 title="Remove this item from your inventory"
                 onClick={() => {
@@ -367,6 +384,7 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
           </button>
         </div>
       </div>
+      {listing ? <ListingForm slug={item.slug} onClose={() => setListing(false)} /> : null}
     </div>
   );
 }

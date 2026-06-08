@@ -53,9 +53,7 @@ pub fn set_account(db: &Db, username: &str, status: Option<&str>) -> AppResult<(
     })
 }
 
-/// Reserved for v1.1 visibility control; the Listings status segment is
-/// read-only in v1 so nothing calls this yet.
-#[allow(dead_code)]
+/// Persist the account's market presence (mirrors `wfm_set_status` after the API call).
 pub fn set_status(db: &Db, status: &str) -> AppResult<()> {
     db.with(|c| {
         c.execute(

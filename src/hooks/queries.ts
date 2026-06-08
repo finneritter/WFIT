@@ -411,6 +411,42 @@ export function useWfmApplyImport() {
   });
 }
 
+export function useWfmCreateOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.wfmCreateOrder,
+    onSuccess: (_n, vars) => {
+      qc.invalidateQueries({ queryKey: keys.listings });
+      qc.invalidateQueries({ queryKey: keys.itemDetail(vars.slug) });
+      qc.invalidateQueries({ queryKey: ["itemOrders", vars.slug] });
+    },
+  });
+}
+
+export function useWfmUpdateOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.wfmUpdateOrder,
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.listings }),
+  });
+}
+
+export function useWfmDeleteOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: string) => api.wfmDeleteOrder(orderId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.listings }),
+  });
+}
+
+export function useWfmSetStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (status: string) => api.wfmSetStatus(status),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.wfmAccount }),
+  });
+}
+
 // ---- game inventory import (memory-scan) ----
 // Polled: it's a cheap local check (consent flag + process detect), and the
 // always-mounted topbar SyncNow button needs `warframe_running` to stay live.

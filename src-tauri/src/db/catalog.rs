@@ -156,6 +156,21 @@ pub fn backfill_mod_rarity(db: &Db) -> AppResult<usize> {
     Ok(n)
 }
 
+/// The warframe.market item id for a slug (for posting orders, which key by id).
+pub fn wfm_id_for(db: &Db, slug: &str) -> AppResult<Option<String>> {
+    db.read(|c| {
+        let id = c
+            .query_row(
+                "SELECT wfm_id FROM catalog_items WHERE slug = ?1",
+                params![slug],
+                |r| r.get::<_, Option<String>>(0),
+            )
+            .ok()
+            .flatten();
+        Ok(id)
+    })
+}
+
 /// Build the warframe.market id -> slug map (for resolving setParts ids in Pass B).
 pub fn id_slug_map(db: &Db) -> AppResult<HashMap<String, String>> {
     db.read(|c| {

@@ -626,6 +626,30 @@ body.flat-deltas .neg {
 .dtable th.r {
   text-align: right;
 }
+/* Clickable column header — a seamless button that inherits the th's type. */
+.dtable th .th-sort {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+}
+.dtable th .th-sort:hover {
+  color: var(--soft);
+}
+.dtable th .th-sort.sorted {
+  color: var(--text);
+}
+.dtable th .sort-arr {
+  margin-left: 4px;
+  font-size: 8px;
+}
 .dtable td {
   padding: 6px 12px;
   border-bottom: 1px solid var(--line);
@@ -1604,6 +1628,152 @@ body.flat-deltas .neg {
 }
 .modal-f .sp {
   flex: 1;
+}
+
+/* ---- Listing create/edit panel (trading panel) ---- */
+.lf-modal {
+  max-width: 460px;
+  width: 460px;
+}
+.lf-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.lf-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lf-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lf-meta {
+  font-size: 11px;
+  color: var(--faint);
+}
+.lf-grid {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+.lf-grid .cell:nth-child(2n) {
+  border-right: 1px solid var(--line);
+}
+.lf-grid .cell:nth-child(3n) {
+  border-right: none;
+}
+.lf-grid .v {
+  font-size: 14px;
+}
+.lf-body {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+.lf-label {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--faint);
+}
+.lf-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--soft);
+}
+.lf-select,
+.lf-qty,
+.lf-price {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
+  font-family: var(--mono);
+  height: 32px;
+  padding: 0 8px;
+}
+.lf-select:focus,
+.lf-qty:focus,
+.lf-price:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.lf-select {
+  flex: 1;
+}
+.lf-qty {
+  width: 64px;
+  text-align: right;
+}
+.lf-pricewrap {
+  display: grid;
+  gap: 6px;
+}
+.lf-priceline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.lf-price {
+  width: 110px;
+  height: 40px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: right;
+}
+.lf-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.lf-chips .chip.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.lf-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--soft);
+}
+.lf-summary {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  font-size: 12.5px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.lf-total {
+  font-family: var(--mono);
+  color: var(--ink);
+}
+.lf-total b {
+  color: var(--accent);
+}
+.lf-pos.pos {
+  color: var(--pos);
+}
+.lf-pos.neg {
+  color: var(--neg);
+}
+.lf-actions {
+  display: inline-flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+tr.row-hidden td {
+  opacity: 0.5;
 }
 @media (max-width: 860px) {
   .modal-cols {

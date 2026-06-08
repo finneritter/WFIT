@@ -11,10 +11,10 @@
 use crate::db::catalog::CatalogUpsert;
 use crate::db::prices::{DayStat, PriceUpsert};
 use crate::domain::classify;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use parking_lot::Mutex;
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -477,26 +477,170 @@ impl Market {
 
         #[derive(Deserialize)]
         struct Resp {
-            payload: Payload,
-        }
-        #[derive(Deserialize)]
-        struct Payload {
             #[serde(default)]
-            sell_orders: Vec<RawOrder>,
+            data: Vec<RawOrder>,
         }
 
-        let url = format!("{API_V1}/profile/{username}/orders");
+        let url = format!("{API_V2}/orders/user/{username}");
         let mut req = self.http.get(url);
         if let Some(token) = jwt {
-            req = req.header("Authorization", format!("JWT {token}"));
+            req = req
+                .header("Authorization", format!("JWT {token}"))
+                .header("Cookie", format!("JWT={token}"));
         }
         let r = req.send().await?;
         if !r.status().is_success() {
             return Ok(Vec::new());
         }
         let resp: Resp = r.json().await?;
-        Ok(resp.payload.sell_orders)
+        Ok(resp.data)
     }
+
+    /// Validate a session token against an authenticated endpoint (`GET /v2/me`).
+    /// Returns the body text on failure so the caller can surface the real reason.
+    pub async fn fetch_me(&self, jwt: &str) -> AppResult<()> {
+        self.throttled().await;
+        let req = self
+            .http
+            .get(format!("{API_V2}/me"))
+            .header("Authorization", format!("JWT {jwt}"))
+            .header("Cookie", format!("JWT={jwt}"));
+        send_checked(req).await?;
+        Ok(())
+    }
+
+    /// Create an order (Tier 2 — requires a session JWT). Returns the created order.
+    /// `rank` is sent only for ranked goods (mods/arcanes).
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_order(
+        &self,
+        jwt: &str,
+        item_id: &str,
+        order_type: &str,
+        platinum: i64,
+        quantity: i64,
+        rank: Option<i64>,
+        visible: bool,
+    ) -> AppResult<RawOrder> {
+        self.throttled().await;
+
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Body<'a> {
+            item_id: &'a str,
+            #[serde(rename = "type")]
+            order_type: &'a str,
+            platinum: i64,
+            quantity: i64,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            rank: Option<i64>,
+            visible: bool,
+        }
+        #[derive(Deserialize)]
+        struct Resp {
+            data: RawOrder,
+        }
+
+        let url = format!("{API_V2}/order");
+        let req = self
+            .http
+            .post(url)
+            .header("Authorization", format!("JWT {jwt}"))
+            .header("Cookie", format!("JWT={jwt}"))
+            .json(&Body {
+                item_id,
+                order_type,
+                platinum,
+                quantity,
+                rank,
+                visible,
+            });
+        let resp: Resp = send_checked(req).await?.json().await?;
+        Ok(resp.data)
+    }
+
+    /// Update an existing order's price/quantity/visibility (Tier 2). Returns the updated order.
+    pub async fn update_order(
+        &self,
+        jwt: &str,
+        order_id: &str,
+        platinum: i64,
+        quantity: i64,
+        visible: bool,
+    ) -> AppResult<RawOrder> {
+        self.throttled().await;
+
+        #[derive(Serialize)]
+        struct Body {
+            platinum: i64,
+            quantity: i64,
+            visible: bool,
+        }
+        #[derive(Deserialize)]
+        struct Resp {
+            data: RawOrder,
+        }
+
+        let url = format!("{API_V2}/order/{order_id}");
+        let req = self
+            .http
+            .patch(url)
+            .header("Authorization", format!("JWT {jwt}"))
+            .header("Cookie", format!("JWT={jwt}"))
+            .json(&Body {
+                platinum,
+                quantity,
+                visible,
+            });
+        let resp: Resp = send_checked(req).await?.json().await?;
+        Ok(resp.data)
+    }
+
+    /// Delete an order (Tier 2).
+    pub async fn delete_order(&self, jwt: &str, order_id: &str) -> AppResult<()> {
+        self.throttled().await;
+        let url = format!("{API_V2}/order/{order_id}");
+        let req = self
+            .http
+            .delete(url)
+            .header("Authorization", format!("JWT {jwt}"))
+            .header("Cookie", format!("JWT={jwt}"));
+        send_checked(req).await?;
+        Ok(())
+    }
+
+    /// Set the account's market presence (`ingame` | `online` | `invisible`) so orders
+    /// show active to buyers (Tier 2).
+    pub async fn set_status(&self, jwt: &str, status: &str) -> AppResult<()> {
+        self.throttled().await;
+
+        #[derive(Serialize)]
+        struct Body<'a> {
+            status: &'a str,
+        }
+
+        let url = format!("{API_V2}/me/status");
+        let req = self
+            .http
+            .put(url)
+            .header("Authorization", format!("JWT {jwt}"))
+            .header("Cookie", format!("JWT={jwt}"))
+            .json(&Body { status });
+        send_checked(req).await?;
+        Ok(())
+    }
+}
+
+/// Send an authed write and, on a non-2xx, surface the response **body** (where
+/// warframe.market puts the actual error reason) instead of a bare status code.
+async fn send_checked(req: reqwest::RequestBuilder) -> AppResult<reqwest::Response> {
+    let r = req.send().await?;
+    let status = r.status();
+    if status.is_success() {
+        return Ok(r);
+    }
+    let body = r.text().await.unwrap_or_default();
+    Err(AppError::Other(format!("warframe.market {status}: {body}")))
 }
 
 /// The live order book for one item: robust asks per rank + the online bid ladder.
@@ -514,20 +658,19 @@ pub struct ItemDetailRaw {
     pub quantity_in_set: i64,
 }
 
-/// A raw warframe.market sell order (v1 profile orders shape).
+/// A raw warframe.market order (v2 user-orders shape). `item_id` is the
+/// warframe.market item id, resolved to a catalog slug via `catalog::id_slug_map`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RawOrder {
     pub id: String,
+    #[serde(rename = "type")]
+    pub order_type: String,
     pub platinum: Option<i64>,
     pub quantity: Option<i64>,
     #[serde(default)]
     pub visible: bool,
-    pub item: RawOrderItem,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct RawOrderItem {
-    pub url_name: String,
+    #[serde(rename = "itemId")]
+    pub item_id: String,
 }
 
 fn avg(xs: &[f64]) -> f64 {

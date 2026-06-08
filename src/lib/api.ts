@@ -113,6 +113,21 @@ export const wfmGetListings = () => invoke<ListingRow[]>("wfm_get_listings");
 export const wfmFetchListings = () => invoke<ImportRow[]>("wfm_fetch_listings");
 export const wfmApplyImport = (rows: { slug: string; qty: number }[]) =>
   invoke<number>("wfm_apply_import", { rows });
+export const wfmCreateOrder = (args: {
+  slug: string;
+  platinum: number;
+  quantity: number;
+  rank: number | null;
+  visible: boolean;
+}) => invoke<number>("wfm_create_order", args);
+export const wfmUpdateOrder = (args: {
+  orderId: string;
+  platinum: number;
+  quantity: number;
+  visible: boolean;
+}) => invoke<number>("wfm_update_order", args);
+export const wfmDeleteOrder = (orderId: string) => invoke<number>("wfm_delete_order", { orderId });
+export const wfmSetStatus = (status: string) => invoke<WfmAccount>("wfm_set_status", { status });
 
 // game inventory import (memory-scan) — opt-in, consent-gated, Linux-only
 export const gameScanStatus = () => invoke<GameScanStatus>("game_scan_status");
