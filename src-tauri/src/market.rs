@@ -467,6 +467,123 @@ impl Market {
         Ok(OrderBook { sells, bids })
     }
 
+    /// Public SELL orders for one item WITH seller identity (ingame name, rep,
+    /// status), plus the online buy-side aggregate — for the Market page. One
+    /// fetch powers both the seller list and the stats strip. `display_name` /
+    /// `max_rank` are resolved by the caller from the catalog (the orders endpoint
+    /// doesn't carry the item name). Sells are sorted cheapest-first (ingame >
+    /// online > offline, then higher rep) and capped — only the cheapest handful
+    /// is ever actionable, and items can have ~900 orders.
+    pub async fn fetch_item_sellers(
+        &self,
+        slug: &str,
+        display_name: String,
+        max_rank: Option<i64>,
+    ) -> AppResult<crate::types::ItemSellers> {
+        self.throttled().await;
+
+        #[derive(Deserialize)]
+        struct Resp {
+            #[serde(default)]
+            data: Vec<Order>,
+        }
+        #[derive(Deserialize)]
+        struct Order {
+            #[serde(rename = "type")]
+            order_type: String,
+            platinum: Option<i64>,
+            quantity: Option<i64>,
+            rank: Option<i64>,
+            #[serde(default = "default_true")]
+            visible: bool,
+            user: Option<OrderUser>,
+        }
+        #[derive(Deserialize)]
+        struct OrderUser {
+            #[serde(rename = "ingameName")]
+            ingame_name: Option<String>,
+            reputation: Option<i64>,
+            status: Option<String>,
+        }
+        fn default_true() -> bool {
+            true
+        }
+
+        let url = format!("{API_V2}/orders/item/{slug}");
+        let r = self.http.get(url).send().await?;
+        if !r.status().is_success() {
+            return Ok(crate::types::ItemSellers {
+                display_name,
+                max_rank,
+                ..Default::default()
+            });
+        }
+        let resp: Resp = r.json().await?;
+
+        let is_online = |s: &str| s == "ingame" || s == "online";
+        let mut orders: Vec<crate::types::SellerOrder> = Vec::new();
+        let mut best_buy: Option<i64> = None;
+        let mut buyers = 0i64;
+        let mut sellers = 0i64;
+        for o in resp.data {
+            if !o.visible {
+                continue;
+            }
+            let Some(p) = o.platinum else { continue };
+            let user = o.user;
+            let status: String = user
+                .as_ref()
+                .and_then(|u| u.status.clone())
+                .unwrap_or_else(|| "offline".into());
+            match o.order_type.as_str() {
+                "buy" if is_online(&status) => {
+                    buyers += 1;
+                    best_buy = Some(best_buy.map_or(p, |b| b.max(p)));
+                }
+                "sell" => {
+                    if is_online(&status) {
+                        sellers += 1;
+                    }
+                    let Some(u) = user else { continue };
+                    let Some(name) = u.ingame_name else { continue };
+                    orders.push(crate::types::SellerOrder {
+                        ingame_name: name,
+                        reputation: u.reputation.unwrap_or(0),
+                        status,
+                        platinum: p,
+                        quantity: o.quantity.unwrap_or(1).max(1),
+                        rank: o.rank,
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        // Cheapest first; at equal price prefer the most contactable seller, then
+        // the higher reputation.
+        let status_rank = |s: &str| match s {
+            "ingame" => 0u8,
+            "online" => 1,
+            _ => 2,
+        };
+        orders.sort_by(|a, b| {
+            a.platinum
+                .cmp(&b.platinum)
+                .then_with(|| status_rank(&a.status).cmp(&status_rank(&b.status)))
+                .then_with(|| b.reputation.cmp(&a.reputation))
+        });
+        orders.truncate(60);
+
+        Ok(crate::types::ItemSellers {
+            display_name,
+            max_rank,
+            best_buy,
+            buyers,
+            sellers,
+            orders,
+        })
+    }
+
     /// Tier 1 (public): a user's visible orders. Auth header optional (Tier 2).
     pub async fn fetch_user_orders(
         &self,

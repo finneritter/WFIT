@@ -99,6 +99,14 @@ export const useItemOrders = (slug: string | null) =>
     enabled: !!slug,
     staleTime: 60_000,
   });
+
+export const useItemSellers = (slug: string | null) =>
+  useQuery({
+    queryKey: ["itemSellers", slug ?? ""],
+    queryFn: () => api.getItemSellers(slug as string),
+    enabled: !!slug,
+    staleTime: 30_000,
+  });
 export const useWorldstate = () =>
   useQuery({
     queryKey: keys.worldstate,

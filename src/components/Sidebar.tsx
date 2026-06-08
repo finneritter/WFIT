@@ -8,6 +8,7 @@ export type ScreenId =
   | "trends"
   | "watchlist"
   | "buy"
+  | "market"
   | "listings"
   | "ducats"
   | "arcanes"
@@ -27,6 +28,7 @@ const NAV: NavDef[] = [
   { id: "trends", label: "Trends", icon: "trends" },
   { id: "watchlist", label: "Watchlist", icon: "watchlist" },
   { id: "buy", label: "Buy List", icon: "buy" },
+  { id: "market", label: "Market", icon: "search" },
   { id: "listings", label: "Listings", icon: "tag" },
   { id: "ducats", label: "Ducats", icon: "coin" },
   { id: "arcanes", label: "Arcanes", icon: "arcane" },

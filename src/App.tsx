@@ -24,6 +24,7 @@ import { BuyList } from "./routes/BuyList";
 import { Ducats } from "./routes/Ducats";
 import { Inventory } from "./routes/Inventory";
 import { Listings } from "./routes/Listings";
+import { Market } from "./routes/Market";
 import { Rotation } from "./routes/Rotation";
 import { Sets } from "./routes/Sets";
 import { Settings } from "./routes/Settings";
@@ -37,6 +38,7 @@ const TITLES: Record<ScreenId, string> = {
   trends: "Trends",
   watchlist: "Watchlist",
   buy: "Buy List",
+  market: "Market",
   listings: "Listings",
   ducats: "Ducats",
   arcanes: "Arcanes",
@@ -183,6 +185,7 @@ export default function App() {
             {screen === "trends" && <Trends onOpen={open} />}
             {screen === "watchlist" && <Watchlist onOpen={open} />}
             {screen === "buy" && <BuyList onOpen={open} />}
+            {screen === "market" && <Market onOpen={open} />}
             {screen === "listings" && <Listings onOpen={open} />}
             {screen === "ducats" && <Ducats onOpen={open} />}
             {screen === "arcanes" && <Arcanes onOpen={open} />}

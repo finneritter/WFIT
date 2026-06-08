@@ -11,6 +11,7 @@ import type {
   InventoryRow,
   ItemDetail,
   ItemOrders,
+  ItemSellers,
   ListingRow,
   PricingProgress,
   RepriceApply,
@@ -99,6 +100,7 @@ export const pricesRefresh = (slugs?: string[], force?: boolean) =>
   invoke<number>("prices_refresh", { slugs: slugs ?? null, force: force ?? null });
 export const getItemDetail = (slug: string) => invoke<ItemDetail>("get_item_detail", { slug });
 export const getItemOrders = (slug: string) => invoke<ItemOrders>("get_item_orders", { slug });
+export const getItemSellers = (slug: string) => invoke<ItemSellers>("get_item_sellers", { slug });
 
 // worldstate
 export const getWorldstate = () => invoke<Worldstate>("get_worldstate");

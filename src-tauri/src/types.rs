@@ -315,6 +315,31 @@ pub struct ItemOrders {
     pub sellers: i64,
 }
 
+/// One live public SELL order with the seller's identity, so the Market page can
+/// build an in-game whisper. `rank` is None for non-ranked items.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SellerOrder {
+    pub ingame_name: String,
+    pub reputation: i64,
+    pub status: String, // "ingame" | "online" | "offline"
+    pub platinum: i64,
+    pub quantity: i64,
+    pub rank: Option<i64>,
+}
+
+/// The Market page's per-item result: the (capped, sorted) seller list plus the
+/// item's name/rank ceiling and the live buy-side aggregate — all from one fetch,
+/// so the stats strip needs no second (throttled) call to the same endpoint.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ItemSellers {
+    pub display_name: String,
+    pub max_rank: Option<i64>,
+    pub best_buy: Option<i64>, // highest online buy order (for the spread stat)
+    pub buyers: i64,           // online buyers
+    pub sellers: i64,          // online sellers (pre-cap count)
+    pub orders: Vec<SellerOrder>,
+}
+
 /// One rank you own of a mod/arcane, with that rank's market price (exact or
 /// nearest). Powers the drawer's rank breakdown.
 #[derive(Debug, Clone, Serialize, Deserialize)]

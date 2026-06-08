@@ -767,6 +767,29 @@ pub async fn get_item_orders(
     state.market.fetch_item_orders(&slug).await
 }
 
+/// Per-seller live SELL orders for the Market page (with whisper data + the live
+/// buy-side aggregate). Resolves the item name + rank ceiling from the local
+/// catalog so the whisper line needs no second round-trip.
+#[tauri::command]
+pub async fn get_item_sellers(
+    state: State<'_, Arc<AppState>>,
+    slug: String,
+) -> AppResult<crate::types::ItemSellers> {
+    let resolved: Option<(String, Option<i64>)> = state.db.read(|c| {
+        Ok(c.query_row(
+            "SELECT display_name, max_rank FROM catalog_items WHERE slug = ?1",
+            rusqlite::params![slug],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .ok())
+    })?;
+    let (display_name, max_rank) = resolved.unwrap_or_else(|| (slug.clone(), None));
+    state
+        .market
+        .fetch_item_sellers(&slug, display_name, max_rank)
+        .await
+}
+
 // ===========================================================================
 // Worldstate (Rotation) — isolated source
 // ===========================================================================

@@ -266,6 +266,24 @@ export interface ItemOrders {
   sellers: number;
 }
 
+export interface SellerOrder {
+  ingame_name: string;
+  reputation: number;
+  status: "ingame" | "online" | "offline";
+  platinum: number;
+  quantity: number;
+  rank: number | null;
+}
+
+export interface ItemSellers {
+  display_name: string;
+  max_rank: number | null;
+  best_buy: number | null;
+  buyers: number;
+  sellers: number;
+  orders: SellerOrder[];
+}
+
 export interface WfmAccount {
   username: string | null;
   status: string | null;

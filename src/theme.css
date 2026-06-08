@@ -4267,3 +4267,104 @@ code {
   color: var(--faint);
   margin-top: 1px;
 }
+
+/* ---------------- Market (Buy search) screen ---------------- */
+.mkt-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding-top: 13vh;
+}
+.mkt-hero h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+.mkt-hero .search {
+  height: 38px;
+  font-size: 13px;
+}
+.mkt-toggles {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.mkt-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.mkt-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mkt-name {
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mkt-name:hover {
+  color: var(--blue);
+  text-decoration: underline;
+}
+.mkt-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.mkt-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--soft);
+}
+.mkt-field .lf-qty {
+  width: 72px;
+}
+.mkt-field .lf-select {
+  flex: none;
+  min-width: 96px;
+}
+/* status dot (own copy — `.cdot` is scoped to the connection bar) */
+.mkt-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 3px;
+  background: var(--faint);
+}
+.mkt-dot.ingame {
+  background: var(--pos);
+}
+.mkt-dot.online {
+  background: var(--blue);
+}
+.deal {
+  margin-left: 6px;
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--pos);
+  border: 1px solid var(--pos);
+  padding: 0 3px;
+}

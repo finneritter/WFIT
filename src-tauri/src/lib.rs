@@ -57,6 +57,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir().expect("resolve app data dir");
             std::fs::create_dir_all(&app_data_dir).expect("create app data dir");
@@ -134,6 +135,7 @@ pub fn run() {
             commands::get_item_detail,
             commands::get_item_history,
             commands::get_item_orders,
+            commands::get_item_sellers,
             commands::rebuild_cache,
             commands::wipe_app,
             // worldstate
