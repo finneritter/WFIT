@@ -795,6 +795,9 @@ pub async fn force_worldstate_refresh(
 pub fn get_wfm_account(state: State<'_, Arc<AppState>>) -> AppResult<WfmAccount> {
     let mut acct = wfm::get_account(&state.db)?;
     acct.has_session = wfm_account::has_session();
+    let (expires_at, expired) = wfm_account::session_expiry();
+    acct.session_expires_at = expires_at;
+    acct.session_expired = expired;
     Ok(acct)
 }
 

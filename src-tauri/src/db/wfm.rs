@@ -28,6 +28,8 @@ pub fn get_account(db: &Db) -> AppResult<WfmAccount> {
                 status,
                 last_import_at,
                 has_session: false,
+                session_expires_at: None,
+                session_expired: false,
             },
             None => WfmAccount {
                 username: None,
@@ -35,6 +37,8 @@ pub fn get_account(db: &Db) -> AppResult<WfmAccount> {
                 last_import_at: None,
                 connected: false,
                 has_session: false,
+                session_expires_at: None,
+                session_expired: false,
             },
         })
     })

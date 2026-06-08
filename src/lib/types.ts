@@ -272,6 +272,8 @@ export interface WfmAccount {
   last_import_at: string | null;
   connected: boolean;
   has_session: boolean;
+  session_expires_at: string | null;
+  session_expired: boolean;
 }
 
 export interface ListingRow {

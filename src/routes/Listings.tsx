@@ -372,8 +372,18 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
 
   if (!account?.connected) return <SignInCard />;
 
-  const session = account.has_session;
-  const writeHint = session ? undefined : "Add a session token to manage orders";
+  // An expired token is treated as "no usable session": writes are gated off and
+  // the re-paste card surfaces, exactly like having no token.
+  const expired = account.has_session && account.session_expired;
+  const session = account.has_session && !account.session_expired;
+  const expiresAt = account.session_expires_at ? new Date(account.session_expires_at) : null;
+  const daysLeft = expiresAt ? Math.ceil((expiresAt.getTime() - Date.now()) / 86_400_000) : null;
+  const expiringSoon = session && daysLeft != null && daysLeft <= 14;
+  const writeHint = expired
+    ? "Session expired — paste a fresh token to manage orders"
+    : session
+      ? undefined
+      : "Add a session token to manage orders";
   const active = listings.length;
   const listedValue = listings.reduce((s, l) => s + (l.your_price ?? 0) * l.qty, 0);
   const atBest = listings.filter(
@@ -398,7 +408,10 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
         <span className={clsx("cdot", dot)} />
         <span className="cinfo">
           <b>{account.username}</b>
-          {session ? " · session active" : " · public · read-only"}
+          {expired ? " · session expired" : session ? " · session active" : " · public · read-only"}
+          {session && expiresAt ? (
+            <span className="muted"> · expires {expiresAt.toLocaleDateString()}</span>
+          ) : null}
         </span>
         <span className="seg" title={writeHint}>
           {STATUS_OPTS.map((o) => (
@@ -469,6 +482,19 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
 
       {repriceRows ? (
         <RepricePanel rows={repriceRows} onClose={() => setRepriceRows(null)} />
+      ) : null}
+
+      {expired ? (
+        <div className="conn-note" style={{ marginBottom: 12 }}>
+          Your warframe.market session has expired
+          {expiresAt ? ` (${expiresAt.toLocaleDateString()})` : ""}. Paste a fresh JWT below to keep
+          creating, editing, and selling orders.
+        </div>
+      ) : expiringSoon ? (
+        <div className="conn-note" style={{ marginBottom: 12 }}>
+          Your warframe.market session expires in {daysLeft} day{daysLeft === 1 ? "" : "s"} (
+          {expiresAt?.toLocaleDateString()}). Disconnect and reconnect to refresh it with a new JWT.
+        </div>
       ) : null}
 
       {!session && !sessionDismissed ? (

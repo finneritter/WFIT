@@ -364,6 +364,10 @@ pub struct WfmAccount {
     pub last_import_at: Option<String>,
     pub connected: bool,
     pub has_session: bool, // a JWT is stored in the keychain
+    /// Session JWT expiry (rfc3339) and whether it's already past — from the
+    /// token's `exp` claim, filled by the command layer. None if no/odd token.
+    pub session_expires_at: Option<String>,
+    pub session_expired: bool,
 }
 
 /// A row in the read-only mirror of your warframe.market sell orders.
