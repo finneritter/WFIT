@@ -1,10 +1,12 @@
 import { useMemo } from "react";
-import { Glyph, StatBox } from "../components/ui";
-import { useDucats } from "../hooks/queries";
+import { ItemTags } from "../components/ItemTags";
+import { Glyph, StatBox, TableStatus } from "../components/ui";
+import { useDucats, useListedSlugs } from "../hooks/queries";
 import { clsx, fmt } from "../lib/format";
 
 export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
-  const { data: rows = [], isLoading } = useDucats();
+  const { data: rows = [], isLoading, isError } = useDucats();
+  const listed = useListedSlugs();
 
   const stats = useMemo(() => {
     const invDucats = rows.reduce((s, r) => s + r.ducats * r.qty, 0);
@@ -38,18 +40,13 @@ export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={5} className="muted">
-                  Loading…
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="muted">
-                  Own some prime parts to see ducat efficiency.
-                </td>
-              </tr>
+            {isLoading || isError || rows.length === 0 ? (
+              <TableStatus
+                span={5}
+                loading={isLoading}
+                error={isError}
+                emptyText="Own some prime parts to see ducat efficiency."
+              />
             ) : (
               rows.map((r) => (
                 <tr key={r.slug} onClick={() => onOpen(r.slug)}>
@@ -57,7 +54,14 @@ export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
                     <div className="dnm">
                       <Glyph name={r.display_name} plat={r.median_plat} thumb={r.thumbnail_url} />
                       <div className="di">
-                        <span className="nm">{r.display_name}</span>
+                        <span className="nm">
+                          {r.display_name}
+                          <ItemTags
+                            trend={r.trend}
+                            vaulted={r.is_vaulted}
+                            listed={listed.has(r.slug)}
+                          />
+                        </span>
                         <span className="sub">
                           {r.part_type} · ×{r.qty}
                         </span>
@@ -66,7 +70,9 @@ export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
                   </td>
                   <td className="r">{fmt(r.median_plat)}p</td>
                   <td className="r">{fmt(r.ducats)}d</td>
-                  <td className="r">{r.ducats_per_plat == null ? "—" : r.ducats_per_plat.toFixed(1)}</td>
+                  <td className="r">
+                    {r.ducats_per_plat == null ? "—" : r.ducats_per_plat.toFixed(1)}
+                  </td>
                   <td>
                     <span className={clsx("badge", r.verdict === "ducat" && "at")}>
                       {r.verdict === "ducat" ? "ducat it" : "sell for plat"}

@@ -471,7 +471,7 @@ pub fn get_ducats(state: State<'_, Arc<AppState>>) -> AppResult<Vec<DucatRow>> {
     let mut rows: Vec<DucatRow> = state.db.with(|c| {
         let mut stmt = c.prepare(
             "SELECT ci.slug, ci.display_name, ci.part_type, ii.qty, pc.median_plat, ci.ducats,
-                    ci.thumbnail_url
+                    ci.is_vaulted, pc.trend, ci.thumbnail_url
              FROM inventory_items ii
              JOIN catalog_items ci ON ci.slug = ii.slug
              LEFT JOIN price_cache pc ON pc.slug = ii.slug
@@ -484,7 +484,9 @@ pub fn get_ducats(state: State<'_, Arc<AppState>>) -> AppResult<Vec<DucatRow>> {
             let qty: i64 = r.get(3)?;
             let median_plat: Option<i64> = r.get(4)?;
             let ducats: i64 = r.get(5)?;
-            let thumbnail_url: Option<String> = r.get(6)?;
+            let is_vaulted: bool = r.get::<_, i64>(6)? != 0;
+            let trend: Option<String> = r.get(7)?;
+            let thumbnail_url: Option<String> = r.get(8)?;
             let ducats_per_plat = median_plat
                 .filter(|&m| m > 0)
                 .map(|m| ducats as f64 / m as f64);
@@ -500,6 +502,8 @@ pub fn get_ducats(state: State<'_, Arc<AppState>>) -> AppResult<Vec<DucatRow>> {
                 ducats,
                 ducats_per_plat,
                 verdict: verdict.to_string(),
+                is_vaulted,
+                trend,
                 thumbnail_url,
             })
         })?;
@@ -862,6 +866,9 @@ pub async fn wfm_set_session(
 
 #[tauri::command]
 pub fn wfm_signout(state: State<'_, Arc<AppState>>) -> AppResult<()> {
+    // Drop presence first so the keeper can push "invisible" and close the socket
+    // while the token is still available, then forget the session.
+    state.presence.set(crate::wfm_socket::Desired::Offline);
     wfm_account::delete_jwt()?;
     wfm::clear_account(&state.db)
 }
@@ -1096,17 +1103,24 @@ pub async fn wfm_mark_sold(state: State<'_, Arc<AppState>>, order_id: String) ->
     sync_listings_impl(state.inner()).await
 }
 
-/// Set the account's market presence so orders show active to buyers.
+/// Set the account's market presence so orders show active to buyers. warframe.market
+/// has no REST status endpoint — presence is held over a WebSocket — so this drives
+/// the background presence keeper (`wfm_socket`) rather than making a one-shot call.
 #[tauri::command]
-pub async fn wfm_set_status(
+pub fn wfm_set_status(
     state: State<'_, Arc<AppState>>,
     status: String,
 ) -> AppResult<WfmAccount> {
     if !STATUSES.contains(&status.as_str()) {
         return Err(AppError::Invalid(format!("unknown status: {status}")));
     }
-    let jwt = require_jwt()?;
-    state.market.set_status(&jwt, &status).await?;
+    // A session is required to broadcast presence; surface that clearly here.
+    require_jwt()?;
+    let desired = match status.as_str() {
+        "invisible" => crate::wfm_socket::Desired::Offline,
+        s => crate::wfm_socket::Desired::Online(s.to_string()),
+    };
+    state.presence.set(desired);
     wfm::set_status(&state.db, &status)?;
     get_wfm_account(state)
 }

@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import { Glyph, StatBox } from "../components/ui";
+import { Glyph, StatBox, TableStatus } from "../components/ui";
 import { useSales, useUndoSale } from "../hooks/queries";
 import { fmt, relativeDay } from "../lib/format";
 
 export function SoldHistory({ onOpen }: { onOpen: (slug: string) => void }) {
-  const { data: rows = [], isLoading } = useSales();
+  const { data: rows = [], isLoading, isError } = useSales();
   const undo = useUndoSale();
 
   const stats = useMemo(() => {
@@ -46,18 +46,13 @@ export function SoldHistory({ onOpen }: { onOpen: (slug: string) => void }) {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={6} className="muted">
-                  Loading…
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="muted">
-                  No sales logged yet — sell from the Drawer.
-                </td>
-              </tr>
+            {isLoading || isError || rows.length === 0 ? (
+              <TableStatus
+                span={6}
+                loading={isLoading}
+                error={isError}
+                emptyText="No sales logged yet — sell from the Drawer."
+              />
             ) : (
               rows.map((r) => (
                 <tr key={r.id} onClick={() => onOpen(r.slug)}>
@@ -76,7 +71,12 @@ export function SoldHistory({ onOpen }: { onOpen: (slug: string) => void }) {
                   <td className="r">{fmt((r.plat_per_unit ?? 0) * r.qty)}p</td>
                   <td className="r" onClick={(e) => e.stopPropagation()}>
                     {isToday(r.sold_at) ? (
-                      <button type="button" className="rm" title="Undo" onClick={() => undo.mutate(r.id)}>
+                      <button
+                        type="button"
+                        className="rm"
+                        title="Undo"
+                        onClick={() => undo.mutate(r.id)}
+                      >
                         ↺
                       </button>
                     ) : null}

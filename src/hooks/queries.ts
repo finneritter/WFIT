@@ -2,7 +2,7 @@
 // keys so the UI updates live across screens.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import * as api from "../lib/api";
 import type { CatalogRow, RepriceApply, ScanApply } from "../lib/types";
 
@@ -137,6 +137,12 @@ export const usePricingProgress = () =>
 export const useWfmAccount = () =>
   useQuery({ queryKey: keys.wfmAccount, queryFn: api.getWfmAccount });
 export const useListings = () => useQuery({ queryKey: keys.listings, queryFn: api.wfmGetListings });
+// Slugs with an active warframe.market sell order → drives the "LISTED" tag on
+// every item-bearing screen. Empty (and cheap) when no account is connected.
+export const useListedSlugs = () => {
+  const { data = [] } = useListings();
+  return useMemo(() => new Set(data.map((l) => l.slug)), [data]);
+};
 
 // ---- inventory mutations ----
 export function useAddToInventory() {

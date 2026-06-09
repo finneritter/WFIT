@@ -8,6 +8,7 @@ import {
   useRemoveItem,
   useWfmAccount,
 } from "../hooks/queries";
+import { useEscape } from "../hooks/useEscape";
 import { clsx, fmt, pct, tier } from "../lib/format";
 import type { HistoryPoint } from "../lib/types";
 import { openWiki } from "../lib/wiki";
@@ -32,8 +33,18 @@ function toCandle(h: HistoryPoint): Candle | null {
   };
 }
 
-export function Drawer({ slug, onClose }: { slug: string; onClose: () => void }) {
-  const { data: item } = useItemDetail(slug);
+export function Drawer({
+  slug,
+  onClose,
+  onGoListings,
+}: {
+  slug: string;
+  onClose: () => void;
+  // Navigate to the Listings screen (and close the drawer) so the user can
+  // connect a session — drives the "Connect to list" CTA when none exists yet.
+  onGoListings?: () => void;
+}) {
+  const { data: item, isError } = useItemDetail(slug);
   const { data: orders } = useItemOrders(slug);
   const { data: account } = useWfmAccount();
   const [tf, setTf] = useState<(typeof TF)[number]>("90d");
@@ -42,6 +53,10 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
   const watch = useAddWatch();
   const buy = useAddToBuyList();
   const remove = useRemoveItem();
+  // Route Escape to the topmost layer: when the nested listing form is open,
+  // close that (matching the form's own handler); otherwise close the drawer.
+  // The guard is what keeps the drawer from closing out from under an open form.
+  useEscape(listing ? () => setListing(false) : onClose);
 
   // Resizable width — drag the grip on the drawer's left edge; remembered.
   const [width, setWidth] = useState<number>(() => {
@@ -107,7 +122,7 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
         <div className="drawer" style={{ width }} onClick={(e) => e.stopPropagation()}>
           <div className="drawer-h">
             <div className="di">
-              <div className="nm">Loading…</div>
+              <div className="nm">{isError ? "Couldn't load this item." : "Loading…"}</div>
             </div>
             <button type="button" className="x" onClick={onClose}>
               ✕
@@ -327,19 +342,25 @@ export function Drawer({ slug, onClose }: { slug: string; onClose: () => void })
               >
                 Sell 1 · {fmt(price)}p
               </button>
-              <button
-                type="button"
-                className="btn"
-                disabled={!account?.has_session}
-                title={
-                  account?.has_session
-                    ? "Post a sell order on warframe.market"
-                    : "Paste a warframe.market session token (Listings screen) to post orders"
-                }
-                onClick={() => setListing(true)}
-              >
-                List for sale
-              </button>
+              {account?.has_session ? (
+                <button
+                  type="button"
+                  className="btn"
+                  title="Post a sell order on warframe.market"
+                  onClick={() => setListing(true)}
+                >
+                  List for sale
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn"
+                  title="Connect a warframe.market session on the Listings screen to post orders"
+                  onClick={() => onGoListings?.()}
+                >
+                  Connect to list →
+                </button>
+              )}
               <button
                 type="button"
                 className="btn warn"

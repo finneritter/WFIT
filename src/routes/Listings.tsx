@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
+import { ItemTags } from "../components/ItemTags";
 import { ListingForm } from "../components/ListingForm";
-import { Glyph, StatBox } from "../components/ui";
+import { Glyph, StatBox, TableStatus } from "../components/ui";
 import {
   useInventory,
   useListings,
@@ -17,13 +18,14 @@ import {
   useWfmSync,
   useWfmUpdateOrder,
 } from "../hooks/queries";
+import { useEscape } from "../hooks/useEscape";
 import { wfmFetchListings, wfmRepricePreview } from "../lib/api";
 import { CATEGORY_LABELS, clsx, fmt } from "../lib/format";
 import type { ImportRow, InventoryRow, ListingRow, RepriceRow } from "../lib/types";
 
 // UI status segment → warframe.market API status; "Offline" = invisible.
 const STATUS_OPTS = [
-  { api: "invisible", label: "Offline", dot: "offline" },
+  { api: "invisible", label: "Invisible", dot: "offline" },
   { api: "online", label: "Online", dot: "online" },
   { api: "ingame", label: "In Game", dot: "ingame" },
 ] as const;
@@ -68,6 +70,7 @@ function NewListingModal({
   const { data: inv = [] } = useInventory();
   const [q, setQ] = useState("");
   const query = q.trim().toLowerCase();
+  useEscape(onClose);
 
   // Owned items, filtered by the query, richest first (what you'd most likely sell).
   const owned = useMemo(() => {
@@ -432,7 +435,7 @@ function RepricePanel({ rows, onClose }: { rows: RepriceRow[]; onClose: () => vo
 
 export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
   const { data: account } = useWfmAccount();
-  const { data: listings = [] } = useListings();
+  const { data: listings = [], isLoading, isError } = useListings();
   const sync = useWfmSync();
   const signout = useWfmSignout();
   const setStatus = useWfmSetStatus();
@@ -556,6 +559,12 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
         </button>
       </div>
 
+      {setStatus.isError ? (
+        <div className="conn-note" style={{ marginBottom: 12 }}>
+          Couldn't set status: {(setStatus.error as Error).message}
+        </div>
+      ) : null}
+
       {importRows ? <ImportPanel rows={importRows} onClose={() => setImportRows(null)} /> : null}
 
       {repriceRows ? (
@@ -600,19 +609,24 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
             </tr>
           </thead>
           <tbody>
-            {listings.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="muted">
-                  No sell orders found. Hit <b>Sync</b> to refresh from warframe.market
-                  {session ? (
-                    <>
-                      , or <b>+ New listing</b> to post one.
-                    </>
-                  ) : (
-                    "."
-                  )}
-                </td>
-              </tr>
+            {isLoading || isError || listings.length === 0 ? (
+              <TableStatus
+                span={7}
+                loading={isLoading}
+                error={isError}
+                emptyText={
+                  <>
+                    No sell orders found. Hit <b>Sync</b> to refresh from warframe.market
+                    {session ? (
+                      <>
+                        , or <b>+ New listing</b> to post one.
+                      </>
+                    ) : (
+                      "."
+                    )}
+                  </>
+                }
+              />
             ) : (
               listings.map((l) => {
                 const yp = l.your_price ?? 0;
@@ -629,7 +643,10 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
                       <div className="dnm">
                         <Glyph name={l.display_name} plat={l.your_price} thumb={l.thumbnail_url} />
                         <div className="di">
-                          <span className="nm">{l.display_name}</span>
+                          <span className="nm">
+                            {l.display_name}
+                            <ItemTags trend={l.trend} vaulted={l.is_vaulted} />
+                          </span>
                           <span className="sub">{l.part_type}</span>
                         </div>
                       </div>

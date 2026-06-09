@@ -1,10 +1,12 @@
 import { useMemo } from "react";
-import { Glyph, StatBox } from "../components/ui";
-import { useAddToBuyList, useRemoveWatch, useWatchlist } from "../hooks/queries";
+import { ItemTags } from "../components/ItemTags";
+import { Glyph, StatBox, TableStatus } from "../components/ui";
+import { useAddToBuyList, useListedSlugs, useRemoveWatch, useWatchlist } from "../hooks/queries";
 import { clsx, fmt, pct } from "../lib/format";
 
 export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
-  const { data: rows = [], isLoading } = useWatchlist();
+  const { data: rows = [], isLoading, isError } = useWatchlist();
+  const listed = useListedSlugs();
   const buy = useAddToBuyList();
   const remove = useRemoveWatch();
 
@@ -13,8 +15,10 @@ export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
 
   const sorted = useMemo(
     () =>
-      [...rows].sort((a, b) => Number(atTarget(b)) - Number(atTarget(a)) ||
-        a.display_name.localeCompare(b.display_name)),
+      [...rows].sort(
+        (a, b) =>
+          Number(atTarget(b)) - Number(atTarget(a)) || a.display_name.localeCompare(b.display_name),
+      ),
     [rows],
   );
 
@@ -23,7 +27,9 @@ export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
     const at = rows.filter(atTarget).length;
     const spend = rows.filter(atTarget).reduce((s, r) => s + (r.median_plat ?? 0), 0);
     const gaps = rows
-      .filter((r) => r.target_plat != null && r.median_plat != null && r.median_plat > r.target_plat)
+      .filter(
+        (r) => r.target_plat != null && r.median_plat != null && r.median_plat > r.target_plat,
+      )
       .map((r) => ((r.median_plat! - r.target_plat!) / r.target_plat!) * 100);
     const avgGap = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0;
     return { watching, at, spend, avgGap };
@@ -51,18 +57,13 @@ export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={6} className="muted">
-                  Loading…
-                </td>
-              </tr>
-            ) : sorted.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="muted">
-                  Nothing watched yet — add items from the Drawer.
-                </td>
-              </tr>
+            {isLoading || isError || sorted.length === 0 ? (
+              <TableStatus
+                span={6}
+                loading={isLoading}
+                error={isError}
+                emptyText="Nothing watched yet — add items from the Drawer."
+              />
             ) : (
               sorted.map((r) => {
                 const at = atTarget(r);
@@ -76,7 +77,14 @@ export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
                       <div className="dnm">
                         <Glyph name={r.display_name} plat={r.median_plat} thumb={r.thumbnail_url} />
                         <div className="di">
-                          <span className="nm">{r.display_name}</span>
+                          <span className="nm">
+                            {r.display_name}
+                            <ItemTags
+                              trend={r.trend}
+                              vaulted={r.is_vaulted}
+                              listed={listed.has(r.slug)}
+                            />
+                          </span>
                           <span className="sub">{r.part_type}</span>
                         </div>
                       </div>

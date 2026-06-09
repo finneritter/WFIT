@@ -10,6 +10,7 @@ import {
   useSetBuyQty,
   useSetQty,
 } from "../hooks/queries";
+import { useEscape } from "../hooks/useEscape";
 import { clsx, fmt } from "../lib/format";
 import type { CatalogRow } from "../lib/types";
 
@@ -203,6 +204,7 @@ export function AddItems({
 }) {
   const [filter, setFilter] = useState("");
   const deferredFilter = useDeferredValue(filter);
+  useEscape(onClose);
 
   const invAdd = useAddToInventory();
   const invRemove = useRemoveItem();

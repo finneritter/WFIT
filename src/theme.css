@@ -149,7 +149,8 @@ body[data-font="lexend"] {
   --sans: "Lexend", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 body[data-font="atkinson"] {
-  --sans: "Atkinson Hyperlegible", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --sans: "Atkinson Hyperlegible", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
 }
 
 /* Light theme — overrides the palette only; the square/dense/mono structure is
@@ -2732,6 +2733,31 @@ code {
   border: 1px solid var(--line-2);
   padding: 0 3px;
   letter-spacing: .04em;
+}
+
+/* Shared HOT / VAULT / LISTED tags (components/ItemTags.tsx) — unscoped so they
+   render consistently on every item-bearing screen (search, listings, ducats,
+   arcanes, watchlist, buy list). The Inventory grid/chip/list views keep their
+   own bespoke markup above. */
+.itag {
+  font-size: 9px;
+  margin-left: 4px;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.itag-hot {
+  color: var(--hot);
+  margin-left: 5px;
+}
+.itag-vault {
+  color: var(--accent);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
+.itag-listed {
+  color: var(--plat);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
 }
 
 /* Uniform 30px toolbar height (scoped to .filters). */

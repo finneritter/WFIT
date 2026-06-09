@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import { AddItems } from "./components/AddItems";
 import { Drawer } from "./components/Drawer";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Icon } from "./components/Icon";
 import { LiveBadge } from "./components/LiveBadge";
 import { SearchResults } from "./components/SearchResults";
@@ -181,28 +182,45 @@ export default function App() {
             <div style={screen === "inventory" ? undefined : { display: "none" }}>
               <Inventory onOpen={open} search={deferredSearch} />
             </div>
-            {screen === "sets" && <Sets onOpen={open} />}
-            {screen === "trends" && <Trends onOpen={open} />}
-            {screen === "watchlist" && <Watchlist onOpen={open} />}
-            {screen === "buy" && <BuyList onOpen={open} />}
-            {screen === "market" && <Market onOpen={open} />}
-            {screen === "listings" && <Listings onOpen={open} />}
-            {screen === "ducats" && <Ducats onOpen={open} />}
-            {screen === "arcanes" && <Arcanes onOpen={open} />}
-            {screen === "rotation" && <Rotation />}
-            {screen === "sold" && <SoldHistory onOpen={open} />}
-            {screen === "settings" && (
-              <Settings
-                onNavigate={(s) => {
-                  setScreen(s);
-                  setSearch("");
-                }}
-              />
-            )}
+            {/* Switchable routes share one boundary, keyed by screen so a caught
+                error clears on navigation. The always-mounted Inventory above is
+                intentionally outside it — a key={screen} boundary would remount
+                its heavy grid on every navigation (covered by the root boundary
+                in main.tsx instead). */}
+            <ErrorBoundary key={screen}>
+              {screen === "sets" && <Sets onOpen={open} />}
+              {screen === "trends" && <Trends onOpen={open} />}
+              {screen === "watchlist" && <Watchlist onOpen={open} />}
+              {screen === "buy" && <BuyList onOpen={open} />}
+              {screen === "market" && <Market onOpen={open} />}
+              {screen === "listings" && <Listings onOpen={open} />}
+              {screen === "ducats" && <Ducats onOpen={open} />}
+              {screen === "arcanes" && <Arcanes onOpen={open} />}
+              {screen === "rotation" && <Rotation />}
+              {screen === "sold" && <SoldHistory onOpen={open} />}
+              {screen === "settings" && (
+                <Settings
+                  onNavigate={(s) => {
+                    setScreen(s);
+                    setSearch("");
+                  }}
+                />
+              )}
+            </ErrorBoundary>
           </div>
         </main>
 
-        {drawer ? <Drawer slug={drawer} onClose={() => setDrawer(null)} /> : null}
+        {drawer ? (
+          <Drawer
+            slug={drawer}
+            onClose={() => setDrawer(null)}
+            onGoListings={() => {
+              setDrawer(null);
+              setScreen("listings");
+              setSearch("");
+            }}
+          />
+        ) : null}
         {adding ? (
           <AddItems
             target={screen === "watchlist" ? "watchlist" : screen === "buy" ? "buy" : "inventory"}

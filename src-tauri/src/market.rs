@@ -572,7 +572,18 @@ impl Market {
                 .then_with(|| status_rank(&a.status).cmp(&status_rank(&b.status)))
                 .then_with(|| b.reputation.cmp(&a.reputation))
         });
-        orders.truncate(60);
+        // Cap, but online/ingame-first: this page exists to whisper sellers in-game,
+        // and offline sellers routinely hold the lowest prices — a flat cheapest-N
+        // truncation would crowd every contactable seller out of the cap (the whole
+        // online list would render empty). Keep the cheapest online sellers, then
+        // backfill with the cheapest offline ones up to the overall cap. The frontend
+        // re-sorts client-side, so this only decides which rows survive.
+        let (mut kept, offline): (Vec<_>, Vec<_>) =
+            orders.into_iter().partition(|o| is_online(&o.status));
+        kept.truncate(60);
+        let backfill = 80usize.saturating_sub(kept.len());
+        kept.extend(offline.into_iter().take(backfill));
+        let orders = kept;
 
         Ok(crate::types::ItemSellers {
             display_name,
@@ -726,26 +737,6 @@ impl Market {
         Ok(())
     }
 
-    /// Set the account's market presence (`ingame` | `online` | `invisible`) so orders
-    /// show active to buyers (Tier 2).
-    pub async fn set_status(&self, jwt: &str, status: &str) -> AppResult<()> {
-        self.throttled().await;
-
-        #[derive(Serialize)]
-        struct Body<'a> {
-            status: &'a str,
-        }
-
-        let url = format!("{API_V2}/me/status");
-        let req = self
-            .http
-            .put(url)
-            .header("Authorization", format!("JWT {jwt}"))
-            .header("Cookie", format!("JWT={jwt}"))
-            .json(&Body { status });
-        send_checked(req).await?;
-        Ok(())
-    }
 }
 
 /// Send an authed write and, on a non-2xx, surface the response **body** (where

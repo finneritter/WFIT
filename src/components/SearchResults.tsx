@@ -1,5 +1,6 @@
-import { useSearchCatalog } from "../hooks/queries";
+import { useListedSlugs, useSearchCatalog } from "../hooks/queries";
 import { CATEGORY_LABELS, fmt } from "../lib/format";
+import { ItemTags } from "./ItemTags";
 import { Glyph } from "./ui";
 
 // "ininv:" or "inv:" scopes the search to owned items.
@@ -17,6 +18,7 @@ export function SearchResults({
   const ownedOnly = INV_PREFIX.test(query);
   const q = query.replace(INV_PREFIX, "").trim();
   const { data = [], isFetching } = useSearchCatalog(q);
+  const listed = useListedSlugs();
   const rows = ownedOnly ? data.filter((r) => r.owned_qty > 0) : data;
 
   if (q.length < 2) {
@@ -40,7 +42,10 @@ export function SearchResults({
           <button key={r.slug} type="button" className="sr-row" onClick={() => onOpen(r.slug)}>
             <Glyph name={r.display_name} plat={r.median_plat} thumb={r.thumbnail_url} />
             <span className="sr-i">
-              <span className="sr-n">{r.display_name}</span>
+              <span className="sr-n">
+                {r.display_name}
+                <ItemTags trend={r.trend} vaulted={r.is_vaulted} listed={listed.has(r.slug)} />
+              </span>
               <span className="sr-s">
                 {r.part_type} · {CATEGORY_LABELS[r.category]}
                 {r.owned_qty > 0 ? ` · owned ×${r.owned_qty}` : ""}

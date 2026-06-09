@@ -63,3 +63,39 @@ export function Chip({
     </button>
   );
 }
+
+/** One full-width <tbody> status row: loading / error / empty. Mirrors the
+ *  Market.tsx convention so every table screen reads the same. Render exactly
+ *  one of these in place of the row map when there's nothing to show. */
+export function TableStatus({
+  span,
+  loading,
+  error,
+  loadingText = "Loading…",
+  errorText = "Couldn't load. Try again in a moment.",
+  emptyText,
+}: {
+  span: number;
+  loading: boolean;
+  error: boolean;
+  loadingText?: React.ReactNode;
+  errorText?: React.ReactNode;
+  emptyText: React.ReactNode;
+}) {
+  return (
+    <tr>
+      <td colSpan={span} className="muted">
+        {loading ? loadingText : error ? errorText : emptyText}
+      </td>
+    </tr>
+  );
+}
+
+/** Block-level status for non-table layouts (hero panels, grids, the drawer body). */
+export function BlockStatus({ error, text }: { error?: boolean; text?: string }) {
+  return (
+    <div className="empty">
+      {text ?? (error ? "Couldn't load. Try again in a moment." : "Loading…")}
+    </div>
+  );
+}

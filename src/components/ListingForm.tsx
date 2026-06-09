@@ -6,6 +6,7 @@ import {
   useWfmCreateOrder,
   useWfmUpdateOrder,
 } from "../hooks/queries";
+import { useEscape } from "../hooks/useEscape";
 import { clsx, fmt } from "../lib/format";
 import { Glyph } from "./ui";
 
@@ -33,6 +34,9 @@ export function ListingForm({
 }) {
   const { data: item } = useItemDetail(slug);
   const { data: orders } = useItemOrders(slug);
+  // Closes whichever context opened it. When nested in the Drawer this fires
+  // alongside the Drawer's guarded handler (both close just this form — harmless).
+  useEscape(onClose);
   const create = useWfmCreateOrder();
   const update = useWfmUpdateOrder();
   const isEdit = edit != null;

@@ -83,6 +83,7 @@ export interface WatchRow {
   trend: Trend | null;
   delta_7d: number | null;
   target_plat: number | null;
+  is_vaulted: boolean;
   thumbnail_url: string | null;
   added_at: string;
 }
@@ -93,6 +94,8 @@ export interface BuyRow {
   part_type: string;
   category: Category;
   median_plat: number | null;
+  trend: Trend | null;
+  is_vaulted: boolean;
   buy_qty: number;
   thumbnail_url: string | null;
   added_at: string;
@@ -126,6 +129,8 @@ export interface DucatRow {
   ducats: number;
   ducats_per_plat: number | null;
   verdict: "ducat" | "plat";
+  is_vaulted: boolean;
+  trend: Trend | null;
   thumbnail_url: string | null;
 }
 
@@ -158,6 +163,7 @@ export interface OwnedArcane {
   collection: string | null;
   rarity: string | null;
   verdict: "keep" | "dissolve";
+  trend: Trend | null;
   thumbnail_url: string | null;
 }
 export interface ArcaneSummary {
@@ -305,6 +311,8 @@ export interface ListingRow {
   visible: boolean;
   market_low: number | null;
   updated_at: string | null;
+  is_vaulted: boolean;
+  trend: Trend | null;
   thumbnail_url: string | null;
 }
 

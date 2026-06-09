@@ -46,7 +46,7 @@ pub fn list(db: &Db) -> AppResult<Vec<WatchRow>> {
         let mut stmt = c.prepare(
             "SELECT w.slug, ci.display_name, ci.part_type, ci.category,
                     pc.median_plat, pc.trend, pc.delta_7d, w.target_plat,
-                    ci.thumbnail_url, w.added_at
+                    ci.is_vaulted, ci.thumbnail_url, w.added_at
              FROM watchlist w
              JOIN catalog_items ci ON ci.slug = w.slug
              LEFT JOIN price_cache pc ON pc.slug = w.slug
@@ -62,8 +62,9 @@ pub fn list(db: &Db) -> AppResult<Vec<WatchRow>> {
                 trend: r.get(5)?,
                 delta_7d: r.get(6)?,
                 target_plat: r.get(7)?,
-                thumbnail_url: r.get(8)?,
-                added_at: r.get(9)?,
+                is_vaulted: r.get::<_, i64>(8)? != 0,
+                thumbnail_url: r.get(9)?,
+                added_at: r.get(10)?,
             })
         })?;
         let mut out = Vec::new();

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Glyph, StatBox } from "../components/ui";
+import { ItemTags } from "../components/ItemTags";
+import { Glyph, StatBox, TableStatus } from "../components/ui";
 import {
   useBudget,
   useBuyList,
+  useListedSlugs,
   usePurchaseBuy,
   useRemoveBuy,
   useSetBudget,
@@ -11,7 +13,8 @@ import {
 import { fmt } from "../lib/format";
 
 export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
-  const { data: rows = [], isLoading } = useBuyList();
+  const { data: rows = [], isLoading, isError } = useBuyList();
+  const listed = useListedSlugs();
   const { data: budget } = useBudget();
   const setBudget = useSetBudget();
   const setQty = useSetBuyQty();
@@ -31,7 +34,7 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
   }, [rows, budget]);
 
   const commitBudget = () => {
-    const v = parseInt(budgetInput, 10);
+    const v = Number.parseInt(budgetInput, 10);
     if (!Number.isNaN(v)) setBudget.mutate(v);
   };
 
@@ -83,18 +86,13 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={5} className="muted">
-                  Loading…
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="muted">
-                  Buy list is empty — add from Sets, Watchlist, or the Drawer.
-                </td>
-              </tr>
+            {isLoading || isError || rows.length === 0 ? (
+              <TableStatus
+                span={5}
+                loading={isLoading}
+                error={isError}
+                emptyText="Buy list is empty — add from Sets, Watchlist, or the Drawer."
+              />
             ) : (
               rows.map((r) => (
                 <tr key={r.slug} onClick={() => onOpen(r.slug)}>
@@ -102,7 +100,14 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
                     <div className="dnm">
                       <Glyph name={r.display_name} plat={r.median_plat} thumb={r.thumbnail_url} />
                       <div className="di">
-                        <span className="nm">{r.display_name}</span>
+                        <span className="nm">
+                          {r.display_name}
+                          <ItemTags
+                            trend={r.trend}
+                            vaulted={r.is_vaulted}
+                            listed={listed.has(r.slug)}
+                          />
+                        </span>
                         <span className="sub">{r.part_type}</span>
                       </div>
                     </div>
@@ -110,18 +115,28 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
                   <td className="r">{fmt(r.median_plat)}p</td>
                   <td className="r" onClick={(e) => e.stopPropagation()}>
                     <span className="qstep" style={{ display: "inline-flex" }}>
-                      <button type="button" onClick={() => setQty.mutate({ slug: r.slug, qty: r.buy_qty - 1 })}>
+                      <button
+                        type="button"
+                        onClick={() => setQty.mutate({ slug: r.slug, qty: r.buy_qty - 1 })}
+                      >
                         −
                       </button>
                       <span className="qn">{r.buy_qty}</span>
-                      <button type="button" onClick={() => setQty.mutate({ slug: r.slug, qty: r.buy_qty + 1 })}>
+                      <button
+                        type="button"
+                        onClick={() => setQty.mutate({ slug: r.slug, qty: r.buy_qty + 1 })}
+                      >
                         +
                       </button>
                     </span>
                   </td>
                   <td className="r">{fmt((r.median_plat ?? 0) * r.buy_qty)}p</td>
                   <td className="r" onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className="btn sm" onClick={() => purchase.mutate(r.slug)}>
+                    <button
+                      type="button"
+                      className="btn sm"
+                      onClick={() => purchase.mutate(r.slug)}
+                    >
                       Bought
                     </button>{" "}
                     <button type="button" className="rm" onClick={() => remove.mutate(r.slug)}>

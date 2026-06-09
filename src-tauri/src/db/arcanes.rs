@@ -150,9 +150,10 @@ fn owned(
     }
 
     let mut stmt = c.prepare(
-        "SELECT ci.slug, ci.display_name, ii.qty, ci.thumbnail_url
+        "SELECT ci.slug, ci.display_name, ii.qty, ci.thumbnail_url, pc.trend
          FROM inventory_items ii
          JOIN catalog_items ci ON ci.slug = ii.slug
+         LEFT JOIN price_cache pc ON pc.slug = ii.slug
          WHERE ii.qty > 0 AND ci.category = 'arcane'",
     )?;
     let rows = stmt.query_map([], |r| {
@@ -161,6 +162,7 @@ fn owned(
             r.get::<_, String>(1)?,
             r.get::<_, i64>(2)?,
             r.get::<_, Option<String>>(3)?,
+            r.get::<_, Option<String>>(4)?,
         ))
     })?;
 
@@ -168,7 +170,7 @@ fn owned(
     let mut total_vosfor = 0i64;
     let mut sell_plat = 0i64;
     for row in rows {
-        let (slug, display_name, qty, thumbnail_url) = row?;
+        let (slug, display_name, qty, thumbnail_url, trend) = row?;
         // Unranked copies: explicit rank-0 count if we have a breakdown, else assume
         // the whole stack is unranked (manual adds carry no rank data).
         let rank0_copies = if has_breakdown.contains(&slug) {
@@ -207,6 +209,7 @@ fn owned(
                 .map(String::from),
             rarity: meta.map(|m| m.rarity.to_string()),
             verdict: verdict.to_string(),
+            trend,
             thumbnail_url,
         });
     }

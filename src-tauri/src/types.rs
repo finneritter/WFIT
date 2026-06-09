@@ -124,6 +124,7 @@ pub struct WatchRow {
     pub trend: Option<String>,
     pub delta_7d: Option<f64>,
     pub target_plat: Option<i64>,
+    pub is_vaulted: bool,
     pub thumbnail_url: Option<String>,
     pub added_at: String,
 }
@@ -135,6 +136,8 @@ pub struct BuyRow {
     pub part_type: String,
     pub category: String,
     pub median_plat: Option<i64>,
+    pub trend: Option<String>,
+    pub is_vaulted: bool,
     pub buy_qty: i64,
     pub thumbnail_url: Option<String>,
     pub added_at: String,
@@ -175,6 +178,8 @@ pub struct DucatRow {
     pub ducats: i64,
     pub ducats_per_plat: Option<f64>,
     pub verdict: String, // 'ducat' | 'plat'
+    pub is_vaulted: bool,
+    pub trend: Option<String>,
     pub thumbnail_url: Option<String>,
 }
 
@@ -217,6 +222,7 @@ pub struct OwnedArcane {
     pub collection: Option<String>,
     pub rarity: Option<String>,
     pub verdict: String, // 'keep' | 'dissolve'
+    pub trend: Option<String>,
     pub thumbnail_url: Option<String>,
 }
 
@@ -408,6 +414,8 @@ pub struct ListingRow {
     pub visible: bool,
     pub market_low: Option<i64>, // current market median for context
     pub updated_at: Option<String>,
+    pub is_vaulted: bool,
+    pub trend: Option<String>,
     pub thumbnail_url: Option<String>,
 }
 

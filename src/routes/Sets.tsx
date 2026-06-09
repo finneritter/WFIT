@@ -66,13 +66,15 @@ function Row({ row, onOpen }: { row: SetRow; onOpen: (slug: string) => void }) {
 }
 
 export function Sets({ onOpen }: { onOpen: (slug: string) => void }) {
-  const { data: sets = [], isLoading } = useSets();
+  const { data: sets = [], isLoading, isError } = useSets();
   const [filter, setFilter] = useState<Filter>("all");
 
   const stats = useMemo(() => {
     const complete = sets.filter((s) => s.complete).length;
     const oneAway = sets.filter((s) => s.total_parts - s.owned_parts === 1).length;
-    const completableValue = sets.filter((s) => s.complete).reduce((a, s) => a + (s.set_value ?? 0), 0);
+    const completableValue = sets
+      .filter((s) => s.complete)
+      .reduce((a, s) => a + (s.set_value ?? 0), 0);
     const avg =
       sets.length === 0
         ? 0
@@ -123,7 +125,9 @@ export function Sets({ onOpen }: { onOpen: (slug: string) => void }) {
       </div>
 
       <div className="tpanel">
-        {isLoading ? (
+        {isError ? (
+          <div className="empty">Couldn't load sets. Try again in a moment.</div>
+        ) : isLoading ? (
           <div className="empty">Loading sets…</div>
         ) : rows.length === 0 ? (
           <div className="empty">No sets match this filter.</div>

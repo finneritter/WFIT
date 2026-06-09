@@ -88,7 +88,7 @@ pub fn list(db: &Db) -> AppResult<Vec<BuyRow>> {
     db.with(|c| {
         let mut stmt = c.prepare(
             "SELECT b.slug, ci.display_name, ci.part_type, ci.category,
-                    pc.median_plat, b.buy_qty, ci.thumbnail_url, b.added_at
+                    pc.median_plat, pc.trend, ci.is_vaulted, b.buy_qty, ci.thumbnail_url, b.added_at
              FROM buy_list b
              JOIN catalog_items ci ON ci.slug = b.slug
              LEFT JOIN price_cache pc ON pc.slug = b.slug
@@ -101,9 +101,11 @@ pub fn list(db: &Db) -> AppResult<Vec<BuyRow>> {
                 part_type: r.get(2)?,
                 category: r.get(3)?,
                 median_plat: r.get(4)?,
-                buy_qty: r.get(5)?,
-                thumbnail_url: r.get(6)?,
-                added_at: r.get(7)?,
+                trend: r.get(5)?,
+                is_vaulted: r.get::<_, i64>(6)? != 0,
+                buy_qty: r.get(7)?,
+                thumbnail_url: r.get(8)?,
+                added_at: r.get(9)?,
             })
         })?;
         let mut out = Vec::new();

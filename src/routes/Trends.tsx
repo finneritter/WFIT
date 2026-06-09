@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MiniArea, RangeBar, Spark } from "../components/charts";
-import { Glyph } from "../components/ui";
+import { BlockStatus, Glyph } from "../components/ui";
 import { useTrends } from "../hooks/queries";
 import { CATEGORY_LABELS, clsx, fmt, pct } from "../lib/format";
 import type { HeatRow, TrendRow } from "../lib/types";
@@ -108,9 +108,11 @@ function HeatRowView({ row, scale }: { row: HeatRow; scale: number }) {
 export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
   const [tf, setTf] = useState<(typeof TFS)[number]>("7d");
   const [excludeOutliers, setExcludeOutliers] = useState(true);
-  const { data, isLoading } = useTrends(tf, excludeOutliers);
+  const { data, isLoading, isError } = useTrends(tf, excludeOutliers);
 
-  if (isLoading || !data) return <div className="empty">Loading market trends…</div>;
+  if (isError)
+    return <BlockStatus error text="Couldn't load market trends. Try again in a moment." />;
+  if (isLoading || !data) return <BlockStatus text="Loading market trends…" />;
 
   const heatScale = Math.max(1, ...data.category_heat.map((h) => Math.abs(h.avg_delta)));
 

@@ -446,7 +446,7 @@ export function Inventory({
   onOpen: (slug: string) => void;
   search: string;
 }) {
-  const { data: inv = [], isLoading } = useInventory();
+  const { data: inv = [], isLoading, isError } = useInventory();
   const { data: summary } = useSummary();
   // Slugs with an active warframe.market sell order → "LISTED" tag on the tiles.
   const { data: listings = [] } = useListings();
@@ -660,7 +660,9 @@ export function Inventory({
         />
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <div className="empty">Couldn't load your inventory. Try again in a moment.</div>
+      ) : isLoading ? (
         <div className="empty">Loading inventory…</div>
       ) : visible.length === 0 ? (
         <div className="empty">

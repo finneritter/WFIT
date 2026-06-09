@@ -6,6 +6,7 @@ mod gamescan;
 mod market;
 mod types;
 mod wfm_account;
+mod wfm_socket;
 mod worldstate;
 
 use chrono::{DateTime, Duration, Utc};
@@ -18,6 +19,8 @@ pub struct AppState {
     pub db: db::Db,
     pub market: market::Market,
     pub worldstate: worldstate::WorldstateClient,
+    /// Drives the warframe.market presence socket (online/ingame/invisible).
+    pub presence: wfm_socket::Presence,
     /// True for the whole launch warm-up (catalog → vault → owned → drain), so the UI
     /// can show a "syncing…" indicator the entire time prices are still filling in —
     /// distinguishing "still loading" from a settled value (incl. a fresh post-wipe sync).
@@ -65,13 +68,23 @@ pub fn run() {
             tracing::info!(?db_path, "opening database");
 
             let db = db::Db::open(&db_path).expect("open db");
+            // Presence is per-session and not restored: we hold no socket until the
+            // user picks a status, so reset the mirror to invisible on launch (it
+            // naturally clears to offline when WFIT closes).
+            let _ = db::wfm::set_status(&db, "invisible");
+            let (presence, presence_rx) = wfm_socket::Presence::new();
             let state = Arc::new(AppState {
                 db,
                 market: market::Market::new(),
                 worldstate: worldstate::WorldstateClient::new(),
+                presence,
                 pricing_active: AtomicBool::new(false),
             });
             app.manage(state.clone());
+
+            // Presence keeper: holds the warframe.market socket open while the
+            // user is online/ingame so their orders show active to buyers.
+            tauri::async_runtime::spawn(wfm_socket::supervisor(presence_rx));
 
             // Keep the worldstate cache confirmed-fresh every ~3min — the
             // Rotation screen's own poll stops when the window is backgrounded.

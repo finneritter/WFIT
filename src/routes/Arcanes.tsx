@@ -1,5 +1,6 @@
-import { Glyph, StatBox } from "../components/ui";
-import { useArcaneDashboard } from "../hooks/queries";
+import { ItemTags } from "../components/ItemTags";
+import { Glyph, StatBox, TableStatus } from "../components/ui";
+import { useArcaneDashboard, useListedSlugs } from "../hooks/queries";
 import { clsx, fmt } from "../lib/format";
 
 // Surfaced from the arcane-economy research (docs/ARCANE_DISSOLUTION.md). None of
@@ -11,7 +12,8 @@ const TOOLS = [
 ];
 
 export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
-  const { data, isLoading } = useArcaneDashboard();
+  const { data, isLoading, isError } = useArcaneDashboard();
+  const listed = useListedSlugs();
   const s = data?.summary;
   const collections = data?.collections ?? [];
   const owned = data?.owned ?? [];
@@ -53,12 +55,13 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={6} className="muted">
-                  Loading…
-                </td>
-              </tr>
+            {isLoading || isError || collections.length === 0 ? (
+              <TableStatus
+                span={6}
+                loading={isLoading}
+                error={isError}
+                emptyText="No collection data yet."
+              />
             ) : (
               collections.map((c) => (
                 <tr key={c.key}>
@@ -92,18 +95,13 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={4} className="muted">
-                  Loading…
-                </td>
-              </tr>
-            ) : owned.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="muted">
-                  No arcanes owned yet.
-                </td>
-              </tr>
+            {isLoading || isError || owned.length === 0 ? (
+              <TableStatus
+                span={4}
+                loading={isLoading}
+                error={isError}
+                emptyText="No arcanes owned yet."
+              />
             ) : (
               owned.map((a) => (
                 <tr key={a.slug} onClick={() => onOpen(a.slug)}>
@@ -111,7 +109,10 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
                     <div className="dnm">
                       <Glyph name={a.display_name} plat={a.plat} thumb={a.thumbnail_url} />
                       <div className="di">
-                        <span className="nm">{a.display_name}</span>
+                        <span className="nm">
+                          {a.display_name}
+                          <ItemTags trend={a.trend} listed={listed.has(a.slug)} />
+                        </span>
                         <span className="sub">
                           {a.collection ?? "no collection"} · ×{a.qty}
                           {a.rank0_copies !== a.qty ? ` (${a.rank0_copies} unranked)` : ""}
