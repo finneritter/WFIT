@@ -1,7 +1,7 @@
 import { ItemTags } from "../components/ItemTags";
 import { Glyph, StatBox, TableStatus } from "../components/ui";
 import { useArcaneDashboard, useListedSlugs } from "../hooks/queries";
-import { clsx, fmt } from "../lib/format";
+import { fmt } from "../lib/format";
 
 // Surfaced from the arcane-economy research (docs/ARCANE_DISSOLUTION.md). None of
 // these compute collection Vosfor-EV — this screen is the novel bit.
@@ -21,11 +21,12 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
   return (
     <>
       <div className="statband" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <StatBox k="Sell value" v={fmt(s?.sell_plat)} unit="p" d="recommended sells" dcls="muted" />
         <StatBox
-          k="Vosfor if dissolved"
+          k="Vosfor (dissolve)"
           v={fmt(s?.total_vosfor)}
           unit="vf"
-          d="all unranked copies"
+          d={s ? `≈ ${fmt(Math.round(s.total_vosfor * s.plat_per_vosfor))}p` : undefined}
           dcls="muted"
         />
         <StatBox
@@ -34,8 +35,13 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
           d={s ? `${s.best_plat_per_200.toFixed(1)}p / 200 vf` : undefined}
           dcls="muted"
         />
-        <StatBox k="Owned arcanes" v={fmt(s?.owned_count)} />
-        <StatBox k="Maxed value" v={fmt(s?.sell_plat)} unit="p" d="if all ranked up" dcls="muted" />
+        <StatBox
+          k="Vosfor rate"
+          v={s ? s.plat_per_vosfor.toFixed(2) : "—"}
+          unit="p/vf"
+          d="best collection"
+          dcls="muted"
+        />
       </div>
 
       <div className="tpanel">
@@ -82,16 +88,18 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
 
       <div className="tpanel">
         <div className="tpanel-h">
-          <h3>Your arcanes — keep or dissolve</h3>
-          <span className="meta">dissolve = low value even maxed; keep the rest</span>
+          <h3>Your arcanes — sell or dissolve</h3>
+          <span className="meta">
+            sell unranked spares for plat, or dissolve into Vosfor — whichever's worth more
+          </span>
         </div>
         <table className="dtable">
           <thead>
             <tr>
               <th>Arcane</th>
-              <th className="r">Maxed</th>
-              <th className="r">Vosfor</th>
-              <th>Verdict</th>
+              <th className="r">Unranked</th>
+              <th>Recommendation</th>
+              <th className="r">Value</th>
             </tr>
           </thead>
           <tbody>
@@ -114,19 +122,31 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
                           <ItemTags trend={a.trend} listed={listed.has(a.slug)} />
                         </span>
                         <span className="sub">
-                          {a.collection ?? "no collection"} · ×{a.qty}
-                          {a.rank0_copies !== a.qty ? ` (${a.rank0_copies} unranked)` : ""}
+                          {a.collection ?? "no collection"} · {a.rank0_copies} unranked
+                          {a.rank0_copies !== a.qty ? ` of ${a.qty}` : ""}
                         </span>
                       </div>
                     </div>
                   </td>
-                  <td className="r">{a.maxed_plat == null ? "—" : `${fmt(a.maxed_plat)}p`}</td>
-                  <td className="r">{fmt(a.vosfor_total)} vf</td>
+                  <td className="r">{a.plat == null ? "—" : `${fmt(a.plat)}p`}</td>
                   <td>
-                    <span className={clsx("badge", a.verdict === "dissolve" && "at")}>
-                      {a.verdict === "dissolve" ? "dissolve" : "keep"}
+                    <span className="arc-rec">
+                      {a.sell_qty > 0 ? (
+                        <span className="badge sell">
+                          sell {a.sell_qty} · {fmt(a.sell_plat)}p
+                        </span>
+                      ) : null}
+                      {a.dissolve_qty > 0 ? (
+                        <span className="badge dissolve">
+                          vosfor {a.dissolve_qty} · {fmt(a.vosfor_total)} vf
+                        </span>
+                      ) : null}
+                      {a.sell_qty === 0 && a.dissolve_qty === 0 ? (
+                        <span className="muted">—</span>
+                      ) : null}
                     </span>
                   </td>
+                  <td className="r num">{fmt(a.sell_plat + a.dissolve_plat_equiv)}p</td>
                 </tr>
               ))
             )}

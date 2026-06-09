@@ -3,7 +3,7 @@
 //! which collection is the best expected platinum per 200 Vosfor, how much Vosfor
 //! dissolving your unranked arcanes yields, and sell-vs-dissolve per owned arcane.
 //! See `docs/ARCANE_DISSOLUTION.md`.
-use crate::db::Db;
+use crate::db::{inventory, prices, Db};
 use crate::domain::arcane;
 use crate::error::AppResult;
 use crate::types::{ArcaneContribution, ArcaneDashboard, ArcaneSummary, CollectionEv, OwnedArcane};
@@ -101,15 +101,13 @@ fn collections(prices: &HashMap<String, (String, Option<i64>)>) -> Vec<Collectio
     out
 }
 
-/// An arcane worth less than this even when fully ranked is clutter — better turned
-/// into Vosfor than kept. Above it, keep: it's worth using, ranking up, or selling.
-/// (Vosfor is a weak currency, so the bar to "keep" is deliberately low.)
-const KEEP_FLOOR_PLAT: i64 = 15;
-
-/// Owned arcanes with keep-vs-dissolve verdicts, plus the portfolio summary.
+/// Owned arcanes with a per-arcane sell-vs-dissolve recommendation, plus the summary.
+/// `rate` is the implied plat-per-Vosfor (best collection) — the price at which
+/// dissolving competes with selling. The decision runs on the UNRANKED spare copies.
 fn owned(
     c: &rusqlite::Connection,
     prices: &HashMap<String, (String, Option<i64>)>,
+    rate: f64,
 ) -> AppResult<(Vec<OwnedArcane>, i64, i64)> {
     // rank-0 (unranked) copy counts, and which slugs have any rank breakdown.
     let mut rank0: HashMap<String, i64> = HashMap::new();
@@ -132,9 +130,9 @@ fn owned(
         }
     }
 
-    // Maxed (top-rank) market price per slug — what the arcane is actually worth
-    // once ranked up. This, not the cheap unranked price, is the keep-or-dissolve
-    // signal: a rank-0 Energize is ~6p but it's a 100p arcane maxed, so it's a keep.
+    // Maxed (top-rank) market price per slug — kept as muted reference only. It does
+    // NOT drive the recommendation: ranking 21 copies into one maxed arcane (which
+    // sells for only ~8–9×) always nets less than selling those copies unranked.
     let mut maxed: HashMap<String, i64> = HashMap::new();
     {
         let mut stmt = c.prepare("SELECT slug, MAX(median) FROM price_rank GROUP BY slug")?;
@@ -149,29 +147,40 @@ fn owned(
         }
     }
 
-    let mut stmt = c.prepare(
-        "SELECT ci.slug, ci.display_name, ii.qty, ci.thumbnail_url, pc.trend
-         FROM inventory_items ii
-         JOIN catalog_items ci ON ci.slug = ii.slug
-         LEFT JOIN price_cache pc ON pc.slug = ii.slug
-         WHERE ii.qty > 0 AND ci.category = 'arcane'",
-    )?;
-    let rows = stmt.query_map([], |r| {
-        Ok((
-            r.get::<_, String>(0)?,
-            r.get::<_, String>(1)?,
-            r.get::<_, i64>(2)?,
-            r.get::<_, Option<String>>(3)?,
-            r.get::<_, Option<String>>(4)?,
-        ))
-    })?;
+    // Owned arcane rows + recent volume (drives the liquidity-aware sell estimate).
+    // (slug, display_name, qty, thumbnail_url, trend, volume_7d)
+    type OwnedRow = (String, String, i64, Option<String>, Option<String>, Option<i64>);
+    let raw: Vec<OwnedRow> = {
+        let mut stmt = c.prepare(
+            "SELECT ci.slug, ci.display_name, ii.qty, ci.thumbnail_url, pc.trend, pc.volume_7d
+             FROM inventory_items ii
+             JOIN catalog_items ci ON ci.slug = ii.slug
+             LEFT JOIN price_cache pc ON pc.slug = ii.slug
+             WHERE ii.qty > 0 AND ci.category = 'arcane'",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, i64>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, Option<String>>(4)?,
+                r.get::<_, Option<i64>>(5)?,
+            ))
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+
+    // Live buy-order ladders for every owned arcane in one query (sell-side demand).
+    let slugs: Vec<String> = raw.iter().map(|(s, ..)| s.clone()).collect();
+    let bid_map = prices::bid_ladders_for(c, &slugs)?;
+    let no_bids: Vec<(i64, i64)> = Vec::new();
 
     let mut out = Vec::new();
     let mut total_vosfor = 0i64;
-    let mut sell_plat = 0i64;
-    for row in rows {
-        let (slug, display_name, qty, thumbnail_url, trend) = row?;
-        // Unranked copies: explicit rank-0 count if we have a breakdown, else assume
+    let mut sell_plat_total = 0i64;
+    for (slug, display_name, qty, thumbnail_url, trend, volume_7d) in raw {
+        // Unranked spares: explicit rank-0 count if we have a breakdown, else assume
         // the whole stack is unranked (manual adds carry no rank data).
         let rank0_copies = if has_breakdown.contains(&slug) {
             rank0.get(&slug).copied().unwrap_or(0)
@@ -182,18 +191,27 @@ fn owned(
         let maxed_plat = maxed.get(&slug).copied().or(plat);
         let meta = arcane::meta_for(&slug);
         let vosfor = meta.map(|m| m.vosfor).unwrap_or(0);
-        let vosfor_total = rank0_copies * vosfor;
+
+        // Sell vs dissolve, per unranked copy: dissolving one is worth `vosfor × rate`
+        // plat, so sell a copy into real demand (live bids, then a volume-capped tail)
+        // only while its marginal price beats that floor — the rest are worth more as
+        // Vosfor. No price/demand → nothing sells → dissolve all.
+        let dissolve_unit = vosfor as f64 * rate;
+        let bids = bid_map.get(&slug).unwrap_or(&no_bids);
+        let (sell_qty, sell_plat) = inventory::split_sell_dissolve_default(
+            plat.unwrap_or(0),
+            rank0_copies,
+            volume_7d,
+            bids,
+            dissolve_unit,
+        );
+        let dissolve_qty = (rank0_copies - sell_qty).max(0);
+        let vosfor_total = dissolve_qty * vosfor;
+        let dissolve_plat_equiv = (vosfor_total as f64 * rate).round() as i64;
         total_vosfor += vosfor_total;
-        sell_plat += maxed_plat.unwrap_or(0) * qty;
-        // Dissolve only clutter — arcanes worth less than the keep floor even when
-        // fully ranked. Anything above it is worth more sold/used than as Vosfor
-        // (which is a weak currency), so keep it. Using the MAXED value, not the
-        // throwaway rank-0 price, is what keeps the verdict honest: a rank-0 Energize
-        // is ~6p but it's a 100p arcane maxed — clearly a keep, not a dissolve.
-        let verdict = match maxed_plat {
-            Some(m) if m < KEEP_FLOOR_PLAT => "dissolve",
-            _ => "keep",
-        };
+        sell_plat_total += sell_plat;
+        let verdict = if sell_qty >= dissolve_qty { "sell" } else { "dissolve" };
+
         out.push(OwnedArcane {
             slug,
             display_name,
@@ -202,7 +220,11 @@ fn owned(
             plat,
             maxed_plat,
             vosfor,
+            sell_qty,
+            sell_plat,
+            dissolve_qty,
             vosfor_total,
+            dissolve_plat_equiv,
             collection: meta
                 .map(|m| m.collection)
                 .filter(|c| *c != "none")
@@ -213,13 +235,13 @@ fn owned(
             thumbnail_url,
         });
     }
-    // Surface the actionable dissolve candidates first, then most Vosfor-on-the-table.
+    // Most actionable first: biggest sale on the table, then biggest Vosfor.
     out.sort_by(|a, b| {
-        (a.verdict != "dissolve")
-            .cmp(&(b.verdict != "dissolve"))
-            .then(b.vosfor_total.cmp(&a.vosfor_total))
+        b.sell_plat
+            .cmp(&a.sell_plat)
+            .then(b.dissolve_plat_equiv.cmp(&a.dissolve_plat_equiv))
     });
-    Ok((out, total_vosfor, sell_plat))
+    Ok((out, total_vosfor, sell_plat_total))
 }
 
 /// The full Arcanes dashboard: collection EV leaderboard + owned arcanes + summary.
@@ -229,7 +251,7 @@ pub fn dashboard(db: &Db) -> AppResult<ArcaneDashboard> {
         let cols = collections(&prices);
         let best = cols.first();
         let implied_rate = best.map(|b| b.plat_per_vosfor).unwrap_or(0.0);
-        let (owned_rows, total_vosfor, sell_plat) = owned(c, &prices)?;
+        let (owned_rows, total_vosfor, sell_plat) = owned(c, &prices, implied_rate)?;
         let summary = ArcaneSummary {
             total_vosfor,
             owned_count: owned_rows.len() as i64,

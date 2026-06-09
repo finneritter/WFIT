@@ -317,6 +317,70 @@ pub fn realizable_default(
     (rz, phi)
 }
 
+/// Split a stack of `qty` identical units between selling and dissolving, given the
+/// per-unit `dissolve_unit` floor (the plat-equivalent of dissolving one). Walks the
+/// SAME demand curve as `realizable_value` (live bids best-first, then a volume-capped
+/// off-book tail at `tail_factor × per_unit`) and keeps selling a unit only while its
+/// marginal price beats the dissolve floor. The curve is monotonically decreasing, so
+/// this is the value-maximizing split. Returns `(sell_qty, sell_plat)`; the remaining
+/// `qty − sell_qty` units are the ones worth dissolving instead.
+#[allow(clippy::too_many_arguments)]
+pub fn split_sell_dissolve(
+    per_unit: i64,
+    qty: i64,
+    volume_7d: Option<i64>,
+    bids: &[(i64, i64)],
+    dissolve_unit: f64,
+    window_days: f64,
+    k: f64,
+    tail_factor: f64,
+) -> (i64, i64) {
+    if qty <= 0 {
+        return (0, 0);
+    }
+    let mut remaining = qty;
+    let mut sell_qty = 0i64;
+    let mut sell_plat = 0i64;
+    // 1) Standing demand, best bid first — take while the bid beats dissolving.
+    //    Bids are sorted price-desc, so once one drops to the floor all later ones do too.
+    for &(price, q) in bids {
+        if remaining == 0 || (price as f64) <= dissolve_unit {
+            break;
+        }
+        let take = remaining.min(q.max(0));
+        sell_qty += take;
+        sell_plat += take * price.max(0);
+        remaining -= take;
+    }
+    // 2) Volume-capped off-book tail at a discount — only worth it if it still beats
+    //    dissolving (a separate channel from the bids, capped by recent demand).
+    let tail_price = (per_unit.max(0) as f64) * tail_factor;
+    if remaining > 0 && tail_price > dissolve_unit {
+        let daily = volume_7d.unwrap_or(0).max(0) as f64 / 7.0;
+        let capacity = (k * daily * window_days).floor() as i64;
+        let filled = qty - remaining;
+        let tail_units = (capacity - filled).max(0).min(remaining);
+        sell_qty += tail_units;
+        sell_plat += (tail_units as f64 * tail_price).round() as i64;
+    }
+    (sell_qty, sell_plat)
+}
+
+/// `split_sell_dissolve` with the app defaults, with the sale clamped to the market
+/// ceiling (`per_unit × qty`).
+pub fn split_sell_dissolve_default(
+    per_unit: i64,
+    qty: i64,
+    volume_7d: Option<i64>,
+    bids: &[(i64, i64)],
+    dissolve_unit: f64,
+) -> (i64, i64) {
+    let (sell_qty, sell_plat) =
+        split_sell_dissolve(per_unit, qty, volume_7d, bids, dissolve_unit, WINDOW_DAYS, K, TAIL_FACTOR);
+    let ceiling = (per_unit.max(0) * sell_qty.max(0)).max(0);
+    (sell_qty, sell_plat.min(ceiling))
+}
+
 /// Number of complete sets currently owned (all member parts present).
 pub fn complete_set_count(db: &Db, set_slug: &str) -> AppResult<i64> {
     let members = set_members(db, set_slug)?;
@@ -648,11 +712,48 @@ pub fn owned_slugs(db: &Db) -> AppResult<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{realizable_default, realizable_value};
+    use super::{realizable_default, realizable_value, split_sell_dissolve, split_sell_dissolve_default};
 
     const W: f64 = 30.0;
     const K: f64 = 1.0;
     const T: f64 = 0.35;
+
+    #[test]
+    fn split_sells_all_when_bids_beat_dissolve() {
+        // 3 copies, a deep 40p bid, dissolve worth 20p/copy → sell all 3 to the bid.
+        assert_eq!(split_sell_dissolve(50, 3, Some(0), &[(40, 5)], 20.0, W, K, T), (3, 120));
+    }
+
+    #[test]
+    fn split_dissolves_all_when_floor_beats_market() {
+        // Bids (15p) and the off-book tail (50×0.35 ≈ 17.5p) both lose to a 30p
+        // dissolve floor → keep nothing for sale.
+        assert_eq!(split_sell_dissolve(50, 5, Some(100), &[(15, 10)], 30.0, W, K, T), (0, 0));
+    }
+
+    #[test]
+    fn split_sells_to_bids_then_dissolves_the_tail() {
+        // One 30p bid for 2 (beats the 20p floor); the tail (40×0.35 = 14p) does not.
+        // → sell 2 @ 30, dissolve the other 3.
+        assert_eq!(split_sell_dissolve(40, 5, Some(0), &[(30, 2)], 20.0, W, K, T), (2, 60));
+    }
+
+    #[test]
+    fn split_no_bids_thin_volume_dissolves_all() {
+        // Junk common: 500 @ 3p, no bids, ~1 sale/wk, dissolve worth 5p → dissolve all.
+        assert_eq!(split_sell_dissolve(3, 500, Some(1), &[], 5.0, W, K, T), (0, 0));
+    }
+
+    #[test]
+    fn split_unpriced_sells_nothing() {
+        assert_eq!(split_sell_dissolve(0, 10, Some(50), &[], 5.0, W, K, T), (0, 0));
+    }
+
+    #[test]
+    fn split_default_clamps_sale_to_market() {
+        // A pathological 99p bid can't value 3 copies above 3 × 50p = 150p.
+        assert_eq!(split_sell_dissolve_default(50, 3, Some(0), &[(99, 5)], 20.0), (3, 150));
+    }
 
     #[test]
     fn no_bids_and_thin_volume_is_nearly_worthless() {

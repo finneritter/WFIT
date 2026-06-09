@@ -156,20 +156,24 @@ export interface OwnedArcane {
   display_name: string;
   qty: number;
   rank0_copies: number;
-  plat: number | null;
-  maxed_plat: number | null;
-  vosfor: number;
-  vosfor_total: number;
+  plat: number | null; // rank-0 (unranked) price — the sell reference
+  maxed_plat: number | null; // muted info only
+  vosfor: number; // per unranked copy
+  sell_qty: number;
+  sell_plat: number;
+  dissolve_qty: number;
+  vosfor_total: number; // dissolve_qty × vosfor
+  dissolve_plat_equiv: number;
   collection: string | null;
   rarity: string | null;
-  verdict: "keep" | "dissolve";
+  verdict: "sell" | "dissolve";
   trend: Trend | null;
   thumbnail_url: string | null;
 }
 export interface ArcaneSummary {
-  total_vosfor: number;
+  total_vosfor: number; // recommended-dissolve Vosfor
   owned_count: number;
-  sell_plat: number;
+  sell_plat: number; // recommended-sell realizable plat
   best_collection: string | null;
   best_plat_per_200: number;
   plat_per_vosfor: number;

@@ -820,6 +820,22 @@ body.flat-deltas .neg {
 .badge.above {
   color: var(--faint);
 }
+/* Arcane sell-vs-dissolve recommendation badges. */
+.badge.sell {
+  color: var(--plat);
+  border-color: var(--plat);
+}
+.badge.dissolve {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+/* Stacks the sell + dissolve badges when an arcane stack splits between both. */
+.arc-rec {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
 .rm {
   width: 22px;
   height: 22px;

@@ -37,10 +37,16 @@ Authoritative per-arcane values come from the wiki data module `Module:Arcane/da
 | 84 | Escapist, Hot Shot, Reaper, Universal Fallout, Longbow Sharpshot, Melee Crescendo/Duplicate, Secondary Shiver |
 | 98 | Barrier, Energize, Grace |
 
-> "Level 1 / total Vosfor" counts **rank-0 (unranked) copies only**. Whether dissolving a fused
-> higher-rank arcane yields more Vosfor (the rank→copies table 1/3/6/10/15/21) is **not wiki-confirmed**,
-> so we deliberately value only unranked copies. The full slug→vosfor map is bundled in
-> `src-tauri/src/domain/data/arcane_dissolution.tsv`.
+> Vosfor counts **rank-0 (unranked) copies only** — the traded/dissolvable unit. Whether dissolving a
+> fused higher-rank arcane refunds more Vosfor is **not wiki-confirmed**, so we value only unranked
+> copies. The full slug→vosfor map is bundled in `src-tauri/src/domain/data/arcane_dissolution.tsv`.
+
+**Ranking is a *use* decision, never a profit one — out of scope for the recommender.** Maxing an
+arcane to rank 5 costs **21 duplicate copies** (cumulative `1 / 3 / 6 / 10 / 15 / 21`, only duplicates
+consumed — no Endo/credits; confirmed at /w/Arcane_Enhancement). A maxed arcane sells for only ~8–9× an
+unranked one, so selling 21 unranked copies always nets more plat than selling one maxed. The
+recommender therefore never suggests ranking up — it only weighs **sell vs dissolve** on the unranked
+spares.
 
 ## The 9 Loid collections — drop rates
 
@@ -71,10 +77,22 @@ using warframe.market rank-0 medians the app already caches. Report **plat per 2
 and **plat per Vosfor**; rank collections descending. Arcanes with no cached price are excluded and
 reflected in a per-collection **coverage** figure so the EV's honesty is visible.
 
-**Implied Vosfor value** = the best collection's `plat / Vosfor`. This drives the **sell-vs-dissolve**
-verdict for an owned arcane: dissolving yields `vosfor × implied_rate` in expected plat, so recommend
-**DISSOLVE** when `vosfor × implied_rate > market_sell_plat`, else **SELL/KEEP**. (A principled rule,
-not an arbitrary plat threshold — Vosfor has no fixed exchange rate.)
+**Implied Vosfor value** = the best collection's `plat / Vosfor` (`rate`). This drives the
+**sell-vs-dissolve** recommendation, computed per arcane over its **unranked spare copies**
+(`rank0_copies`):
+
+- Dissolving one copy is worth `dissolve_unit = vosfor × rate` plat-equivalent — a flat floor.
+- Selling is **liquidity-aware**: walk the live demand curve (`buy_orders` best-first, then a
+  volume-capped off-book tail at `TAIL_FACTOR × unranked_price`) — the same curve as inventory's
+  `realizable_value` — and **sell a copy only while its marginal price beats `dissolve_unit`**; the rest
+  are worth more as Vosfor. This is what makes the result *quantity-aware*: you can't dump 30 copies of a
+  thin-demand arcane, so its tail dissolves.
+- Output per arcane: `sell_qty @ sell_plat` and `dissolve_qty → vosfor` (a stack can split between both).
+  `verdict` = the dominant action. Implemented in `db/arcanes.rs::owned` via
+  `db/inventory.rs::split_sell_dissolve_default`.
+
+A high-value liquid arcane (e.g. Energize) sells; junk commons (and anything with no price/no demand)
+dissolve. No arbitrary plat threshold — Vosfor has no fixed exchange rate, so the rate is derived.
 
 ## Data provenance & caveats
 
