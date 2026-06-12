@@ -3,6 +3,7 @@ import { fmt } from "../lib/format";
 import { Icon } from "./Icon";
 
 export type ScreenId =
+  | "home"
   | "inventory"
   | "sets"
   | "trends"
@@ -22,18 +23,39 @@ interface NavDef {
   icon: string;
 }
 
-const NAV: NavDef[] = [
-  { id: "inventory", label: "Inventory", icon: "inventory" },
-  { id: "sets", label: "Sets", icon: "sets" },
-  { id: "trends", label: "Trends", icon: "trends" },
-  { id: "watchlist", label: "Watchlist", icon: "watchlist" },
-  { id: "buy", label: "Buy List", icon: "buy" },
-  { id: "market", label: "Market", icon: "search" },
-  { id: "listings", label: "Listings", icon: "tag" },
-  { id: "ducats", label: "Ducats", icon: "coin" },
-  { id: "arcanes", label: "Arcanes", icon: "arcane" },
-  { id: "rotation", label: "Rotation", icon: "timer" },
-  { id: "sold", label: "Sold History", icon: "history" },
+// Grouped by workflow so the 12 screens read as a small set of intents rather
+// than a flat list. A null `label` is an ungrouped lead item (Home).
+const GROUPS: { label: string | null; items: NavDef[] }[] = [
+  { label: null, items: [{ id: "home", label: "Home", icon: "home" }] },
+  {
+    label: "Portfolio",
+    items: [
+      { id: "inventory", label: "Inventory", icon: "inventory" },
+      { id: "sets", label: "Sets", icon: "sets" },
+      { id: "arcanes", label: "Arcanes", icon: "arcane" },
+      { id: "ducats", label: "Ducats", icon: "coin" },
+    ],
+  },
+  {
+    label: "Trading",
+    items: [
+      { id: "listings", label: "Listings", icon: "tag" },
+      { id: "sold", label: "Sold History", icon: "history" },
+      { id: "market", label: "Market", icon: "search" },
+    ],
+  },
+  {
+    label: "Planning",
+    items: [
+      { id: "watchlist", label: "Watchlist", icon: "watchlist" },
+      { id: "buy", label: "Buy List", icon: "buy" },
+      { id: "trends", label: "Trends", icon: "trends" },
+    ],
+  },
+  {
+    label: "World",
+    items: [{ id: "rotation", label: "Rotation", icon: "timer" }],
+  },
 ];
 
 export function Sidebar({
@@ -61,18 +83,23 @@ export function Sidebar({
           </button>
         </div>
 
-        {NAV.map((n) => (
-          <button
-            key={n.id}
-            type="button"
-            className="nav-item"
-            aria-current={screen === n.id}
-            onClick={() => onNavigate(n.id)}
-          >
-            <Icon name={n.icon} />
-            {n.label}
-            {badges[n.id] ? <span className="ct">{badges[n.id]}</span> : null}
-          </button>
+        {GROUPS.map((g) => (
+          <div className="nav-group" key={g.label ?? "home"}>
+            {g.label ? <div className="nav-group-h">{g.label}</div> : null}
+            {g.items.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                className="nav-item"
+                aria-current={screen === n.id}
+                onClick={() => onNavigate(n.id)}
+              >
+                <Icon name={n.icon} />
+                {n.label}
+                {badges[n.id] ? <span className="ct">{badges[n.id]}</span> : null}
+              </button>
+            ))}
+          </div>
         ))}
 
         <div className="nav-sp" />

@@ -34,6 +34,8 @@ const PATHS: Record<string, string> = {
   arcane: "M6 3h12l4 6-10 12L2 9zM2 9h20M9 3l3 18M15 3l-3 18",
   // double chevron — sidebar collapse toggle (rotated 180° when collapsed)
   chevrons: "M11 17l-5-5 5-5M18 17l-5-5 5-5",
+  // feather "home" — Dashboard nav item
+  home: "M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10",
 };
 
 export const Icon = memo(function Icon({ name }: { name: string }) {
