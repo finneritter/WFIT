@@ -41,3 +41,10 @@ r2d2_sqlite = "0.25"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+# Smaller, faster installed binary (scripts/install.sh builds --release).
+# panic stays "unwind" — Tauri callbacks tolerate caught panics better.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

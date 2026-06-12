@@ -47,7 +47,7 @@ impl Market {
         let http = Client::builder()
             .user_agent("wfit-desktop/0.1")
             .default_headers(headers)
-            .timeout(Duration::from_secs(25))
+            .timeout(Duration::from_secs(10))
             .build()
             .expect("reqwest client");
         Self {
@@ -74,11 +74,29 @@ impl Market {
         *self.last_call.lock() = Instant::now();
     }
 
+    /// Throttled GET with ONE retry on transient failures (timeout/connect
+    /// errors, 429, 5xx). The retry re-enters the global throttle plus a 1s
+    /// grace so a rate-limit response isn't immediately hammered again.
+    /// Idempotent public reads only — auth'd/write requests don't use this.
+    async fn get_throttled(&self, url: &str) -> AppResult<reqwest::Response> {
+        self.throttled().await;
+        let first = self.http.get(url).send().await;
+        let transient = match &first {
+            Ok(r) => r.status().as_u16() == 429 || r.status().is_server_error(),
+            Err(e) => e.is_timeout() || e.is_connect(),
+        };
+        if !transient {
+            return Ok(first?);
+        }
+        tracing::warn!(url, "transient warframe.market failure — retrying once");
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        self.throttled().await;
+        Ok(self.http.get(url).send().await?)
+    }
+
     /// Pass A: the full item list. Classifies into the 5 categories and skips
     /// anything WFIT doesn't track (sentinels, skins, ...).
     pub async fn fetch_catalog(&self) -> AppResult<Vec<CatalogUpsert>> {
-        self.throttled().await;
-
         #[derive(Deserialize)]
         struct Resp {
             data: Vec<Item>,
@@ -108,9 +126,7 @@ impl Market {
 
         let url = format!("{API_V2}/items");
         let resp: Resp = self
-            .http
-            .get(url)
-            .send()
+            .get_throttled(&url)
             .await?
             .error_for_status()?
             .json()
@@ -155,8 +171,6 @@ impl Market {
     /// Per-item 90-day statistics → a fully-derived PriceUpsert (history + cache
     /// figures). Returns None when the item has no usable closed-market history.
     pub async fn fetch_statistics(&self, slug: &str) -> AppResult<Option<PriceUpsert>> {
-        self.throttled().await;
-
         #[derive(Deserialize)]
         struct Resp {
             payload: Payload,
@@ -183,7 +197,7 @@ impl Market {
         }
 
         let url = format!("{API_V1}/items/{slug}/statistics");
-        let r = self.http.get(url).send().await?;
+        let r = self.get_throttled(&url).await?;
         if !r.status().is_success() {
             return Ok(None);
         }
@@ -310,8 +324,6 @@ impl Market {
 
     /// Pass B: per-item detail — the set composition (member ids + quantity).
     pub async fn fetch_detail(&self, slug: &str) -> AppResult<Option<ItemDetailRaw>> {
-        self.throttled().await;
-
         #[derive(Deserialize)]
         struct Resp {
             data: Data,
@@ -325,7 +337,7 @@ impl Market {
         }
 
         let url = format!("{API_V2}/items/{slug}");
-        let r = self.http.get(url).send().await?;
+        let r = self.get_throttled(&url).await?;
         if !r.status().is_success() {
             return Ok(None);
         }
@@ -340,8 +352,6 @@ impl Market {
     /// Public live orders for one item → best buy/sell among online users (the
     /// actionable market) + buyer/seller counts. Powers the drawer's spread row.
     pub async fn fetch_item_orders(&self, slug: &str) -> AppResult<crate::types::ItemOrders> {
-        self.throttled().await;
-
         #[derive(Deserialize)]
         struct Resp {
             #[serde(default)]
@@ -360,7 +370,7 @@ impl Market {
         }
 
         let url = format!("{API_V2}/orders/item/{slug}");
-        let r = self.http.get(url).send().await?;
+        let r = self.get_throttled(&url).await?;
         if !r.status().is_success() {
             return Ok(crate::types::ItemOrders::default());
         }
@@ -402,8 +412,6 @@ impl Market {
     /// orders") and callers should store it. `Ok(None)` = the server answered
     /// non-2xx (throttle, 5xx, bad slug); callers must keep whatever they have.
     pub async fn fetch_order_book(&self, slug: &str) -> AppResult<Option<OrderBook>> {
-        self.throttled().await;
-
         #[derive(Deserialize)]
         struct Resp {
             #[serde(default)]
@@ -424,7 +432,7 @@ impl Market {
         }
 
         let url = format!("{API_V2}/orders/item/{slug}");
-        let r = self.http.get(url).send().await?;
+        let r = self.get_throttled(&url).await?;
         if !r.status().is_success() {
             tracing::warn!(slug, status = %r.status(), "order book fetch rejected");
             return Ok(None);
@@ -485,8 +493,6 @@ impl Market {
         display_name: String,
         max_rank: Option<i64>,
     ) -> AppResult<crate::types::ItemSellers> {
-        self.throttled().await;
-
         #[derive(Deserialize)]
         struct Resp {
             #[serde(default)]
@@ -515,7 +521,7 @@ impl Market {
         }
 
         let url = format!("{API_V2}/orders/item/{slug}");
-        let r = self.http.get(url).send().await?;
+        let r = self.get_throttled(&url).await?;
         if !r.status().is_success() {
             return Ok(crate::types::ItemSellers {
                 display_name,

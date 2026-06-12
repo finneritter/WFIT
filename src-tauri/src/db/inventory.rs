@@ -241,6 +241,9 @@ const TAIL_FACTOR: f64 = 0.35; // off-book sales beyond live bids net ~a third o
 /// Realizable plat for a stack: `bids` (price, qty) filled best-first, plus a
 /// volume-capped, discounted tail; units beyond both real bids and that capacity
 /// are worth ~0. `per_unit` is the reference price for the tail.
+///
+/// TWIN: `split_sell_dissolve` walks this same curve with a dissolve floor —
+/// change the fill/tail math in BOTH or the no-floor property test fails.
 pub fn realizable_value(
     per_unit: i64,
     qty: i64,
@@ -336,6 +339,9 @@ pub fn realizable_default(
 /// marginal price beats the dissolve floor. The curve is monotonically decreasing, so
 /// this is the value-maximizing split. Returns `(sell_qty, sell_plat)`; the remaining
 /// `qty − sell_qty` units are the ones worth dissolving instead.
+///
+/// TWIN: with `dissolve_unit < 0` this must equal `realizable_value` exactly —
+/// change the fill/tail math in BOTH or the no-floor property test fails.
 #[allow(clippy::too_many_arguments)]
 pub fn split_sell_dissolve(
     per_unit: i64,
@@ -373,7 +379,9 @@ pub fn split_sell_dissolve(
         let filled = qty - remaining;
         let tail_units = (capacity - filled).max(0).min(remaining);
         sell_qty += tail_units;
-        sell_plat += (tail_units as f64 * tail_price).round() as i64;
+        // Same association order as realizable_value's tail — float multiply
+        // isn't associative, and units × (price × factor) can round 1p apart.
+        sell_plat += (tail_units as f64 * per_unit.max(0) as f64 * tail_factor).round() as i64;
     }
     (sell_qty, sell_plat)
 }
@@ -734,6 +742,37 @@ mod tests {
     const W: f64 = 30.0;
     const K: f64 = 1.0;
     const T: f64 = 0.35;
+
+    /// Pins the two liquidation walks together: with a dissolve floor below any
+    /// possible price, `split_sell_dissolve` must trace exactly the same demand
+    /// curve as `realizable_value` (same bids-then-tail fill, same rounding).
+    /// If one is ever edited without the other, this property breaks.
+    #[test]
+    fn split_with_no_floor_equals_realizable_value() {
+        let bid_books: &[&[(i64, i64)]] = &[
+            &[],
+            &[(40, 5)],
+            &[(40, 2), (35, 3), (10, 50)],
+            &[(1, 1)],
+            &[(100, 1), (1, 1000)],
+        ];
+        for &per_unit in &[0i64, 1, 13, 50, 400] {
+            for &qty in &[1i64, 2, 7, 40, 500] {
+                for &vol in &[None, Some(0i64), Some(3), Some(70), Some(10_000)] {
+                    for bids in bid_books {
+                        let rz = realizable_value(per_unit, qty, vol, bids, W, K, T);
+                        let (sell_qty, sell_plat) =
+                            split_sell_dissolve(per_unit, qty, vol, bids, -1.0, W, K, T);
+                        assert_eq!(
+                            sell_plat, rz,
+                            "diverged: per_unit={per_unit} qty={qty} vol={vol:?} bids={bids:?}"
+                        );
+                        assert!(sell_qty <= qty);
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn split_sells_all_when_bids_beat_dissolve() {
