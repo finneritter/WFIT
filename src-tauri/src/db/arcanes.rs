@@ -9,12 +9,14 @@ use crate::error::AppResult;
 use crate::types::{ArcaneContribution, ArcaneDashboard, ArcaneSummary, CollectionEv, OwnedArcane};
 use std::collections::HashMap;
 
-/// slug → (display_name, rank-0 market price). Rank-0 is the traded unit for
-/// arcanes (collections grant unranked copies); prefer the per-rank-0 median, else
-/// the headline median.
-fn arcane_prices(c: &rusqlite::Connection) -> AppResult<HashMap<String, (String, Option<i64>)>> {
+/// slug → (display_name, rank-0 market price, 7-day volume). Rank-0 is the traded
+/// unit for arcanes (collections grant unranked copies); prefer the per-rank-0
+/// median, else the headline median. Volume feeds the realizable (liquidity-
+/// adjusted) EV — it caps the off-book tail beyond standing bids.
+type ArcanePrice = (String, Option<i64>, Option<i64>);
+fn arcane_prices(c: &rusqlite::Connection) -> AppResult<HashMap<String, ArcanePrice>> {
     let mut stmt = c.prepare(
-        "SELECT ci.slug, ci.display_name, COALESCE(pr.median, pc.median_plat)
+        "SELECT ci.slug, ci.display_name, COALESCE(pr.median, pc.median_plat), pc.volume_7d
          FROM catalog_items ci
          LEFT JOIN price_rank pr ON pr.slug = ci.slug AND pr.rank = 0
          LEFT JOIN price_cache pc ON pc.slug = ci.slug
@@ -25,18 +27,27 @@ fn arcane_prices(c: &rusqlite::Connection) -> AppResult<HashMap<String, (String,
             r.get::<_, String>(0)?,
             r.get::<_, String>(1)?,
             r.get::<_, Option<i64>>(2)?,
+            r.get::<_, Option<i64>>(3)?,
         ))
     })?;
     let mut m = HashMap::new();
     for row in rows {
-        let (slug, name, price) = row?;
-        m.insert(slug, (name, price));
+        let (slug, name, price, volume) = row?;
+        m.insert(slug, (name, price, volume));
     }
     Ok(m)
 }
 
 /// Per-collection expected value from one 200-Vosfor pull, ranked best-first.
-fn collections(prices: &HashMap<String, (String, Option<i64>)>) -> Vec<CollectionEv> {
+/// The EV is **realizable** (liquidity-adjusted): each arcane contributes the value
+/// of selling *one unranked copy* into live rank-0 demand (`rank0_bids`, best-first,
+/// then a volume-capped off-book tail) — NOT its raw market median — matching the
+/// app's core valuation philosophy that a median is a marginal, not a stackable, price.
+fn collections(
+    prices: &HashMap<String, ArcanePrice>,
+    rank0_bids: &HashMap<String, Vec<(i64, i64)>>,
+) -> Vec<CollectionEv> {
+    let no_bids: Vec<(i64, i64)> = Vec::new();
     let mut out: Vec<CollectionEv> = arcane::COLLECTIONS
         .iter()
         .map(|col| {
@@ -54,11 +65,21 @@ fn collections(prices: &HashMap<String, (String, Option<i64>)>) -> Vec<Collectio
                 let p = (col.weights[ri] / 100.0) / n as f64; // single-draw chance
                 for slug in pool {
                     pool_size += 1;
-                    let plat = prices.get(*slug).and_then(|(_, p)| *p);
+                    let (plat, volume) = prices
+                        .get(*slug)
+                        .map(|(_, pl, v)| (*pl, *v))
+                        .unwrap_or((None, None));
                     if plat.is_some() {
                         priced += 1;
                     }
-                    let contribution = arcane::ARCANES_PER_PULL * p * plat.unwrap_or(0) as f64;
+                    // Realizable value of one unranked copy: best standing rank-0 bid
+                    // if any (usually tiny), else the volume-gated tail (~0.35×median,
+                    // 0 when there's no recent volume). This is what a copy actually
+                    // fetches — so the implied Vosfor rate is honest, not nominal.
+                    let bids = rank0_bids.get(*slug).unwrap_or(&no_bids);
+                    let realizable =
+                        inventory::realizable_value_default(plat.unwrap_or(0), 1, volume, bids);
+                    let contribution = arcane::ARCANES_PER_PULL * p * realizable as f64;
                     ev += contribution;
                     contribs.push((slug.to_string(), p, plat, contribution));
                 }
@@ -70,7 +91,7 @@ fn collections(prices: &HashMap<String, (String, Option<i64>)>) -> Vec<Collectio
                 .map(|(slug, prob, plat, _)| ArcaneContribution {
                     display_name: prices
                         .get(slug)
-                        .map(|(n, _)| n.clone())
+                        .map(|(n, _, _)| n.clone())
                         .unwrap_or_else(|| slug.clone()),
                     slug: slug.clone(),
                     prob: *prob,
@@ -106,7 +127,7 @@ fn collections(prices: &HashMap<String, (String, Option<i64>)>) -> Vec<Collectio
 /// dissolving competes with selling. The decision runs on the UNRANKED spare copies.
 fn owned(
     c: &rusqlite::Connection,
-    prices: &HashMap<String, (String, Option<i64>)>,
+    prices: &HashMap<String, ArcanePrice>,
     rate: f64,
 ) -> AppResult<(Vec<OwnedArcane>, i64, i64)> {
     // rank-0 (unranked) copy counts, and which slugs have any rank breakdown.
@@ -171,9 +192,11 @@ fn owned(
         rows.collect::<Result<Vec<_>, _>>()?
     };
 
-    // Live buy-order ladders for every owned arcane in one query (sell-side demand).
+    // Live rank-0 buy-order ladders for every owned arcane in one query (sell-side
+    // demand). Rank-filtered to 0: the decision is over UNRANKED spare copies, so
+    // maxed (rank-5) bids must not leak into it and inflate the sale.
     let slugs: Vec<String> = raw.iter().map(|(s, ..)| s.clone()).collect();
-    let bid_map = prices::bid_ladders_for(c, &slugs)?;
+    let bid_map = prices::bid_ladders_for_rank(c, &slugs, 0)?;
     let no_bids: Vec<(i64, i64)> = Vec::new();
 
     let mut out = Vec::new();
@@ -187,7 +210,7 @@ fn owned(
         } else {
             qty
         };
-        let plat = prices.get(&slug).and_then(|(_, p)| *p);
+        let plat = prices.get(&slug).and_then(|(_, p, _)| *p);
         let maxed_plat = maxed.get(&slug).copied().or(plat);
         let meta = arcane::meta_for(&slug);
         let vosfor = meta.map(|m| m.vosfor).unwrap_or(0);
@@ -248,7 +271,11 @@ fn owned(
 pub fn dashboard(db: &Db) -> AppResult<ArcaneDashboard> {
     db.read(|c| {
         let prices = arcane_prices(c)?;
-        let cols = collections(&prices);
+        // Rank-0 bids for every catalogued arcane in one query — feeds the realizable
+        // collection EV (each arcane valued as one unranked copy sold into live demand).
+        let all_slugs: Vec<String> = prices.keys().cloned().collect();
+        let rank0_bids = prices::bid_ladders_for_rank(c, &all_slugs, 0)?;
+        let cols = collections(&prices, &rank0_bids);
         let best = cols.first();
         let implied_rate = best.map(|b| b.plat_per_vosfor).unwrap_or(0.0);
         let (owned_rows, total_vosfor, sell_plat) = owned(c, &prices, implied_rate)?;
@@ -274,16 +301,20 @@ mod tests {
 
     #[test]
     fn ev_weights_a_synthetic_collection() {
-        // Eidolon: legendary tier 5% over 3 arcanes → 1.667% each per draw. If only
-        // Energize is priced at 120p, EV ≈ 3 draws × 0.01667 × 120 = ~6.0p/pull.
+        // Eidolon: legendary tier 5% over 3 arcanes → 1.667% each per draw. Energize is
+        // priced at 120p with a standing rank-0 bid of 100p, so one unranked copy's
+        // *realizable* value is 100p (it sells into the bid, not the 120p median). EV ≈
+        // 3 draws × 0.01667 × 100 = ~5.0p/pull — liquidity-adjusted, not nominal.
         let mut prices = HashMap::new();
         prices.insert(
             "arcane_energize".to_string(),
-            ("Arcane Energize".to_string(), Some(120)),
+            ("Arcane Energize".to_string(), Some(120), None),
         );
-        let cols = collections(&prices);
+        let mut rank0_bids: HashMap<String, Vec<(i64, i64)>> = HashMap::new();
+        rank0_bids.insert("arcane_energize".to_string(), vec![(100, 5)]);
+        let cols = collections(&prices, &rank0_bids);
         let eidolon = cols.iter().find(|c| c.key == "eidolon").unwrap();
-        let expected = 3.0 * (0.05 / 3.0) * 120.0;
+        let expected = 3.0 * (0.05 / 3.0) * 100.0;
         assert!(
             (eidolon.ev_plat_per_pull - expected).abs() < 0.01,
             "got {}",

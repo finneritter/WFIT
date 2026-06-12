@@ -47,7 +47,7 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
       <div className="tpanel">
         <div className="tpanel-h">
           <h3>Best collection to spend Vosfor on</h3>
-          <span className="meta">expected platinum per 200 Vosfor pull</span>
+          <span className="meta">realizable platinum per 200 Vosfor pull (liquidity-adjusted)</span>
         </div>
         <table className="dtable">
           <thead>

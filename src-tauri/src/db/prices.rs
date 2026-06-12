@@ -258,6 +258,44 @@ pub fn bid_ladders_for(
     Ok(out)
 }
 
+/// Like `bid_ladders_for`, but restricted to a single `rank`. Arcanes (and mods)
+/// trade as distinct goods per rank — an unranked (rank-0) copy and a maxed copy
+/// have separate demand curves — so a per-rank decision must only see its own bids.
+/// (`bid_ladders_for` stays rank-agnostic for the general inventory path.)
+pub fn bid_ladders_for_rank(
+    c: &Connection,
+    slugs: &[String],
+    rank: i64,
+) -> AppResult<HashMap<String, Vec<(i64, i64)>>> {
+    let mut out: HashMap<String, Vec<(i64, i64)>> = HashMap::new();
+    if slugs.is_empty() {
+        return Ok(out);
+    }
+    let sql = format!(
+        "SELECT slug, price, qty FROM buy_orders WHERE rank = ? AND slug IN ({})
+         ORDER BY slug, price DESC",
+        placeholders(slugs.len())
+    );
+    let mut stmt = c.prepare(&sql)?;
+    let mut bind: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(slugs.len() + 1);
+    bind.push(&rank);
+    for s in slugs {
+        bind.push(s);
+    }
+    let rows = stmt.query_map(bind.as_slice(), |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, i64>(1)?,
+            r.get::<_, i64>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (slug, price, qty) = row?;
+        out.entry(slug).or_default().push((price, qty));
+    }
+    Ok(out)
+}
+
 /// Recent daily medians (≤12, chronological) for many slugs in one query.
 /// Batched twin of inventory's `recent_medians`.
 pub fn recent_medians_for(

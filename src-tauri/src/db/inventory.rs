@@ -298,6 +298,18 @@ pub fn confidence_of(
     })
 }
 
+/// `realizable_value` with the app defaults (`WINDOW_DAYS`/`K`/`TAIL_FACTOR`), no
+/// market clamp. Lets other modules value a stack on the same realizable curve the
+/// inventory uses without reaching into the private consts.
+pub fn realizable_value_default(
+    per_unit: i64,
+    qty: i64,
+    volume_7d: Option<i64>,
+    bids: &[(i64, i64)],
+) -> i64 {
+    realizable_value(per_unit, qty, volume_7d, bids, WINDOW_DAYS, K, TAIL_FACTOR)
+}
+
 /// `realizable_value` with the app defaults, clamped to the market ceiling, plus
 /// φ = realizable / market.
 pub fn realizable_default(
