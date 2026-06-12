@@ -164,17 +164,19 @@ body.light {
   --line-2: #c7ccd4;
   --ink: #14161a;
   --soft: #474b53;
-  --faint: #868b95;
+  /* darkened just enough for WCAG AA on the lightest panel (#f3f4f7):
+     text tokens >= 4.5:1, tier-edge (graphic) tokens >= 3:1 */
+  --faint: #6b707b;
   --hover: #e9ebf0;
   --accent: #2a2d33;
   --accent-ink: #f5f6f8;
-  --pos: #2e9e57;
-  --neg: #cf4436;
-  --hot: #b9781a;
-  --t-exotic: #b2902a;
+  --pos: #257f46;
+  --neg: #ca3e30;
+  --hot: #9b6416;
+  --t-exotic: #aa8928;
   --t-legend: #6f57c4;
   --t-rare: #3d6fc0;
-  --t-basic: #9298a2;
+  --t-basic: #878e99;
 }
 
 * {
