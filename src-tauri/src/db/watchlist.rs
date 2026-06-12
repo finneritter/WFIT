@@ -99,3 +99,31 @@ pub fn at_target_count(db: &Db) -> AppResult<i64> {
         Ok(n)
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::testutil::{seed_item, test_db};
+
+    #[test]
+    fn add_list_target_remove_roundtrip() {
+        let db = test_db("watch-roundtrip");
+        seed_item(&db, "volt_prime_set", "set", Some(80));
+
+        add(&db, "volt_prime_set", Some(70)).unwrap();
+        assert!(is_watched(&db, "volt_prime_set").unwrap());
+        let rows = list(&db).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].target_plat, Some(70));
+        // median 80 > target 70 → not at target yet
+        assert_eq!(at_target_count(&db).unwrap(), 0);
+
+        // Raising the target above the median flips the at-target signal.
+        set_target(&db, "volt_prime_set", Some(90)).unwrap();
+        assert_eq!(at_target_count(&db).unwrap(), 1);
+
+        remove(&db, "volt_prime_set").unwrap();
+        assert!(!is_watched(&db, "volt_prime_set").unwrap());
+        assert!(list(&db).unwrap().is_empty());
+    }
+}

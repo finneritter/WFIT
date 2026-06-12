@@ -206,7 +206,8 @@ pub fn effective_price_from(maps: &PriceMaps, slug: &str, rank: Option<i64>) -> 
 
 /// Σ qty_r × effective per-rank price for a slug's owned rank breakdown, using
 /// preloaded maps. `None` when the slug has no breakdown (callers fall back to the
-/// non-ranked effective price). In-memory twin of inventory's `rank_aware_value`.
+/// non-ranked effective price). Must always equal summing the SQL
+/// [`effective_price`] per rank — the twin test pins this.
 pub fn rank_aware_value_from(
     maps: &PriceMaps,
     slug: &str,
@@ -677,6 +678,36 @@ mod tests {
                 let mem = effective_price_from(&maps, slug, rank);
                 assert_eq!(sql, mem, "slug={slug} rank={rank:?}");
             }
+        }
+    }
+
+    // The second twin CLAUDE.md pins: valuing a rank breakdown through the maps
+    // must equal summing the SQL effective_price per rank — across live-ask,
+    // per-rank-median, and headline precedence paths.
+    #[test]
+    fn rank_aware_value_from_matches_sql_sum() {
+        let c = fixture();
+        c.execute_batch(
+            "INSERT INTO inventory_items VALUES ('liveask', 1), ('rankmed', 1), ('headline', 1);
+             INSERT INTO order_cache VALUES ('liveask', 0, 100), ('liveask', 5, 140);
+             INSERT INTO price_rank VALUES ('rankmed', 0, 30), ('rankmed', 10, 90);
+             INSERT INTO price_cache VALUES ('headline', 25), ('rankmed', 7), ('liveask', 9);",
+        )
+        .unwrap();
+        let maps = load_owned_price_maps(&c).unwrap();
+        let breakdown = [(0i64, 2i64), (3, 1), (5, 4), (10, 1)];
+        for slug in ["liveask", "rankmed", "headline"] {
+            let sql_sum: i64 = breakdown
+                .iter()
+                .map(|&(rank, qty)| {
+                    effective_price(&c, slug, Some(rank)).unwrap().unwrap_or(0) * qty
+                })
+                .sum();
+            assert_eq!(
+                rank_aware_value_from(&maps, slug, &breakdown),
+                Some(sql_sum),
+                "slug={slug}"
+            );
         }
     }
 

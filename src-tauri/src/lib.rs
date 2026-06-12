@@ -49,21 +49,53 @@ const LISTINGS_SYNC_TICKS: u64 = 13; // listings piggyback every ~10 min (1 call
                                      // "rebuild cache" and stale old-logic prices can't survive behind the TTL.
 const PRICING_VERSION: &str = "4"; // 4: delta_7d = None (not 0%) when there's no prior window
 
+/// Keeps the non-blocking file-log writer alive for the app's lifetime —
+/// dropping it would silently stop file logging.
+static LOG_GUARD: std::sync::OnceLock<tracing_appender::non_blocking::WorkerGuard> =
+    std::sync::OnceLock::new();
+
+/// Stdout (dev) + a daily-rolling file in `app_data_dir/logs/` (~7 days kept) —
+/// the installed app has no visible stdout, and market/worldstate failures are
+/// exactly the things that need diagnosing after the fact.
+fn init_logging(log_dir: &std::path::Path) {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,wfit_lib=debug"));
+    let stdout = tracing_subscriber::fmt::layer();
+
+    let file_layer = tracing_appender::rolling::Builder::new()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix("wfit")
+        .filename_suffix("log")
+        .max_log_files(7)
+        .build(log_dir)
+        .ok()
+        .map(|appender| {
+            let (writer, guard) = tracing_appender::non_blocking(appender);
+            let _ = LOG_GUARD.set(guard);
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(writer)
+        });
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(stdout)
+        .with(file_layer) // Option<Layer> — file logging degrades gracefully
+        .init();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info,wfit_lib=debug")),
-        )
-        .init();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir().expect("resolve app data dir");
             std::fs::create_dir_all(&app_data_dir).expect("create app data dir");
+            init_logging(&app_data_dir.join("logs"));
             let db_path = app_data_dir.join("wfit.sqlite");
             tracing::info!(?db_path, "opening database");
 
