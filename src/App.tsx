@@ -8,6 +8,7 @@ import { SearchResults } from "./components/SearchResults";
 import { type ScreenId, Sidebar } from "./components/Sidebar";
 import { SyncNow } from "./components/SyncNow";
 import { TitleBar } from "./components/TitleBar";
+import { Toasts } from "./components/Toasts";
 import {
   useLivePriceEvents,
   usePricesRefresh,
@@ -238,6 +239,7 @@ export default function App() {
             onClose={() => setAdding(false)}
           />
         ) : null}
+        <Toasts />
       </div>
     </div>
   );

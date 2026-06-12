@@ -5091,3 +5091,80 @@ code {
   border: 1px solid var(--pos);
   padding: 0 3px;
 }
+
+/* ---- TOASTS (global error surface; pushed from the mutation cache) ---- */
+.toasts {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 360px;
+}
+.toast {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  text-align: left;
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  padding: 8px 10px;
+  cursor: pointer;
+  animation: toastIn .14s ease-out;
+}
+.toast-err {
+  border-color: var(--neg);
+}
+.toast-k {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: .06em;
+  color: var(--neg);
+  flex: none;
+}
+.toast .toast-m {
+  font-size: 11px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- keyboard focus (keyboard-only; mouse clicks don't trigger these) ---- */
+.btn:focus-visible,
+.chip:focus-visible,
+.icon-btn:focus-visible,
+.nav-item:focus-visible,
+.nav-add:focus-visible,
+.rm:focus-visible,
+.x:focus-visible,
+.toast:focus-visible,
+.sr-row:focus-visible,
+.crow:focus-visible,
+.agrp-h:focus-visible,
+.sec-h:focus-visible,
+.pchip:focus-visible,
+.tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.dtable tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
