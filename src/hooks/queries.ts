@@ -33,6 +33,11 @@ export const keys = {
   catalog: (cat?: string) => ["catalog", cat ?? "all"] as const,
   trends: (tf: string, excludeOutliers: boolean) => ["trends", tf, excludeOutliers] as const,
   itemDetail: (slug: string) => ["itemDetail", slug] as const,
+  searchCatalog: (q: string) => ["searchCatalog", q] as const,
+  itemOrders: (slug: string) => ["itemOrders", slug] as const,
+  itemSellers: (slug: string) => ["itemSellers", slug] as const,
+  recommendedPrice: (slug: string, rank: number | null) =>
+    ["recommendedPrice", slug, rank] as const,
   worldstate: ["worldstate"] as const,
   pricingProgress: ["pricingProgress"] as const,
   wfmAccount: ["wfmAccount"] as const,
@@ -76,7 +81,7 @@ export const useCatalog = (cat?: string) =>
   useQuery({ queryKey: keys.catalog(cat), queryFn: () => api.getCatalog(cat) });
 export const useSearchCatalog = (q: string) =>
   useQuery({
-    queryKey: ["searchCatalog", q],
+    queryKey: keys.searchCatalog(q),
     queryFn: () => api.searchCatalog(q, 40),
     enabled: q.trim().length >= 2,
     staleTime: 30_000,
@@ -94,7 +99,7 @@ export const useItemDetail = (slug: string | null) =>
   });
 export const useItemOrders = (slug: string | null) =>
   useQuery({
-    queryKey: ["itemOrders", slug ?? ""],
+    queryKey: keys.itemOrders(slug ?? ""),
     queryFn: () => api.getItemOrders(slug as string),
     enabled: !!slug,
     staleTime: 60_000,
@@ -102,7 +107,7 @@ export const useItemOrders = (slug: string | null) =>
 
 export const useItemSellers = (slug: string | null) =>
   useQuery({
-    queryKey: ["itemSellers", slug ?? ""],
+    queryKey: keys.itemSellers(slug ?? ""),
     queryFn: () => api.getItemSellers(slug as string),
     enabled: !!slug,
     staleTime: 30_000,
@@ -339,6 +344,12 @@ export function useLivePriceEvents() {
       invalidateInventoryDerived(qc);
       qc.invalidateQueries({ queryKey: keys.listings });
       qc.invalidateQueries({ queryKey: keys.pricingProgress });
+      // Market-screen order books and the drawer's recommended price come from
+      // the same caches the heartbeat just refreshed. Only refetch what's on
+      // screen — these are per-slug queries and most are unmounted.
+      qc.invalidateQueries({ queryKey: ["itemOrders"], refetchType: "active" });
+      qc.invalidateQueries({ queryKey: ["itemSellers"], refetchType: "active" });
+      qc.invalidateQueries({ queryKey: ["recommendedPrice"], refetchType: "active" });
     });
     return () => {
       un.then((f) => f());
@@ -432,7 +443,7 @@ export function useWfmCreateOrder() {
     onSuccess: (_n, vars) => {
       qc.invalidateQueries({ queryKey: keys.listings });
       qc.invalidateQueries({ queryKey: keys.itemDetail(vars.slug) });
-      qc.invalidateQueries({ queryKey: ["itemOrders", vars.slug] });
+      qc.invalidateQueries({ queryKey: keys.itemOrders(vars.slug) });
     },
   });
 }
@@ -478,7 +489,7 @@ export function useWfmSetStatus() {
 // Lowball-resistant recommended sell price for an item at a rank (null = non-ranked).
 export const useRecommendedPrice = (slug: string, rank: number | null) =>
   useQuery({
-    queryKey: ["recommendedPrice", slug, rank],
+    queryKey: keys.recommendedPrice(slug, rank),
     queryFn: () => api.getRecommendedPrice(slug, rank),
     staleTime: 60_000,
   });
