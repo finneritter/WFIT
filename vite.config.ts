@@ -1,5 +1,5 @@
-import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 // @tauri-apps/cli sets TAURI_DEV_HOST when running on a device/emulator.
@@ -15,9 +15,7 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     host: host || false,
-    hmr: host
-      ? { protocol: "ws", host, port: 1421 }
-      : undefined,
+    hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
     watch: {
       // Don't watch the Rust source tree.
       ignored: ["**/src-tauri/**"],

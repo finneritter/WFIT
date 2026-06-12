@@ -70,7 +70,9 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
             type="button"
             className="btn sm"
             style={{ marginLeft: 8 }}
-            onClick={() => rows.forEach((r) => purchase.mutate(r.slug))}
+            onClick={() => {
+              for (const r of rows) purchase.mutate(r.slug);
+            }}
           >
             Purchase all → inventory
           </button>

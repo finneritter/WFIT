@@ -49,9 +49,9 @@ function Row({ row, onOpen }: { row: SetRow; onOpen: (slug: string) => void }) {
             <button
               type="button"
               className="btn sm"
-              onClick={() =>
-                row.parts.filter((p) => !p.owned).forEach((p) => buy.mutate({ slug: p.slug }))
-              }
+              onClick={() => {
+                for (const p of row.parts.filter((p) => !p.owned)) buy.mutate({ slug: p.slug });
+              }}
             >
               Buy {missing} missing
             </button>

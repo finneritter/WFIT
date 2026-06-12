@@ -4,14 +4,14 @@ import { Glyph, StatBox, TableStatus } from "../components/ui";
 import { useAddToBuyList, useListedSlugs, useRemoveWatch, useWatchlist } from "../hooks/queries";
 import { clsx, fmt, pct } from "../lib/format";
 
+const atTarget = (r: { median_plat: number | null; target_plat: number | null }) =>
+  r.target_plat != null && r.median_plat != null && r.median_plat <= r.target_plat;
+
 export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
   const { data: rows = [], isLoading, isError } = useWatchlist();
   const listed = useListedSlugs();
   const buy = useAddToBuyList();
   const remove = useRemoveWatch();
-
-  const atTarget = (r: { median_plat: number | null; target_plat: number | null }) =>
-    r.target_plat != null && r.median_plat != null && r.median_plat <= r.target_plat;
 
   const sorted = useMemo(
     () =>

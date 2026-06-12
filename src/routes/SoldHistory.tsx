@@ -42,7 +42,7 @@ export function SoldHistory({ onOpen }: { onOpen: (slug: string) => void }) {
               <th className="r">Qty</th>
               <th className="r">Unit</th>
               <th className="r">Total</th>
-              <th className="r"></th>
+              <th className="r" />
             </tr>
           </thead>
           <tbody>

@@ -502,7 +502,10 @@ fn warn_if_newly_empty(flag: &std::sync::atomic::AtomicBool, empty: bool, what: 
     use std::sync::atomic::Ordering;
     if empty {
         if !flag.swap(true, Ordering::Relaxed) {
-            tracing::warn!(section = what, "DE worldstate section empty — outage or schema change");
+            tracing::warn!(
+                section = what,
+                "DE worldstate section empty — outage or schema change"
+            );
         }
     } else {
         flag.store(false, Ordering::Relaxed);

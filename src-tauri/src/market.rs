@@ -741,7 +741,6 @@ impl Market {
         send_checked(req).await?;
         Ok(())
     }
-
 }
 
 /// Send an authed write and, on a non-2xx, surface the response **body** (where

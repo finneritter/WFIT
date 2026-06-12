@@ -206,6 +206,7 @@ export function ListingForm({
                 onChange={(e) => onRankChange(Number.parseInt(e.target.value, 10))}
               >
                 {Array.from({ length: (item.max_rank ?? 0) + 1 }, (_, r) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: r IS the rank — a stable identity, not a position
                   <option key={r} value={r}>
                     Rank {r}
                     {r === 0 ? " (unranked)" : ""}

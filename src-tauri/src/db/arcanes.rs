@@ -170,7 +170,14 @@ fn owned(
 
     // Owned arcane rows + recent volume (drives the liquidity-aware sell estimate).
     // (slug, display_name, qty, thumbnail_url, trend, volume_7d)
-    type OwnedRow = (String, String, i64, Option<String>, Option<String>, Option<i64>);
+    type OwnedRow = (
+        String,
+        String,
+        i64,
+        Option<String>,
+        Option<String>,
+        Option<i64>,
+    );
     let raw: Vec<OwnedRow> = {
         let mut stmt = c.prepare(
             "SELECT ci.slug, ci.display_name, ii.qty, ci.thumbnail_url, pc.trend, pc.volume_7d
@@ -233,7 +240,11 @@ fn owned(
         let dissolve_plat_equiv = (vosfor_total as f64 * rate).round() as i64;
         total_vosfor += vosfor_total;
         sell_plat_total += sell_plat;
-        let verdict = if sell_qty >= dissolve_qty { "sell" } else { "dissolve" };
+        let verdict = if sell_qty >= dissolve_qty {
+            "sell"
+        } else {
+            "dissolve"
+        };
 
         out.push(OwnedArcane {
             slug,

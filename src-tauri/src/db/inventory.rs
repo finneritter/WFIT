@@ -387,8 +387,16 @@ pub fn split_sell_dissolve_default(
     bids: &[(i64, i64)],
     dissolve_unit: f64,
 ) -> (i64, i64) {
-    let (sell_qty, sell_plat) =
-        split_sell_dissolve(per_unit, qty, volume_7d, bids, dissolve_unit, WINDOW_DAYS, K, TAIL_FACTOR);
+    let (sell_qty, sell_plat) = split_sell_dissolve(
+        per_unit,
+        qty,
+        volume_7d,
+        bids,
+        dissolve_unit,
+        WINDOW_DAYS,
+        K,
+        TAIL_FACTOR,
+    );
     let ceiling = (per_unit.max(0) * sell_qty.max(0)).max(0);
     (sell_qty, sell_plat.min(ceiling))
 }
@@ -719,7 +727,9 @@ pub fn owned_slugs(db: &Db) -> AppResult<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{realizable_default, realizable_value, split_sell_dissolve, split_sell_dissolve_default};
+    use super::{
+        realizable_default, realizable_value, split_sell_dissolve, split_sell_dissolve_default,
+    };
 
     const W: f64 = 30.0;
     const K: f64 = 1.0;
@@ -728,38 +738,56 @@ mod tests {
     #[test]
     fn split_sells_all_when_bids_beat_dissolve() {
         // 3 copies, a deep 40p bid, dissolve worth 20p/copy → sell all 3 to the bid.
-        assert_eq!(split_sell_dissolve(50, 3, Some(0), &[(40, 5)], 20.0, W, K, T), (3, 120));
+        assert_eq!(
+            split_sell_dissolve(50, 3, Some(0), &[(40, 5)], 20.0, W, K, T),
+            (3, 120)
+        );
     }
 
     #[test]
     fn split_dissolves_all_when_floor_beats_market() {
         // Bids (15p) and the off-book tail (50×0.35 ≈ 17.5p) both lose to a 30p
         // dissolve floor → keep nothing for sale.
-        assert_eq!(split_sell_dissolve(50, 5, Some(100), &[(15, 10)], 30.0, W, K, T), (0, 0));
+        assert_eq!(
+            split_sell_dissolve(50, 5, Some(100), &[(15, 10)], 30.0, W, K, T),
+            (0, 0)
+        );
     }
 
     #[test]
     fn split_sells_to_bids_then_dissolves_the_tail() {
         // One 30p bid for 2 (beats the 20p floor); the tail (40×0.35 = 14p) does not.
         // → sell 2 @ 30, dissolve the other 3.
-        assert_eq!(split_sell_dissolve(40, 5, Some(0), &[(30, 2)], 20.0, W, K, T), (2, 60));
+        assert_eq!(
+            split_sell_dissolve(40, 5, Some(0), &[(30, 2)], 20.0, W, K, T),
+            (2, 60)
+        );
     }
 
     #[test]
     fn split_no_bids_thin_volume_dissolves_all() {
         // Junk common: 500 @ 3p, no bids, ~1 sale/wk, dissolve worth 5p → dissolve all.
-        assert_eq!(split_sell_dissolve(3, 500, Some(1), &[], 5.0, W, K, T), (0, 0));
+        assert_eq!(
+            split_sell_dissolve(3, 500, Some(1), &[], 5.0, W, K, T),
+            (0, 0)
+        );
     }
 
     #[test]
     fn split_unpriced_sells_nothing() {
-        assert_eq!(split_sell_dissolve(0, 10, Some(50), &[], 5.0, W, K, T), (0, 0));
+        assert_eq!(
+            split_sell_dissolve(0, 10, Some(50), &[], 5.0, W, K, T),
+            (0, 0)
+        );
     }
 
     #[test]
     fn split_default_clamps_sale_to_market() {
         // A pathological 99p bid can't value 3 copies above 3 × 50p = 150p.
-        assert_eq!(split_sell_dissolve_default(50, 3, Some(0), &[(99, 5)], 20.0), (3, 150));
+        assert_eq!(
+            split_sell_dissolve_default(50, 3, Some(0), &[(99, 5)], 20.0),
+            (3, 150)
+        );
     }
 
     #[test]
