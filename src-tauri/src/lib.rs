@@ -61,6 +61,10 @@ fn init_logging(log_dir: &std::path::Path) {
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
 
+    // The appender's retention scan reads the dir at build time — make sure it
+    // exists first or the very first launch prints a spurious error.
+    let _ = std::fs::create_dir_all(log_dir);
+
     let filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,wfit_lib=debug"));
     let stdout = tracing_subscriber::fmt::layer();
