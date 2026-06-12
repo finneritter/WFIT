@@ -633,6 +633,26 @@ body.flat-deltas .neg {
   color: var(--soft);
   flex: none;
 }
+/* Filter-syntax autocomplete rows (SearchSuggest) — denser than item results */
+.sg-row {
+  padding: 5px 10px;
+}
+.sg-row.hi {
+  background: var(--hover);
+}
+.sg-k {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink);
+  flex: none;
+}
+.sg-hint {
+  font-size: 10.5px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .search svg {
   width: 14px;
   height: 14px;

@@ -15,6 +15,8 @@ import {
 } from "../hooks/queries";
 import { copyText } from "../lib/clipboard";
 import { CATEGORY_LABELS, clsx, fmt, pct } from "../lib/format";
+import { compileQuery } from "../lib/searchQuery";
+import { marketSchema } from "../lib/searchSchemas";
 import type { BuyOrder, CatalogRow, Category, SellerOrder } from "../lib/types";
 
 // ---------------------------------------------------------------------------
@@ -113,7 +115,11 @@ function Screener({
   patch: (p: Partial<MarketPrefs>) => void;
   onPick: (r: CatalogRow) => void;
 }) {
-  const q = query.trim();
+  // The screener's own search box (the topbar stays global on this screen).
+  // Bare words go to the backend catalog search; the DIM-style clauses from the
+  // topbar grammar (cat:mod, ducat>=45, is:owned…) also work, client-side.
+  const { test, freeText } = useMemo(() => compileQuery(query, marketSchema), [query]);
+  const q = freeText.trim();
   const searching = q.length >= 2;
   // Search returns every category (we filter client-side); browse asks the
   // backend for just the active category. Both are cached DB reads — no API call.
@@ -127,6 +133,7 @@ function Screener({
 
   const rows = useMemo(() => {
     let rs = source.data ?? [];
+    rs = rs.filter(test);
     if (prefs.category !== "all") rs = rs.filter((r) => r.category === prefs.category);
     if (prefs.vaultedOnly) rs = rs.filter((r) => r.is_vaulted);
     if (prefs.hideOwned) rs = rs.filter((r) => r.owned_qty === 0);
@@ -152,7 +159,7 @@ function Screener({
         ? dir * a.display_name.localeCompare(b.display_name)
         : dir * (key(a) - key(b)),
     );
-  }, [source.data, prefs]);
+  }, [source.data, test, prefs]);
 
   // Reveal the result set in pages, and keyboard-highlight a row.
   const [limit, setLimit] = useState(PAGE);
@@ -161,7 +168,7 @@ function Screener({
   useEffect(() => {
     setLimit(PAGE);
     setHi(-1);
-  }, [q, prefs]);
+  }, [query, prefs]);
   const visible = rows.slice(0, limit);
   const hiRow = useRef<HTMLTableRowElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll the newly-highlighted row into view
@@ -200,7 +207,7 @@ function Screener({
         <Icon name="search" />
         <input
           autoFocus
-          placeholder="Search any item, or browse a category below…"
+          placeholder="Search any item, or browse a category below…  (cat:mod ducat>=45 works too)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />

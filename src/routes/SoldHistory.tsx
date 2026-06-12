@@ -4,6 +4,9 @@ import { useSales, useUndoSale } from "../hooks/queries";
 import { useColumnSort, usePaged } from "../hooks/useTable";
 import { CATEGORY_LABELS, clsx, fmt, pct, relativeDay } from "../lib/format";
 import { usePersisted } from "../lib/persist";
+import { usePageSearch } from "../lib/searchContext";
+import { compileQuery } from "../lib/searchQuery";
+import { soldSchema } from "../lib/searchSchemas";
 import type { Category, SaleRow } from "../lib/types";
 
 // How the realized unit price compared to the market median *at the time of sale*
@@ -54,9 +57,11 @@ export function SoldHistory({ onOpen }: { onOpen: (slug: string) => void }) {
     return (["warframe", "weapon", "set", "mod", "arcane"] as Category[]).filter((c) => set.has(c));
   }, [rows]);
 
+  const search = usePageSearch();
+  const { test } = useMemo(() => compileQuery(search, soldSchema), [search]);
   const view = useMemo(
-    () => apply(rows.filter((r) => cat === "all" || r.category === cat)),
-    [rows, cat, apply],
+    () => apply(rows.filter((r) => (cat === "all" || r.category === cat) && test(r))),
+    [rows, cat, test, apply],
   );
   const { visible, hasMore, shown, total, more } = usePaged(view, 60);
 

@@ -1,11 +1,13 @@
-import { useMemo, useState } from "react";
-import { Icon } from "../components/Icon";
+import { useMemo } from "react";
 import { ItemTags } from "../components/ItemTags";
 import { Chip, ItemName, SortTh, StatBox, TableStatus, rowAction } from "../components/ui";
 import { useArcaneDashboard, useListedSlugs } from "../hooks/queries";
 import { useColumnSort, usePaged } from "../hooks/useTable";
 import { clsx, fmt } from "../lib/format";
 import { usePersisted } from "../lib/persist";
+import { usePageSearch } from "../lib/searchContext";
+import { compileQuery } from "../lib/searchQuery";
+import { arcanesSchema } from "../lib/searchSchemas";
 import type { CollectionEv, OwnedArcane } from "../lib/types";
 
 // Surfaced from the arcane-economy research (docs/ARCANE_DISSOLUTION.md). None of
@@ -44,7 +46,7 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
   const collections = data?.collections ?? [];
   const owned = data?.owned ?? [];
 
-  const [search, setSearch] = useState("");
+  const search = usePageSearch();
   const [sellOnly, setSellOnly] = usePersisted<"1" | "0">("wfit-arc-sell", "0");
   const [dissolveOnly, setDissolveOnly] = usePersisted<"1" | "0">("wfit-arc-dissolve", "0");
   const [noCommon, setNoCommon] = usePersisted<"1" | "0">("wfit-arc-nocommon", "0");
@@ -59,17 +61,16 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
 
   const sortedColls = useMemo(() => coll.apply(collections), [collections, coll.apply]);
 
-  const q = search.trim().toLowerCase();
+  const { test } = useMemo(() => compileQuery(search, arcanesSchema), [search]);
   const ownedView = useMemo(() => {
     const filtered = owned.filter((a) => {
       if (sellOnly === "1" && a.sell_qty === 0) return false;
       if (dissolveOnly === "1" && a.dissolve_qty === 0) return false;
       if (noCommon === "1" && a.rarity === "common") return false;
-      if (q && !a.display_name.toLowerCase().includes(q)) return false;
-      return true;
+      return test(a);
     });
     return own.apply(filtered);
-  }, [owned, sellOnly, dissolveOnly, noCommon, q, own.apply]);
+  }, [owned, sellOnly, dissolveOnly, noCommon, test, own.apply]);
   const ownedPage = usePaged(ownedView, 50);
 
   return (
@@ -174,15 +175,6 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
           </span>
         </div>
         <div className="mkt-filters" style={{ margin: "0 0 10px" }}>
-          <span className="search mkt-search" style={{ maxWidth: 200 }}>
-            <Icon name="search" />
-            <input
-              placeholder="Find an arcane…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </span>
-          <span className="mkt-sep" />
           <Chip active={sellOnly === "1"} onClick={() => setSellOnly(sellOnly === "1" ? "0" : "1")}>
             Sell only
           </Chip>

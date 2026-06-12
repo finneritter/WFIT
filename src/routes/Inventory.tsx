@@ -7,6 +7,9 @@ import { Glyph, SortTh, StatBox, rowAction } from "../components/ui";
 import { useInventory, useListings, usePricingProgress, useSummary } from "../hooks/queries";
 import { CATEGORY_LABELS, clsx, fmt, fmtK, glyph, pct, tier, trendOf } from "../lib/format";
 import { usePersisted } from "../lib/persist";
+import { usePageSearch } from "../lib/searchContext";
+import { compileQuery } from "../lib/searchQuery";
+import { inventorySchema } from "../lib/searchSchemas";
 import type { InventoryRow } from "../lib/types";
 
 type SortKey = "value-desc" | "value-asc" | "trend" | "name";
@@ -401,13 +404,8 @@ function ViewOptions({
   );
 }
 
-export function Inventory({
-  onOpen,
-  search,
-}: {
-  onOpen: (slug: string) => void;
-  search: string;
-}) {
+export function Inventory({ onOpen }: { onOpen: (slug: string) => void }) {
+  const search = usePageSearch();
   const { data: inv = [], isLoading, isError } = useInventory();
   const { data: summary } = useSummary();
   // Slugs with an active warframe.market sell order → "LISTED" tag on the tiles.
@@ -463,13 +461,13 @@ export function Inventory({
   const hideExcl = hideExcluded === "1";
   const setHideExcluded = (v: boolean) => setHideExcludedStr(v ? "1" : "0");
 
-  const query = search.trim().toLowerCase();
+  const query = search.trim();
+  const { test } = useMemo(() => compileQuery(query, inventorySchema), [query]);
   const filtered = useMemo(() => {
-    // Hot and Category are independent axes that combine. Search matches name + part + cat.
+    // Hot and Category are independent axes that combine with the topbar query.
     const rows = inv.filter((r) => {
       if (hideExcl && r.excluded) return false;
-      if (query && !`${r.display_name} ${r.part_type} ${r.category}`.toLowerCase().includes(query))
-        return false;
+      if (!test(r)) return false;
       if (hot && r.trend !== "up") return false;
       if (vaulted && !r.is_vaulted) return false;
       return true;
@@ -492,7 +490,7 @@ export function Inventory({
       }
     });
     return sorted;
-  }, [inv, query, hot, vaulted, sort, colSort, hideExcl]);
+  }, [inv, test, hot, vaulted, sort, colSort, hideExcl]);
 
   const byCat = useMemo(() => {
     const map = new Map<string, InventoryRow[]>();

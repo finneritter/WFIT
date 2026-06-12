@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { Icon } from "../components/Icon";
 import { Chip, StatBox } from "../components/ui";
 import { useAddToBuyList, useSets } from "../hooks/queries";
 import { useColumnSort, usePaged } from "../hooks/useTable";
 import { clsx, fmt } from "../lib/format";
+import { usePageSearch } from "../lib/searchContext";
+import { compileQuery } from "../lib/searchQuery";
+import { setsSchema } from "../lib/searchSchemas";
 import type { SetRow } from "../lib/types";
 
 type Filter = "all" | "complete" | "almost" | "progress";
@@ -89,7 +91,7 @@ function Row({ row, onOpen }: { row: SetRow; onOpen: (slug: string) => void }) {
 export function Sets({ onOpen }: { onOpen: (slug: string) => void }) {
   const { data: sets = [], isLoading, isError } = useSets();
   const [filter, setFilter] = useState<Filter>("all");
-  const [search, setSearch] = useState("");
+  const search = usePageSearch();
   const { sort, cycle, apply } = useColumnSort<SetRow, SetCol>("wfit-sets-sort", SET_CMP, {
     key: "completion",
     dir: "desc",
@@ -106,18 +108,17 @@ export function Sets({ onOpen }: { onOpen: (slug: string) => void }) {
     return { complete, oneAway, completableValue, avg };
   }, [sets]);
 
-  const q = search.trim().toLowerCase();
+  const { test } = useMemo(() => compileQuery(search, setsSchema), [search]);
   const rows = useMemo(() => {
     const filtered = sets.filter((s) => {
       const missing = s.total_parts - s.owned_parts;
       if (filter === "complete" && !s.complete) return false;
       if (filter === "almost" && missing !== 1) return false;
       if (filter === "progress" && (s.complete || s.owned_parts === 0)) return false;
-      if (q && !s.set_name.toLowerCase().includes(q)) return false;
-      return true;
+      return test(s);
     });
     return apply(filtered);
-  }, [sets, filter, q, apply]);
+  }, [sets, filter, test, apply]);
   const { visible, hasMore, shown, total, more } = usePaged(rows, 36);
 
   const sortChip = (col: SetCol, label: string) => (
@@ -158,15 +159,6 @@ export function Sets({ onOpen }: { onOpen: (slug: string) => void }) {
       </div>
 
       <div className="mkt-filters" style={{ marginBottom: 12 }}>
-        <span className="search mkt-search" style={{ maxWidth: 220 }}>
-          <Icon name="search" />
-          <input
-            placeholder="Find a set…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </span>
-        <span className="mkt-sep" />
         <span className="muted" style={{ fontSize: 11 }}>
           Sort
         </span>

@@ -4,11 +4,11 @@ import { Drawer } from "./components/Drawer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Icon } from "./components/Icon";
 import { LiveBadge } from "./components/LiveBadge";
-import { SearchResults } from "./components/SearchResults";
 import { type ScreenId, Sidebar } from "./components/Sidebar";
 import { SyncNow } from "./components/SyncNow";
 import { TitleBar } from "./components/TitleBar";
 import { Toasts } from "./components/Toasts";
+import { GLOBAL_PREFIX, TopbarSearch } from "./components/TopbarSearch";
 import {
   useLivePriceEvents,
   usePricesRefresh,
@@ -17,6 +17,8 @@ import {
   useWorldstateHardReset,
 } from "./hooks/queries";
 import { clsx } from "./lib/format";
+import { type SearchKeyHandler, SearchProvider } from "./lib/searchContext";
+import { PAGE_SCHEMAS } from "./lib/searchSchemas";
 import { attachSmoothScroll } from "./lib/smoothScroll";
 import { Arcanes } from "./routes/Arcanes";
 // Routes are imported eagerly. This is a local desktop app — the bundle loads
@@ -57,6 +59,13 @@ export default function App() {
   // Input stays on `search`; screens filter on the deferred value so keystrokes
   // never block on a large grid re-render.
   const deferredSearch = useDeferredValue(search);
+  // The query each screen filters on: empty in global (`all:`) mode or on
+  // screens without a search schema (those fall back to the catalog dropdown).
+  const pageQuery =
+    PAGE_SCHEMAS[screen] && !GLOBAL_PREFIX.test(deferredSearch) ? deferredSearch : "";
+  // The active screen's handler for Arrow/Enter keys typed in the topbar input
+  // (Market's screener registers itself via useSearchKeys).
+  const searchKeysRef = useRef<SearchKeyHandler | null>(null);
   const [drawer, setDrawer] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(
@@ -128,28 +137,14 @@ export default function App() {
         <main className="main">
           <div className="topbar">
             <div className="screen-title">{TITLES[screen]}</div>
-            <div className="search-wrap">
-              <div className="search">
-                <Icon name="search" />
-                <input
-                  placeholder="Search all items…  (ininv: to scope to inventory)"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") setSearch("");
-                  }}
-                />
-              </div>
-              {search.trim() ? (
-                <SearchResults
-                  query={deferredSearch}
-                  onOpen={(slug) => {
-                    open(slug);
-                    setSearch("");
-                  }}
-                />
-              ) : null}
-            </div>
+            <TopbarSearch
+              screen={screen}
+              search={search}
+              setSearch={setSearch}
+              deferredSearch={deferredSearch}
+              keysRef={searchKeysRef}
+              onOpen={open}
+            />
             <LiveBadge />
             <SyncNow />
             <button
@@ -179,46 +174,48 @@ export default function App() {
           </div>
 
           <div className="content" ref={contentRef}>
-            {/* Inventory stays mounted and is just hidden when inactive — its
+            <SearchProvider query={pageQuery} keysRef={searchKeysRef}>
+              {/* Inventory stays mounted and is just hidden when inactive — its
                 ~800-tile grid is expensive to mount, so re-creating it on every
                 navigation caused a visible freeze. Hidden → instant show. */}
-            <div style={screen === "inventory" ? undefined : { display: "none" }}>
-              <Inventory onOpen={open} search={deferredSearch} />
-            </div>
-            {/* Switchable routes share one boundary, keyed by screen so a caught
+              <div style={screen === "inventory" ? undefined : { display: "none" }}>
+                <Inventory onOpen={open} />
+              </div>
+              {/* Switchable routes share one boundary, keyed by screen so a caught
                 error clears on navigation. The always-mounted Inventory above is
                 intentionally outside it — a key={screen} boundary would remount
                 its heavy grid on every navigation (covered by the root boundary
                 in main.tsx instead). */}
-            <ErrorBoundary key={screen}>
-              {screen === "home" && (
-                <Dashboard
-                  onOpen={open}
-                  onNavigate={(s) => {
-                    setScreen(s);
-                    setSearch("");
-                  }}
-                />
-              )}
-              {screen === "sets" && <Sets onOpen={open} />}
-              {screen === "trends" && <Trends onOpen={open} />}
-              {screen === "watchlist" && <Watchlist onOpen={open} />}
-              {screen === "buy" && <BuyList onOpen={open} />}
-              {screen === "market" && <Market onOpen={open} />}
-              {screen === "listings" && <Listings onOpen={open} />}
-              {screen === "ducats" && <Ducats onOpen={open} />}
-              {screen === "arcanes" && <Arcanes onOpen={open} />}
-              {screen === "rotation" && <Rotation />}
-              {screen === "sold" && <SoldHistory onOpen={open} />}
-              {screen === "settings" && (
-                <Settings
-                  onNavigate={(s) => {
-                    setScreen(s);
-                    setSearch("");
-                  }}
-                />
-              )}
-            </ErrorBoundary>
+              <ErrorBoundary key={screen}>
+                {screen === "home" && (
+                  <Dashboard
+                    onOpen={open}
+                    onNavigate={(s) => {
+                      setScreen(s);
+                      setSearch("");
+                    }}
+                  />
+                )}
+                {screen === "sets" && <Sets onOpen={open} />}
+                {screen === "trends" && <Trends onOpen={open} />}
+                {screen === "watchlist" && <Watchlist onOpen={open} />}
+                {screen === "buy" && <BuyList onOpen={open} />}
+                {screen === "market" && <Market onOpen={open} />}
+                {screen === "listings" && <Listings onOpen={open} />}
+                {screen === "ducats" && <Ducats onOpen={open} />}
+                {screen === "arcanes" && <Arcanes onOpen={open} />}
+                {screen === "rotation" && <Rotation />}
+                {screen === "sold" && <SoldHistory onOpen={open} />}
+                {screen === "settings" && (
+                  <Settings
+                    onNavigate={(s) => {
+                      setScreen(s);
+                      setSearch("");
+                    }}
+                  />
+                )}
+              </ErrorBoundary>
+            </SearchProvider>
           </div>
         </main>
 

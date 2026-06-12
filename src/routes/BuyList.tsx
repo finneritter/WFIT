@@ -13,6 +13,9 @@ import {
 import { useColumnSort, usePaged } from "../hooks/useTable";
 import { fmt, relativeDay } from "../lib/format";
 import { usePersisted } from "../lib/persist";
+import { usePageSearch } from "../lib/searchContext";
+import { compileQuery } from "../lib/searchQuery";
+import { buySchema } from "../lib/searchSchemas";
 import type { BuyRow } from "../lib/types";
 
 const lineTotal = (r: BuyRow): number => (r.median_plat ?? 0) * r.buy_qty;
@@ -38,6 +41,8 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
   const [falling, setFalling] = usePersisted<"1" | "0">("wfit-buy-fall", "0");
   const [rising, setRising] = usePersisted<"1" | "0">("wfit-buy-rise", "0");
   const { sort, cycle, apply } = useColumnSort<BuyRow, BuyCol>("wfit-buy-sort", BUY_CMP);
+  const search = usePageSearch();
+  const { test } = useMemo(() => compileQuery(search, buySchema), [search]);
 
   const [budgetInput, setBudgetInput] = useState<string>("");
   useEffect(() => {
@@ -56,10 +61,10 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
       if (vaulted === "1" && !r.is_vaulted) return false;
       if (falling === "1" && r.trend !== "down") return false;
       if (rising === "1" && r.trend !== "up") return false;
-      return true;
+      return test(r);
     });
     return apply(filtered);
-  }, [rows, vaulted, falling, rising, apply]);
+  }, [rows, vaulted, falling, rising, test, apply]);
   const { visible, hasMore, shown, total, more } = usePaged(view, 60);
 
   const commitBudget = () => {

@@ -1,9 +1,13 @@
+import { useMemo } from "react";
 import { MiniArea, RangeBar, Spark } from "../components/charts";
 import { BlockStatus, Glyph } from "../components/ui";
 import { useTrends } from "../hooks/queries";
 import { usePaged } from "../hooks/useTable";
 import { CATEGORY_LABELS, clsx, fmt, pct } from "../lib/format";
 import { usePersisted } from "../lib/persist";
+import { usePageSearch } from "../lib/searchContext";
+import { compileQuery } from "../lib/searchQuery";
+import { trendsSchema } from "../lib/searchSchemas";
 import type { HeatRow, TrendRow } from "../lib/types";
 
 const TFS = ["24h", "7d", "30d", "90d"] as const;
@@ -125,6 +129,21 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
   const excludeOutliers = outliers === "1";
   const { data, isLoading, isError } = useTrends(tf, excludeOutliers);
 
+  // The topbar query narrows all three signal panels (the index/heat stay whole).
+  const search = usePageSearch();
+  const { test } = useMemo(() => compileQuery(search, trendsSchema), [search]);
+  const panels = useMemo(
+    () =>
+      data
+        ? {
+            sell: data.sell_signals.filter(test),
+            buy: data.buy_candidates.filter(test),
+            unusual: data.unusual.filter(test),
+          }
+        : null,
+    [data, test],
+  );
+
   if (isError)
     return <BlockStatus error text="Couldn't load market trends. Try again in a moment." />;
   if (isLoading || !data) return <BlockStatus text="Loading market trends…" />;
@@ -225,7 +244,7 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
         <Panel
           title="Sell signals"
           note="you own these"
-          rows={data.sell_signals}
+          rows={panels?.sell ?? []}
           mode="sell"
           empty="Items you own that are high in their range or spiking will surface here."
           onOpen={onOpen}
@@ -233,7 +252,7 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
         <Panel
           title="Buy / flip candidates"
           note="low in range"
-          rows={data.buy_candidates}
+          rows={panels?.buy ?? []}
           mode="buy"
           empty="No clear dips in liquid items right now."
           onOpen={onOpen}
@@ -245,7 +264,7 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
         <Panel
           title="Unusual moves"
           note="volatility-adjusted"
-          rows={data.unusual}
+          rows={panels?.unusual ?? []}
           mode="unusual"
           empty="Nothing moving unusually."
           onOpen={onOpen}

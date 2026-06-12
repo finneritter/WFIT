@@ -1,11 +1,13 @@
-import { useMemo, useState } from "react";
-import { Icon } from "../components/Icon";
+import { useMemo } from "react";
 import { ItemTags } from "../components/ItemTags";
 import { Chip, ItemName, SortTh, StatBox, TableStatus, rowAction } from "../components/ui";
 import { useDucats, useListedSlugs } from "../hooks/queries";
 import { useColumnSort, usePaged } from "../hooks/useTable";
 import { clsx, fmt } from "../lib/format";
 import { usePersisted } from "../lib/persist";
+import { usePageSearch } from "../lib/searchContext";
+import { compileQuery } from "../lib/searchQuery";
+import { ducatsSchema } from "../lib/searchSchemas";
 import type { DucatRow } from "../lib/types";
 
 const TRASH_PLAT = 8; // the "trash-tier" cutoff used in the stat band
@@ -23,7 +25,7 @@ const DUCAT_CMP: Record<DucatCol, (a: DucatRow, b: DucatRow) => number> = {
 export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
   const { data: rows = [], isLoading, isError } = useDucats();
   const listed = useListedSlugs();
-  const [search, setSearch] = useState("");
+  const search = usePageSearch();
   const [highDp, setHighDp] = usePersisted<"1" | "0">("wfit-duc-highdp", "0");
   const [trash, setTrash] = usePersisted<"1" | "0">("wfit-duc-trash", "0");
   const [vaulted, setVaulted] = usePersisted<"1" | "0">("wfit-duc-vault", "0");
@@ -40,17 +42,16 @@ export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
     return { invDucats, trashDucats, trashCount: trashRows.length, avg };
   }, [rows]);
 
-  const q = search.trim().toLowerCase();
+  const { test } = useMemo(() => compileQuery(search, ducatsSchema), [search]);
   const view = useMemo(() => {
     const filtered = rows.filter((r) => {
       if (highDp === "1" && (r.ducats_per_plat ?? 0) < HIGH_DP) return false;
       if (trash === "1" && (r.median_plat ?? 0) > TRASH_PLAT) return false;
       if (vaulted === "1" && !r.is_vaulted) return false;
-      if (q && !`${r.display_name} ${r.part_type}`.toLowerCase().includes(q)) return false;
-      return true;
+      return test(r);
     });
     return apply(filtered);
-  }, [rows, highDp, trash, vaulted, q, apply]);
+  }, [rows, highDp, trash, vaulted, test, apply]);
   const { visible, hasMore, shown, total, more } = usePaged(view, 60);
 
   return (
@@ -63,15 +64,6 @@ export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
       </div>
 
       <div className="mkt-filters" style={{ marginBottom: 12 }}>
-        <span className="search mkt-search" style={{ maxWidth: 220 }}>
-          <Icon name="search" />
-          <input
-            placeholder="Filter parts…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </span>
-        <span className="mkt-sep" />
         <Chip active={highDp === "1"} onClick={() => setHighDp(highDp === "1" ? "0" : "1")}>
           d/p ≥ {HIGH_DP}
         </Chip>

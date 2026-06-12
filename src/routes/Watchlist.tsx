@@ -5,6 +5,9 @@ import { useAddToBuyList, useListedSlugs, useRemoveWatch, useWatchlist } from ".
 import { useColumnSort, usePaged } from "../hooks/useTable";
 import { clsx, fmt, pct, relativeDay } from "../lib/format";
 import { usePersisted } from "../lib/persist";
+import { usePageSearch } from "../lib/searchContext";
+import { compileQuery } from "../lib/searchQuery";
+import { watchlistSchema } from "../lib/searchSchemas";
 import type { WatchRow } from "../lib/types";
 
 const atTarget = (r: { median_plat: number | null; target_plat: number | null }) =>
@@ -35,6 +38,8 @@ export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
   const [vaulted, setVaulted] = usePersisted<"1" | "0">("wfit-watch-vault", "0");
   const [falling, setFalling] = usePersisted<"1" | "0">("wfit-watch-fall", "0");
   const { sort, cycle, apply } = useColumnSort<WatchRow, WatchCol>("wfit-watch-sort", WATCH_CMP);
+  const search = usePageSearch();
+  const { test } = useMemo(() => compileQuery(search, watchlistSchema), [search]);
 
   const stats = useMemo(() => {
     const watching = rows.length;
@@ -50,7 +55,7 @@ export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
       if (atOnly === "1" && !atTarget(r)) return false;
       if (vaulted === "1" && !r.is_vaulted) return false;
       if (falling === "1" && (r.delta_7d ?? 0) >= 0) return false;
-      return true;
+      return test(r);
     });
     // No active column sort → at-target first, then alphabetical (the original default).
     return sort
@@ -60,7 +65,7 @@ export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
             Number(atTarget(b)) - Number(atTarget(a)) ||
             a.display_name.localeCompare(b.display_name),
         );
-  }, [rows, atOnly, vaulted, falling, sort, apply]);
+  }, [rows, atOnly, vaulted, falling, test, sort, apply]);
   const { visible, hasMore, shown, total, more } = usePaged(view, 60);
 
   return (

@@ -21,6 +21,9 @@ import {
 import { useEscape } from "../hooks/useEscape";
 import { wfmFetchListings, wfmRepricePreview } from "../lib/api";
 import { CATEGORY_LABELS, clsx, fmt } from "../lib/format";
+import { usePageSearch } from "../lib/searchContext";
+import { compileQuery } from "../lib/searchQuery";
+import { listingsSchema } from "../lib/searchSchemas";
 import type { ImportRow, InventoryRow, ListingRow, RepriceRow } from "../lib/types";
 
 // UI status segment → warframe.market API status; "Offline" = invisible.
@@ -450,6 +453,11 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [sessionDismissed, setSessionDismissed] = useState(false);
 
+  // Topbar query filters the table only; the stat band reflects all listings.
+  const search = usePageSearch();
+  const { test } = useMemo(() => compileQuery(search, listingsSchema), [search]);
+  const view = useMemo(() => listings.filter(test), [listings, test]);
+
   if (!account?.connected) return <SignInCard />;
 
   // An expired token is treated as "no usable session": writes are gated off and
@@ -608,7 +616,7 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
             </tr>
           </thead>
           <tbody>
-            {isLoading || isError || listings.length === 0 ? (
+            {isLoading || isError || view.length === 0 ? (
               <TableStatus
                 span={7}
                 loading={isLoading}
@@ -627,7 +635,7 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
                 }
               />
             ) : (
-              listings.map((l) => {
+              view.map((l) => {
                 const yp = l.your_price ?? 0;
                 const best = l.market_low != null && yp <= l.market_low;
                 const over = l.market_low != null && yp > l.market_low ? yp - l.market_low : 0;

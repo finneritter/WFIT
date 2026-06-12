@@ -3,8 +3,10 @@ import { CATEGORY_LABELS, fmt } from "../lib/format";
 import { ItemTags } from "./ItemTags";
 import { Glyph } from "./ui";
 
-// "ininv:" or "inv:" scopes the search to owned items.
+// "ininv:" or "inv:" scopes the search to owned items; "all:" is the explicit
+// whole-catalog mode (the topbar otherwise filters the current page).
 const INV_PREFIX = /^in?inv:\s*/i;
+const MODE_PREFIX = /^(all|in?inv):\s*/i;
 
 /** Global command-palette search over the whole tradable catalog. Clicking a
  *  result opens the item drawer (works for owned and non-owned alike). */
@@ -16,7 +18,7 @@ export function SearchResults({
   onOpen: (slug: string) => void;
 }) {
   const ownedOnly = INV_PREFIX.test(query);
-  const q = query.replace(INV_PREFIX, "").trim();
+  const q = query.replace(MODE_PREFIX, "").trim();
   const { data = [], isFetching } = useSearchCatalog(q);
   const listed = useListedSlugs();
   const rows = ownedOnly ? data.filter((r) => r.owned_qty > 0) : data;
