@@ -130,9 +130,11 @@ function WorldStrip({
   const fissuresLive = (ws?.fissures ?? []).filter((f) => msUntil(f.expiry) > 0).length;
   return (
     <button type="button" className="rsetbar r5" onClick={() => onNavigate("rotation")}>
-      <span className="rsetbox">
+      {/* Live cascade tints the whole box like Rotation's .fwx.hit hero —
+          Steel Path carries the SP amber; a normal one stays green. */}
+      <span className={clsx("rsetbox", cascadeLive && (cascade.is_hard ? "hit-sp" : "hit"))}>
         <span className="k">Void Cascade</span>
-        <span className={clsx("v", cascadeLive && "pos")}>
+        <span className={clsx("v", cascadeLive && (cascade.is_hard ? "sp" : "pos"))}>
           {cascadeLive ? "Live" : <Countdown iso={omnia?.expiry} />}
         </span>
       </span>

@@ -4478,6 +4478,22 @@ button.fgroup-h:hover .fg-go {
   margin-top: 3px;
   white-space: nowrap;
 }
+/* a live Steel Path cascade carries the SP color (matches .badge.sp) */
+.rsetbox .v.sp {
+  color: var(--hot);
+}
+/* live Void Cascade box mirrors the Rotation hero's .fwx.hit tint; the border
+   color also wins over the strip's accent hover so the state stays readable */
+.rsetbox.hit,
+button.rsetbar:hover .rsetbox.hit {
+  border-color: rgba(95, 194, 126, 0.45);
+  background: linear-gradient(180deg, rgba(95, 194, 126, 0.05), var(--panel));
+}
+.rsetbox.hit-sp,
+button.rsetbar:hover .rsetbox.hit-sp {
+  border-color: rgba(240, 169, 62, 0.5);
+  background: linear-gradient(180deg, rgba(240, 169, 62, 0.05), var(--panel));
+}
 
 /* nightwave challenge rows */
 .nw-row {
