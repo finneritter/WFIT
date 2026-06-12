@@ -33,7 +33,7 @@ export const keys = {
   catalog: (cat?: string) => ["catalog", cat ?? "all"] as const,
   trends: (tf: string, excludeOutliers: boolean) => ["trends", tf, excludeOutliers] as const,
   itemDetail: (slug: string) => ["itemDetail", slug] as const,
-  searchCatalog: (q: string) => ["searchCatalog", q] as const,
+  searchCatalog: (q: string, limit: number) => ["searchCatalog", q, limit] as const,
   itemOrders: (slug: string) => ["itemOrders", slug] as const,
   itemSellers: (slug: string) => ["itemSellers", slug] as const,
   recommendedPrice: (slug: string, rank: number | null) =>
@@ -79,10 +79,10 @@ export const useArcaneDashboard = () =>
   useQuery({ queryKey: keys.arcanes, queryFn: api.getArcaneDashboard });
 export const useCatalog = (cat?: string) =>
   useQuery({ queryKey: keys.catalog(cat), queryFn: () => api.getCatalog(cat) });
-export const useSearchCatalog = (q: string) =>
+export const useSearchCatalog = (q: string, limit = 40) =>
   useQuery({
-    queryKey: keys.searchCatalog(q),
-    queryFn: () => api.searchCatalog(q, 40),
+    queryKey: keys.searchCatalog(q, limit),
+    queryFn: () => api.searchCatalog(q, limit),
     enabled: q.trim().length >= 2,
     staleTime: 30_000,
   });

@@ -189,7 +189,7 @@ pub fn id_slug_map(db: &Db) -> AppResult<HashMap<String, String>> {
 const CATALOG_SELECT: &str = "SELECT
         ci.slug, ci.display_name, ci.part_type, ci.category, ci.set_slug,
         ci.ducats, ci.is_vaulted, pc.median_plat, pc.trend, pc.delta_7d,
-        ci.thumbnail_url,
+        pc.volume_7d, ci.thumbnail_url,
         CASE WHEN ci.category = 'set' THEN (
             SELECT COALESCE(MIN(COALESCE(mi.qty, 0)), 0)
             FROM catalog_items m
@@ -216,10 +216,11 @@ fn map_catalog_row(r: &rusqlite::Row) -> rusqlite::Result<CatalogRow> {
         median_plat: r.get(7)?,
         trend: r.get(8)?,
         delta_7d: r.get(9)?,
-        thumbnail_url: r.get(10)?,
-        owned_qty: r.get(11)?,
-        on_watchlist: r.get::<_, i64>(12)? != 0,
-        buy_qty: r.get(13)?,
+        volume_7d: r.get(10)?,
+        thumbnail_url: r.get(11)?,
+        owned_qty: r.get(12)?,
+        on_watchlist: r.get::<_, i64>(13)? != 0,
+        buy_qty: r.get(14)?,
     })
 }
 

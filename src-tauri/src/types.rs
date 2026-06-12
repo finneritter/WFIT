@@ -18,6 +18,7 @@ pub struct CatalogRow {
     pub median_plat: Option<i64>,
     pub trend: Option<String>,
     pub delta_7d: Option<f64>,
+    pub volume_7d: Option<i64>, // 7-day trade volume (liquidity sort / thin-market hint)
     pub thumbnail_url: Option<String>,
     pub owned_qty: i64,
     pub on_watchlist: bool,
@@ -339,9 +340,21 @@ pub struct SellerOrder {
     pub rank: Option<i64>,
 }
 
+/// One price level of the online bid ladder (demand depth), quantity summed
+/// across buyers at that price. Identity is irrelevant to the curve, so only
+/// price/qty/rank are kept. `rank` mirrors the seller table for mods/arcanes
+/// (rank-0 and max are distinct goods); None for non-ranked items.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuyOrder {
+    pub platinum: i64,
+    pub quantity: i64,
+    pub rank: Option<i64>,
+}
+
 /// The Market page's per-item result: the (capped, sorted) seller list plus the
-/// item's name/rank ceiling and the live buy-side aggregate — all from one fetch,
-/// so the stats strip needs no second (throttled) call to the same endpoint.
+/// item's name/rank ceiling, the live buy-side aggregate, and the online bid
+/// ladder (demand depth) — all from one fetch, so the stats strip and depth view
+/// need no second (throttled) call to the same endpoint.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ItemSellers {
     pub display_name: String,
@@ -350,6 +363,7 @@ pub struct ItemSellers {
     pub buyers: i64,           // online buyers
     pub sellers: i64,          // online sellers (pre-cap count)
     pub orders: Vec<SellerOrder>,
+    pub bids: Vec<BuyOrder>, // online buy orders, price-desc (demand depth)
 }
 
 /// One rank you own of a mod/arcane, with that rank's market price (exact or

@@ -4567,30 +4567,6 @@ button.fgroup-h:hover .fg-go {
 }
 
 /* ---------------- Market (Buy search) screen ---------------- */
-.mkt-hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  max-width: 560px;
-  margin: 0 auto;
-  padding-top: 13vh;
-}
-.mkt-hero h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-}
-.mkt-hero .search {
-  height: 38px;
-  font-size: 13px;
-}
-.mkt-toggles {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
 .mkt-head {
   display: flex;
   align-items: center;
@@ -4665,6 +4641,174 @@ button.fgroup-h:hover .fg-go {
   color: var(--pos);
   border: 1px solid var(--pos);
   padding: 0 3px;
+}
+
+/* ---- Market screener (browse + rich search) ---- */
+.mkt-screener {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mkt-search {
+  height: 38px;
+  font-size: 13px;
+}
+.mkt-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.mkt-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 4px;
+  background: var(--line-2);
+}
+.mkt-table .rowlink {
+  cursor: pointer;
+}
+.mkt-table .rowlink:hover,
+.mkt-table .rowlink.hi {
+  background: var(--row-hover, var(--line));
+}
+.mkt-table .rowlink.hi {
+  outline: 1px solid var(--line-2);
+  outline-offset: -1px;
+}
+.mkt-add {
+  white-space: nowrap;
+}
+.mkt-add .btn {
+  margin-left: 4px;
+  min-width: 32px;
+}
+.load-more {
+  width: 100%;
+  margin-top: 8px;
+  justify-content: center;
+}
+/* sale-notes marker (SoldHistory) — hover for the note text */
+.note-mark {
+  margin-left: 5px;
+  font-size: 10px;
+  color: var(--soft);
+  cursor: help;
+}
+/* per-row daily volume in the Trends signal rows */
+.svol {
+  font-size: 9.5px;
+  margin-top: 1px;
+}
+/* arcane rarity cell — tinted by tier, common is muted */
+.rarity {
+  text-transform: capitalize;
+  color: var(--soft);
+}
+.rarity.common {
+  color: var(--faint);
+}
+.rarity.rare {
+  color: var(--blue);
+}
+.rarity.legendary {
+  color: var(--pos);
+}
+
+/* ---- Buy-decision context band ---- */
+.mkt-context {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel, transparent);
+}
+.mkt-ctx-deltas {
+  display: flex;
+  gap: 12px;
+  font-size: 11.5px;
+}
+.mkt-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 200px;
+  font-size: 11px;
+}
+.mkt-range-track {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+.mkt-range-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--line-2);
+}
+.mkt-range-dot {
+  position: absolute;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  transform: translateY(-50%);
+  background: var(--ink);
+}
+
+/* ---- Bid ladder (demand depth) ---- */
+.bidladder {
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+.bidladder-h {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--soft);
+  margin-bottom: 6px;
+}
+.bidrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  padding: 1px 0;
+}
+.bidrow-p {
+  min-width: 52px;
+  text-align: right;
+}
+.bidrow-track {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+.bidrow-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--pos) 35%, transparent);
+}
+.bidrow-q {
+  min-width: 44px;
+  text-align: right;
+}
+.bidrow-cum {
+  min-width: 48px;
+  text-align: right;
+  font-size: 10.5px;
 }
 
 /* ---- TOASTS (global error surface; pushed from the mutation cache) ---- */

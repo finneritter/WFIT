@@ -94,6 +94,40 @@ export function ItemName({
   );
 }
 
+/** A clickable, sortable column header. Presentational — pair with `useColumnSort`
+ *  (hooks/useTable.ts) for the cycle/persist logic. `right` mirrors the `.r`
+ *  numeric alignment. Renders the active-direction arrow + aria-sort. */
+export function SortTh<K extends string>({
+  label,
+  col,
+  sort,
+  onSort,
+  right,
+}: {
+  label: React.ReactNode;
+  col: K;
+  sort: { key: K; dir: "asc" | "desc" } | null;
+  onSort: (key: K) => void;
+  right?: boolean;
+}) {
+  const active = sort?.key === col;
+  return (
+    <th
+      className={clsx(right && "r")}
+      aria-sort={active ? (sort?.dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button
+        type="button"
+        className={clsx("th-sort", active && "sorted")}
+        onClick={() => onSort(col)}
+      >
+        {label}
+        {active ? <span className="sort-arr">{sort?.dir === "asc" ? "▲" : "▼"}</span> : null}
+      </button>
+    </th>
+  );
+}
+
 /** Click + keyboard activation props for an interactive table row:
  *  spread onto a <tr> to make it Tab-focusable and Enter/Space-activatable.
  *  Inner controls keep working — keyboard activation only fires when the row

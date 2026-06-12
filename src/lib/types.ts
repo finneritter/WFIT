@@ -15,6 +15,7 @@ export interface CatalogRow {
   median_plat: number | null;
   trend: Trend | null;
   delta_7d: number | null;
+  volume_7d: number | null; // 7-day trade volume (liquidity sort / thin-market hint)
   thumbnail_url: string | null;
   owned_qty: number;
   on_watchlist: boolean;
@@ -285,6 +286,14 @@ export interface SellerOrder {
   rank: number | null;
 }
 
+/** One price level of the online bid ladder (demand depth), qty summed across
+ *  buyers at that price. `rank` mirrors the seller table for mods/arcanes. */
+export interface BuyOrder {
+  platinum: number;
+  quantity: number;
+  rank: number | null;
+}
+
 export interface ItemSellers {
   display_name: string;
   max_rank: number | null;
@@ -292,6 +301,7 @@ export interface ItemSellers {
   buyers: number;
   sellers: number;
   orders: SellerOrder[];
+  bids: BuyOrder[];
 }
 
 export interface WfmAccount {

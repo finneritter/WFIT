@@ -3,9 +3,10 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Dropdown, type DropdownOption } from "../components/Dropdown";
 import { Icon } from "../components/Icon";
 import { Spark } from "../components/charts";
-import { Glyph, StatBox, rowAction } from "../components/ui";
+import { Glyph, SortTh, StatBox, rowAction } from "../components/ui";
 import { useInventory, useListings, usePricingProgress, useSummary } from "../hooks/queries";
 import { CATEGORY_LABELS, clsx, fmt, fmtK, glyph, pct, tier, trendOf } from "../lib/format";
+import { usePersisted } from "../lib/persist";
 import type { InventoryRow } from "../lib/types";
 
 type SortKey = "value-desc" | "value-asc" | "trend" | "name";
@@ -53,25 +54,6 @@ const colCompare = (a: InventoryRow, b: InventoryRow, key: ColKey): number => {
       return realValue(a) - realValue(b);
   }
 };
-
-// Persisted string UI state (view, tile size, label density). Survives reloads.
-function usePersisted<T extends string>(key: string, fallback: T): [T, (v: T) => void] {
-  const [v, setV] = useState<T>(() => {
-    try {
-      return (localStorage.getItem(key) as T) || fallback;
-    } catch {
-      return fallback;
-    }
-  });
-  useEffect(() => {
-    try {
-      localStorage.setItem(key, v);
-    } catch {
-      /* ignore quota/availability errors */
-    }
-  }, [key, v]);
-  return [v, setV];
-}
 
 const Tile = memo(function Tile({
   row,
@@ -195,39 +177,6 @@ const ChipItem = memo(function ChipItem({
 });
 
 // List view: the shared data table — Item | 7d (spark + %) | Qty | Unit | Stack.
-// A clickable List-view column header: cycles asc → desc → off and shows the
-// active-direction arrow. `right` mirrors the existing `.r` numeric alignment.
-function SortTh({
-  label,
-  col,
-  colSort,
-  onSort,
-  right,
-}: {
-  label: string;
-  col: ColKey;
-  colSort: ColSort | null;
-  onSort: (key: ColKey) => void;
-  right?: boolean;
-}) {
-  const active = colSort?.key === col;
-  return (
-    <th
-      className={clsx(right && "r")}
-      aria-sort={active ? (colSort?.dir === "asc" ? "ascending" : "descending") : "none"}
-    >
-      <button
-        type="button"
-        className={clsx("th-sort", active && "sorted")}
-        onClick={() => onSort(col)}
-      >
-        {label}
-        {active ? <span className="sort-arr">{colSort?.dir === "asc" ? "▲" : "▼"}</span> : null}
-      </button>
-    </th>
-  );
-}
-
 const InvTable = memo(function InvTable({
   rows,
   onOpen,
@@ -245,11 +194,11 @@ const InvTable = memo(function InvTable({
     <table className="dtable inv-tbl">
       <thead>
         <tr>
-          <SortTh label="Item" col="name" colSort={colSort} onSort={onSort} />
-          <SortTh label="7d trend" col="trend" colSort={colSort} onSort={onSort} right />
-          <SortTh label="Qty" col="qty" colSort={colSort} onSort={onSort} right />
-          <SortTh label="Unit" col="unit" colSort={colSort} onSort={onSort} right />
-          <SortTh label="Stack" col="stack" colSort={colSort} onSort={onSort} right />
+          <SortTh<ColKey> label="Item" col="name" sort={colSort} onSort={onSort} />
+          <SortTh<ColKey> label="7d trend" col="trend" sort={colSort} onSort={onSort} right />
+          <SortTh<ColKey> label="Qty" col="qty" sort={colSort} onSort={onSort} right />
+          <SortTh<ColKey> label="Unit" col="unit" sort={colSort} onSort={onSort} right />
+          <SortTh<ColKey> label="Stack" col="stack" sort={colSort} onSort={onSort} right />
         </tr>
       </thead>
       <tbody>

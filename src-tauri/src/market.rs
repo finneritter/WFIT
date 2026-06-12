@@ -536,6 +536,10 @@ impl Market {
         let mut best_buy: Option<i64> = None;
         let mut buyers = 0i64;
         let mut sellers = 0i64;
+        // (rank, price) -> summed qty, so the ladder collapses many buyers at the
+        // same level into one bar. BTreeMap keeps it ordered for the price-desc pass.
+        let mut bid_levels: std::collections::BTreeMap<(Option<i64>, i64), i64> =
+            std::collections::BTreeMap::new();
         for o in resp.data {
             if !o.visible {
                 continue;
@@ -550,6 +554,8 @@ impl Market {
                 "buy" if is_online(&status) => {
                     buyers += 1;
                     best_buy = Some(best_buy.map_or(p, |b| b.max(p)));
+                    *bid_levels.entry((o.rank, p)).or_insert(0) +=
+                        o.quantity.unwrap_or(1).max(1);
                 }
                 "sell" => {
                     if is_online(&status) {
@@ -596,6 +602,17 @@ impl Market {
         kept.extend(offline.into_iter().take(backfill));
         let orders = kept;
 
+        // Bid ladder, highest price first (the demand curve a buyer reads top-down).
+        let mut bids: Vec<crate::types::BuyOrder> = bid_levels
+            .into_iter()
+            .map(|((rank, platinum), quantity)| crate::types::BuyOrder {
+                platinum,
+                quantity,
+                rank,
+            })
+            .collect();
+        bids.sort_by_key(|b| std::cmp::Reverse(b.platinum));
+
         Ok(crate::types::ItemSellers {
             display_name,
             max_rank,
@@ -603,6 +620,7 @@ impl Market {
             buyers,
             sellers,
             orders,
+            bids,
         })
     }
 
