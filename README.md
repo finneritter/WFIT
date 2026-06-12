@@ -169,7 +169,7 @@ sticker. WFIT shows that number only as the optimistic ceiling ("Market value") 
 
 Realizable value is recomputed fresh on every inventory read (it's not cached), so valuation-rule
 changes apply instantly. The research behind the model lives in
-`reference/CLAUDE_ECONOMIC_RESEARCH/`.
+`docs/CLAUDE_ECONOMIC_RESEARCH/`.
 
 ---
 
@@ -310,7 +310,7 @@ The local database lives at `$APPDATA/dev.finn.wfit/wfit.sqlite` (e.g.
 
 - `docs/HANDOFF.md` — **current-state handoff; read first.**
 - `CLAUDE.md` — working guidance, hard constraints, and the pricing/valuation model.
-- `reference/CLAUDE_ECONOMIC_RESEARCH/` — the economics behind realizable valuation (liquidity,
+- `docs/CLAUDE_ECONOMIC_RESEARCH/` — the economics behind realizable valuation (liquidity,
   market impact, honest presentation).
 - `docs/DATA_SOURCING_MASTER_PLAN.md` — the warframe.market data contract.
 - `docs/GAMESTATE_WORLDSTATE.md` — world-state sources (DE raw, derived cycles, arbitrations).

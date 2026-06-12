@@ -233,7 +233,7 @@ fn row_value(r: &InventoryRow) -> i64 {
 // orders (the demand curve) best-bid-first, then a volume-capped tail for what
 // off-book demand could absorb over the window (discounted), and anything beyond
 // that is worth ~0. So 500 copies of a mod nobody is bidding on ≈ nothing.
-// (See .claude/plans/pricing-rework + reference/CLAUDE_ECONOMIC_RESEARCH.)
+// (See .claude/plans/pricing-rework + docs/CLAUDE_ECONOMIC_RESEARCH.)
 const WINDOW_DAYS: f64 = 30.0; // horizon for off-book (volume-driven) sales
 const K: f64 = 1.0; // share of market volume you could capture
 const TAIL_FACTOR: f64 = 0.35; // off-book sales beyond live bids net ~a third of sticker
