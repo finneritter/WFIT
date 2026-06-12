@@ -5170,3 +5170,13 @@ textarea:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: -1px;
 }
+/* Composite field boxes: the chromeless inner input must not draw its own
+   outline — the container border is the focus indicator. */
+.search input:focus-visible,
+.budget input:focus-visible {
+  outline: none;
+}
+.search:focus-within,
+.budget:focus-within {
+  border-color: var(--accent);
+}
