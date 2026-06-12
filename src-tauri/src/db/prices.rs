@@ -334,7 +334,10 @@ pub fn recent_medians_for(
 }
 
 /// Replace the cached order book for a slug: robust asks (`order_cache`) + the
-/// online bid ladder (`buy_orders`).
+/// online bid ladder (`buy_orders`). An empty book is a real market state and is
+/// stored as such (rows cleared); `order_fetch_meta` stamps the fetch either way
+/// so `owned_order_slugs` doesn't refetch orderless items every cycle. Callers
+/// must NOT call this on a failed fetch — stale bids beat no bids.
 pub fn store_order_book(
     db: &Db,
     slug: &str,
@@ -344,6 +347,11 @@ pub fn store_order_book(
     db.with_mut(|conn| {
         let tx = conn.transaction()?;
         let now = Utc::now().to_rfc3339();
+        tx.execute(
+            "INSERT INTO order_fetch_meta (slug, fetched_at) VALUES (?1, ?2)
+             ON CONFLICT(slug) DO UPDATE SET fetched_at = excluded.fetched_at",
+            params![slug, now],
+        )?;
         tx.execute("DELETE FROM order_cache WHERE slug = ?1", params![slug])?;
         tx.execute("DELETE FROM buy_orders WHERE slug = ?1", params![slug])?;
         for (rank, sell) in sells {
@@ -384,7 +392,7 @@ pub fn owned_order_slugs(db: &Db, fresh_cutoff: &str) -> AppResult<Vec<String>> 
             "SELECT ii.slug FROM inventory_items ii
              WHERE ii.qty > 0
              AND NOT EXISTS (
-                 SELECT 1 FROM order_cache oc WHERE oc.slug = ii.slug AND oc.fetched_at > ?1
+                 SELECT 1 FROM order_fetch_meta m WHERE m.slug = ii.slug AND m.fetched_at > ?1
              )",
         )?;
         let rows = stmt.query_map(params![fresh_cutoff], |r| r.get::<_, String>(0))?;

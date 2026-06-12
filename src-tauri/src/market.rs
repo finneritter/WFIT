@@ -397,7 +397,11 @@ impl Market {
     ///   — the reference for buying / for items with no bids.
     /// - `bids`: the online BUY ladder (rank, price, qty) — the actual demand curve
     ///   we liquidate holdings into. rank -1 = a non-ranked item.
-    pub async fn fetch_order_book(&self, slug: &str) -> AppResult<OrderBook> {
+    ///
+    /// `Ok(Some(book))` may be empty — that's a real market state ("no online
+    /// orders") and callers should store it. `Ok(None)` = the server answered
+    /// non-2xx (throttle, 5xx, bad slug); callers must keep whatever they have.
+    pub async fn fetch_order_book(&self, slug: &str) -> AppResult<Option<OrderBook>> {
         self.throttled().await;
 
         #[derive(Deserialize)]
@@ -422,7 +426,8 @@ impl Market {
         let url = format!("{API_V2}/orders/item/{slug}");
         let r = self.http.get(url).send().await?;
         if !r.status().is_success() {
-            return Ok(OrderBook::default());
+            tracing::warn!(slug, status = %r.status(), "order book fetch rejected");
+            return Ok(None);
         }
         let resp: Resp = r.json().await?;
 
@@ -464,7 +469,7 @@ impl Market {
             }
         }
         let bids = bids.into_iter().map(|((rk, p), q)| (rk, p, q)).collect();
-        Ok(OrderBook { sells, bids })
+        Ok(Some(OrderBook { sells, bids }))
     }
 
     /// Public SELL orders for one item WITH seller identity (ingame name, rep,

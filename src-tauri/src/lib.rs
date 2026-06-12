@@ -217,7 +217,7 @@ async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
         tracing::info!("pricing logic changed → clearing price caches for a clean reprice");
         state.db.with(|c| {
             c.execute_batch(
-                "DELETE FROM price_cache; DELETE FROM price_rank; DELETE FROM order_cache; DELETE FROM buy_orders;",
+                "DELETE FROM price_cache; DELETE FROM price_rank; DELETE FROM order_cache; DELETE FROM buy_orders; DELETE FROM order_fetch_meta;",
             )?;
             Ok(())
         })?;
@@ -391,11 +391,13 @@ async fn heartbeat_tick(state: &Arc<AppState>) -> error::AppResult<usize> {
     order_slugs.truncate(HEARTBEAT_ORDER_BATCH);
     for slug in &order_slugs {
         match state.market.fetch_order_book(slug).await {
-            Ok(book) if !book.sells.is_empty() || !book.bids.is_empty() => {
+            // An empty book is stored too: it clears stale ladders and stamps
+            // freshness so the slug isn't refetched every tick.
+            Ok(Some(book)) => {
                 prices::store_order_book(&state.db, slug, &book.sells, &book.bids)?;
                 touched += 1;
             }
-            Ok(_) => {}
+            Ok(None) => {} // non-2xx (warned in the client); keep stale data
             Err(e) => tracing::warn!(slug, error = %e, "heartbeat order book failed"),
         }
     }
@@ -450,11 +452,11 @@ pub(crate) async fn refresh_owned_orders(
     let mut priced = 0usize;
     for slug in &slugs {
         match state.market.fetch_order_book(slug).await {
-            Ok(book) if !book.sells.is_empty() || !book.bids.is_empty() => {
+            Ok(Some(book)) => {
                 prices::store_order_book(&state.db, slug, &book.sells, &book.bids)?;
                 priced += 1;
             }
-            Ok(_) => {}
+            Ok(None) => {} // non-2xx (warned in the client); keep stale data
             Err(e) => tracing::warn!(slug, error = %e, "fetch_order_book failed"),
         }
     }

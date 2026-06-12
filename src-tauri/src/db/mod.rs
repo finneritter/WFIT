@@ -35,6 +35,7 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         M::up(include_str!("../../migrations/0007_mod_rarity.sql")),
         M::up(include_str!("../../migrations/0008_vault_status.sql")),
         M::up(include_str!("../../migrations/0009_perf_indexes.sql")),
+        M::up(include_str!("../../migrations/0010_order_fetch_meta.sql")),
     ])
 });
 
