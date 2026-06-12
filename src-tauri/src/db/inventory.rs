@@ -393,30 +393,25 @@ pub fn split_sell_dissolve_default(
     (sell_qty, sell_plat.min(ceiling))
 }
 
-/// Number of complete sets currently owned (all member parts present).
+/// Number of complete sets currently owned (all member parts present): the
+/// minimum owned qty across every catalog member, in one read-pool query
+/// (a member with no inventory row counts as 0; no members at all → 0).
 pub fn complete_set_count(db: &Db, set_slug: &str) -> AppResult<i64> {
-    let members = set_members(db, set_slug)?;
-    if members.is_empty() {
-        return Ok(0);
-    }
-    db.with(|c| {
-        let mut min_qty = i64::MAX;
-        for m in &members {
-            let q: i64 = c
-                .query_row(
-                    "SELECT qty FROM inventory_items WHERE slug = ?1",
-                    params![m],
-                    |r| r.get(0),
-                )
-                .unwrap_or(0);
-            min_qty = min_qty.min(q);
-        }
-        Ok(min_qty.max(0))
+    db.read(|c| {
+        let n: i64 = c.query_row(
+            "SELECT COALESCE(MIN(COALESCE(ii.qty, 0)), 0)
+             FROM catalog_items ci
+             LEFT JOIN inventory_items ii ON ii.slug = ci.slug
+             WHERE ci.set_slug = ?1",
+            params![set_slug],
+            |r| r.get(0),
+        )?;
+        Ok(n.max(0))
     })
 }
 
 pub fn set_members(db: &Db, set_slug: &str) -> AppResult<Vec<String>> {
-    db.with(|c| {
+    db.read(|c| {
         let mut stmt = c.prepare("SELECT slug FROM catalog_items WHERE set_slug = ?1")?;
         let rows = stmt.query_map(params![set_slug], |r| r.get::<_, String>(0))?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
@@ -575,13 +570,13 @@ fn memberships(
 }
 
 fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
-    // Exclusion settings read on the writer first (separate lock), then the whole
-    // valuation runs on a single pooled read connection — no writer contention.
-    let excluded = settings::excluded_rarities(db)?;
-    let min_plat = settings::excluded_min_plat(db)?;
-    let min_by_cat = settings::excluded_min_plat_by_cat(db)?;
-
+    // The whole valuation — exclusion settings included — runs on a single
+    // pooled read connection, so it never queues behind the writer mutex.
     db.read(|c| {
+        let excluded = settings::excluded_rarities_conn(c)?;
+        let min_plat = settings::excluded_min_plat_conn(c)?;
+        let min_by_cat = settings::excluded_min_plat_by_cat_conn(c)?;
+
         let owned = fetch_owned(c)?;
         let templates = set_templates(c)?;
 
