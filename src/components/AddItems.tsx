@@ -13,6 +13,7 @@ import {
 import { useEscape } from "../hooks/useEscape";
 import { clsx, fmt } from "../lib/format";
 import type { CatalogRow } from "../lib/types";
+import { Scrim } from "./ui";
 
 // Which list the picker adds to — follows the screen it was opened from.
 export type AddTarget = "inventory" | "watchlist" | "buy";
@@ -72,7 +73,11 @@ const Stepper = memo(function Stepper({ slug, qty }: { slug: string; qty: number
     else h.setQty(slug, Math.min(99, next));
   };
   return (
-    <div className="qstep" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="qstep"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
       <button type="button" onClick={() => change(qty - 1)}>
         −
       </button>
@@ -100,7 +105,20 @@ const Row = memo(function Row({
   const showStepper = active && h.target !== "watchlist";
   const toggle = () => (active ? h.remove(row.slug) : h.add(row.slug));
   return (
-    <div className={clsx("crow", active && "on", leaf && "leaf")} onClick={toggle}>
+    <div
+      className={clsx("crow", active && "on", leaf && "leaf")}
+      // biome-ignore lint/a11y/useSemanticElements: contains a nested qty stepper — a native checkbox/button can't wrap interactive children
+      role="checkbox"
+      aria-checked={active}
+      tabIndex={0}
+      onClick={toggle}
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+          e.preventDefault();
+          toggle();
+        }
+      }}
+    >
       <span className="cb">{active ? "✓" : ""}</span>
       {row.thumbnail_url ? (
         <img className="crow-ic" src={row.thumbnail_url} alt="" loading="lazy" />
@@ -146,7 +164,17 @@ function GroupedColumn({ rows, filter }: { rows: CatalogRow[]; filter: string })
           <div className="agrp" key={setSlug}>
             <div
               className={clsx("agrp-h", activeCount > 0 && "has")}
+              // biome-ignore lint/a11y/useSemanticElements: styled as a div row; no native-button reset exists in the theme
+              role="button"
+              aria-expanded={isOpen}
+              tabIndex={0}
               onClick={() => setOpen((o) => ({ ...o, [setSlug]: !isOpen }))}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+                  e.preventDefault();
+                  setOpen((o) => ({ ...o, [setSlug]: !isOpen }));
+                }
+              }}
             >
               <span className={clsx("tw", isOpen && "open")}>▸</span>
               <span className="gn">{name}</span>
@@ -256,8 +284,8 @@ export function AddItems({
         : "Click a row to toggle owned; use the stepper for quantity.";
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <Scrim onClose={onClose}>
+      <div className="modal">
         <div className="modal-h">
           <h2>{TITLE[target]}</h2>
           <div className="search">
@@ -287,6 +315,6 @@ export function AddItems({
           </button>
         </div>
       </div>
-    </div>
+    </Scrim>
   );
 }

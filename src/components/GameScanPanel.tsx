@@ -6,7 +6,9 @@ import {
   useGameScanRevoke,
   useGameScanStatus,
 } from "../hooks/queries";
+import { useEscape } from "../hooks/useEscape";
 import type { ScanDiffRow } from "../lib/types";
+import { Scrim } from "./ui";
 
 // The exact phrase the backend (gamescan::consent) requires. Kept in sync by hand.
 const CONSENT_PHRASE = "I understand and accept the risk involved in using this functionality.";
@@ -25,10 +27,11 @@ export function ReviewPanel({ rows, onClose }: { rows: ScanDiffRow[]; onClose: (
   );
 
   const selected = rows.filter((r) => checked[r.slug]);
+  useEscape(onClose);
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 760 }} onClick={(e) => e.stopPropagation()}>
+    <Scrim onClose={onClose}>
+      <div className="modal" style={{ maxWidth: 760 }}>
         <div className="modal-h">
           <h2>Review game scan</h2>
           <span style={{ flex: 1 }} />
@@ -100,7 +103,7 @@ export function ReviewPanel({ rows, onClose }: { rows: ScanDiffRow[]; onClose: (
           </button>
         </div>
       </div>
-    </div>
+    </Scrim>
   );
 }
 

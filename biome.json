@@ -19,8 +19,7 @@
         "noNonNullAssertion": "off"
       },
       "a11y": {
-        "noAutofocus": "off",
-        "useKeyWithClickEvents": "warn"
+        "noAutofocus": "off"
       }
     }
   },

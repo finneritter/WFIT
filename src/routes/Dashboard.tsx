@@ -122,13 +122,12 @@ const GRADE_C: Record<string, string> = {
  *  Clicking opens the Rotation screen for the full schedule. */
 function ArbitrationBox({
   block,
-  now,
   onNavigate,
 }: {
   block: ArbitrationBlock | null | undefined;
-  now: number;
   onNavigate: (s: ScreenId) => void;
 }) {
+  const now = useNow();
   const cur = block?.current ?? null;
   const tier = cur?.tier ?? null;
   const next = block?.notable?.[0] ?? null;
@@ -177,6 +176,86 @@ function ArbitrationBox({
   );
 }
 
+/** The ticking world-pulse rail. Isolated so its 1s clock re-renders only
+ *  this strip — not the whole dashboard (hero, cards, search). */
+function WorldRail({
+  ws,
+  lastSynced,
+  onNavigate,
+}: {
+  ws: Worldstate | undefined;
+  lastSynced: string | null | undefined;
+  onNavigate: (s: ScreenId) => void;
+}) {
+  const now = useNow();
+  const ground = (ws?.fissures ?? []).filter((f) => msUntil(f.expiry) > 0 && !f.is_storm);
+  const cascade = ground
+    .filter((f) => /cascade/i.test(f.mission_type))
+    .sort((a, b) => msUntil(b.expiry) - msUntil(a.expiry))[0];
+  const omnia = ground
+    .filter((f) => f.tier.toLowerCase() === "omnia")
+    .sort((a, b) => msUntil(a.expiry) - msUntil(b.expiry))[0];
+  const cascadeLive = cascade !== undefined;
+  const cascadeIso = (cascade ?? omnia)?.expiry;
+  const baro = ws?.baro;
+  const baroActive = baro?.active ?? false;
+  const baroIso = baro ? (baroActive ? baro.expiry : baro.activation) : null;
+  const fissuresLive = (ws?.fissures ?? []).filter((f) => msUntil(f.expiry) > 0).length;
+  const ageSecs = lastSynced
+    ? Math.max(0, Math.floor((now - new Date(lastSynced).getTime()) / 1000))
+    : null;
+  const ageTxt =
+    ageSecs == null
+      ? "—"
+      : ageSecs < 60
+        ? `${ageSecs}s`
+        : ageSecs < 3600
+          ? `${Math.floor(ageSecs / 60)}m`
+          : `${Math.floor(ageSecs / 3600)}h`;
+
+  return (
+    <button type="button" className="lb-pulse" onClick={() => onNavigate("rotation")}>
+      <span className="lb-pulse-cell" style={STYLE("--pos")}>
+        <span className="lb-pulse-lbl">Void Cascade</span>
+        <span className={clsx("lb-pulse-val", !cascadeLive && "lb-mono")}>
+          {cascadeLive ? (
+            <>
+              <span className="lb-livedot lb-livedot--pos lb-pulse-anim" />
+              Live
+            </>
+          ) : (
+            countdown(cascadeIso, now)
+          )}
+        </span>
+        <span className="lb-pulse-meta">{cascadeLive ? "active now" : "until rotation"}</span>
+      </span>
+      <span className="lb-pulse-cell" style={STYLE("--essence")}>
+        <span className="lb-pulse-lbl">Baro Ki'Teer</span>
+        <span className="lb-pulse-val lb-mono">{baroIso ? countdown(baroIso, now) : "—"}</span>
+        <span className="lb-pulse-meta">{baroActive ? "until departure" : "until arrival"}</span>
+      </span>
+      <span className="lb-pulse-cell" style={STYLE("--hot")}>
+        <span className="lb-pulse-lbl">Daily reset</span>
+        <span className="lb-pulse-val lb-mono">{countdown(nextUtc(0), now)}</span>
+        <span className="lb-pulse-meta">countdown</span>
+      </span>
+      <span className="lb-pulse-cell" style={STYLE("--blue")}>
+        <span className="lb-pulse-lbl">Fissures live</span>
+        <span className="lb-pulse-val lb-mono">{fissuresLive}</span>
+        <span className="lb-pulse-meta">across all tiers</span>
+      </span>
+      <span className="lb-pulse-cell" style={STYLE("--pos")}>
+        <span className="lb-pulse-lbl">Price data</span>
+        <span className="lb-pulse-val lb-mono">
+          <span className="lb-livedot lb-livedot--pos lb-pulse-anim" />
+          {ageTxt}
+        </span>
+        <span className="lb-pulse-meta">since last sync</span>
+      </span>
+    </button>
+  );
+}
+
 interface CardDef {
   to: ScreenId;
   icon: string;
@@ -195,7 +274,6 @@ export function Dashboard({
   onOpen: (slug: string) => void;
   onNavigate: (s: ScreenId) => void;
 }) {
-  const now = useNow();
   const { data: summary } = useSummary();
   const { data: listings = [] } = useListings();
   const { data: buy = [] } = useBuyList();
@@ -227,32 +305,6 @@ export function Dashboard({
     summary && summary.total_plat > 0
       ? Math.round((summary.realizable_plat / summary.total_plat) * 100)
       : null;
-
-  // ---- live world rail ----
-  const ground = (ws?.fissures ?? []).filter((f) => msUntil(f.expiry) > 0 && !f.is_storm);
-  const cascade = ground
-    .filter((f) => /cascade/i.test(f.mission_type))
-    .sort((a, b) => msUntil(b.expiry) - msUntil(a.expiry))[0];
-  const omnia = ground
-    .filter((f) => f.tier.toLowerCase() === "omnia")
-    .sort((a, b) => msUntil(a.expiry) - msUntil(b.expiry))[0];
-  const cascadeLive = cascade !== undefined;
-  const cascadeIso = (cascade ?? omnia)?.expiry;
-  const baro = ws?.baro;
-  const baroActive = baro?.active ?? false;
-  const baroIso = baro ? (baroActive ? baro.expiry : baro.activation) : null;
-  const fissuresLive = (ws?.fissures ?? []).filter((f) => msUntil(f.expiry) > 0).length;
-  const ageSecs = summary?.last_synced
-    ? Math.max(0, Math.floor((now - new Date(summary.last_synced).getTime()) / 1000))
-    : null;
-  const ageTxt =
-    ageSecs == null
-      ? "—"
-      : ageSecs < 60
-        ? `${ageSecs}s`
-        : ageSecs < 3600
-          ? `${Math.floor(ageSecs / 60)}m`
-          : `${Math.floor(ageSecs / 3600)}h`;
 
   const cards: CardDef[] = [
     {
@@ -400,50 +452,12 @@ export function Dashboard({
       </button>
 
       {/* ============ WORLD PULSE RAIL ============ */}
-      <button type="button" className="lb-pulse" onClick={() => onNavigate("rotation")}>
-        <span className="lb-pulse-cell" style={STYLE("--pos")}>
-          <span className="lb-pulse-lbl">Void Cascade</span>
-          <span className={clsx("lb-pulse-val", !cascadeLive && "lb-mono")}>
-            {cascadeLive ? (
-              <>
-                <span className="lb-livedot lb-livedot--pos lb-pulse-anim" />
-                Live
-              </>
-            ) : (
-              countdown(cascadeIso, now)
-            )}
-          </span>
-          <span className="lb-pulse-meta">{cascadeLive ? "active now" : "until rotation"}</span>
-        </span>
-        <span className="lb-pulse-cell" style={STYLE("--essence")}>
-          <span className="lb-pulse-lbl">Baro Ki'Teer</span>
-          <span className="lb-pulse-val lb-mono">{baroIso ? countdown(baroIso, now) : "—"}</span>
-          <span className="lb-pulse-meta">{baroActive ? "until departure" : "until arrival"}</span>
-        </span>
-        <span className="lb-pulse-cell" style={STYLE("--hot")}>
-          <span className="lb-pulse-lbl">Daily reset</span>
-          <span className="lb-pulse-val lb-mono">{countdown(nextUtc(0), now)}</span>
-          <span className="lb-pulse-meta">countdown</span>
-        </span>
-        <span className="lb-pulse-cell" style={STYLE("--blue")}>
-          <span className="lb-pulse-lbl">Fissures live</span>
-          <span className="lb-pulse-val lb-mono">{fissuresLive}</span>
-          <span className="lb-pulse-meta">across all tiers</span>
-        </span>
-        <span className="lb-pulse-cell" style={STYLE("--pos")}>
-          <span className="lb-pulse-lbl">Price data</span>
-          <span className="lb-pulse-val lb-mono">
-            <span className="lb-livedot lb-livedot--pos lb-pulse-anim" />
-            {ageTxt}
-          </span>
-          <span className="lb-pulse-meta">since last sync</span>
-        </span>
-      </button>
+      <WorldRail ws={ws} lastSynced={summary?.last_synced} onNavigate={onNavigate} />
 
       {/* ============ TOOLS: market search + arbitration ============ */}
       <div className="lb-tools">
         <MarketSearch onOpen={onOpen} hot={(trends?.unusual ?? []).slice(0, 3)} />
-        <ArbitrationBox block={ws?.arbitration} now={now} onNavigate={onNavigate} />
+        <ArbitrationBox block={ws?.arbitration} onNavigate={onNavigate} />
       </div>
 
       {/* ============ LAUNCH GRID ============ */}

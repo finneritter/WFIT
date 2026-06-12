@@ -26,7 +26,17 @@ function Row({ row, onOpen }: { row: SetRow; onOpen: (slug: string) => void }) {
           <div
             key={p.slug}
             className={clsx("pchip", p.owned ? "have" : "miss")}
+            // biome-ignore lint/a11y/useSemanticElements: styled as a div chip; no native-button reset exists in the theme
+            role="button"
+            tabIndex={0}
             onClick={() => (p.owned ? onOpen(p.slug) : buy.mutate({ slug: p.slug }))}
+            onKeyDown={(e) => {
+              if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+                e.preventDefault();
+                if (p.owned) onOpen(p.slug);
+                else buy.mutate({ slug: p.slug });
+              }
+            }}
             title={p.owned ? p.part_name : `Add ${p.part_name} to buy list`}
           >
             <span className="pa">{p.part_name.slice(0, 3)}</span>
