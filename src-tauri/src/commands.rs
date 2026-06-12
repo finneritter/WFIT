@@ -11,7 +11,7 @@ use crate::AppState;
 use chrono::{Duration, Utc};
 use rusqlite::OptionalExtension;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Manager, State};
 
 const PRICE_TTL_HOURS: i64 = 6;
 const HISTORY_DRAWER_DAYS: i64 = 90;
@@ -1333,4 +1333,119 @@ pub fn game_scan_apply(state: State<'_, Arc<AppState>>, rows: Vec<ScanApply>) ->
         ));
     }
     gamescan_db::merge_from_scan(&state.db, &rows)
+}
+
+// ===========================================================================
+// Backups
+// ===========================================================================
+
+/// `<app_data_dir>/wfit.sqlite` — the one DB location (mirrors lib.rs setup).
+fn app_db_path(app: &tauri::AppHandle) -> AppResult<std::path::PathBuf> {
+    use tauri::Manager;
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Other(format!("resolve app data dir: {e}")))?
+        .join("wfit.sqlite"))
+}
+
+/// One-click snapshot (VACUUM INTO) into <app_data_dir>/backups, pruned to the
+/// newest few. Returns the snapshot path for the toast.
+#[tauri::command]
+pub fn backup_now(state: State<'_, Arc<AppState>>, app: tauri::AppHandle) -> AppResult<String> {
+    let db_path = app_db_path(&app)?;
+    let dest = crate::db::backup::snapshot(&state.db, &db_path, None)?;
+    tracing::info!(path = %dest.display(), "manual backup saved");
+    Ok(dest.display().to_string())
+}
+
+/// Backups newest-first. Takes AppHandle (not State) so it also works while the
+/// app is in recovery mode.
+#[tauri::command]
+pub fn list_backups(app: tauri::AppHandle) -> AppResult<Vec<crate::db::backup::BackupInfo>> {
+    let db_path = app_db_path(&app)?;
+    crate::db::backup::list(&crate::db::backup::backups_dir(&db_path))
+}
+
+/// Open the backups folder in the system file manager. Spawned directly (the
+/// shell plugin's `open` is deprecated in favor of a whole extra plugin — not
+/// worth it for one folder).
+#[tauri::command]
+pub fn open_backups_dir(app: tauri::AppHandle) -> AppResult<()> {
+    let dir = crate::db::backup::backups_dir(&app_db_path(&app)?);
+    std::fs::create_dir_all(&dir)?;
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(target_os = "windows") {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(opener)
+        .arg(&dir)
+        .spawn()
+        .map_err(|e| AppError::Other(format!("open folder: {e}")))?;
+    Ok(())
+}
+
+// ===========================================================================
+// Recovery — commands that work WITHOUT AppState (startup failed). They take
+// AppHandle and gate on RecoveryInfo so the live DB can never be raw-copied
+// or renamed out from under the writer in healthy mode.
+// ===========================================================================
+
+#[derive(serde::Serialize)]
+pub struct StartupStatus {
+    pub ok: bool,
+    pub error: Option<String>,
+    pub db_path: Option<String>,
+}
+
+/// Which mode is the app in? The frontend's Boot gate calls this before
+/// mounting anything that would invoke a State-backed command.
+#[tauri::command]
+pub fn startup_status(app: tauri::AppHandle) -> StartupStatus {
+    if app.try_state::<Arc<AppState>>().is_some() {
+        return StartupStatus {
+            ok: true,
+            error: None,
+            db_path: None,
+        };
+    }
+    match app.try_state::<crate::RecoveryInfo>() {
+        Some(r) => StartupStatus {
+            ok: false,
+            error: Some(r.error.clone()),
+            db_path: Some(r.db_path.display().to_string()),
+        },
+        None => StartupStatus {
+            ok: false,
+            error: Some("startup state missing (setup did not run?)".into()),
+            db_path: None,
+        },
+    }
+}
+
+fn recovery_info(app: &tauri::AppHandle) -> AppResult<tauri::State<'_, crate::RecoveryInfo>> {
+    app.try_state::<crate::RecoveryInfo>().ok_or_else(|| {
+        AppError::Invalid("recovery actions are only available when startup failed".into())
+    })
+}
+
+/// Raw file copy of the (unopenable) DB + WAL sidecars into backups/.
+#[tauri::command]
+pub fn recovery_backup_db(app: tauri::AppHandle) -> AppResult<String> {
+    let info = recovery_info(&app)?;
+    let dest = crate::db::backup::raw_copy(&info.db_path)?;
+    tracing::warn!(path = %dest.display(), "recovery: raw DB backup saved");
+    Ok(dest.display().to_string())
+}
+
+/// Move the broken DB aside (rename, never delete) and restart into a fresh one.
+#[tauri::command]
+pub fn recovery_reset_db(app: tauri::AppHandle) -> AppResult<()> {
+    let info = recovery_info(&app)?;
+    let moved = crate::db::backup::reset_aside(&info.db_path)?;
+    tracing::warn!(moved = %moved.display(), "recovery: DB moved aside; restarting");
+    app.restart();
 }

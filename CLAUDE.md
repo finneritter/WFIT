@@ -53,7 +53,8 @@ Retired (do not build from): `reference/design/` (old "Primely" hi-fi),
 ## Hard constraints (carry into all work)
 
 - **warframe.market is the sole source for items/prices/ducats/sets.** Headers on every request:
-  `User-Agent: wfit-desktop/0.1`, `Language: en`, `Platform: pc`, `Accept: application/json`.
+  `User-Agent: wfit-desktop/<crate version>` (one shared constant: `lib.rs::USER_AGENT`, tied to
+  `CARGO_PKG_VERSION`), `Language: en`, `Platform: pc`, `Accept: application/json`.
   Global throttle: **350ms min-gap (~3 req/s)** across ALL warframe.market calls — one chokepoint.
 - **No programmatic DE login** — POSTing credentials to DE's auth endpoint is dead (Akamai-blocked /
   decommissioned). The safe, default "sign-in" is to a *warframe.market* account, only for reading
@@ -75,9 +76,11 @@ Retired (do not build from): `reference/design/` (old "Primely" hi-fi),
 - **Session start: `git pull` before doing anything else.** This repo is worked on from two
   machines (Linux desktop + Mac laptop), so the local checkout may be behind `main`. If the working
   tree is dirty or the pull reports a divergence, stop and ask instead of merging/rebasing blindly.
-- `npm run tauri:dev` — run the desktop app (bakes in the WebKitGTK/Wayland env vars; plain
-  `tauri dev` crashes on this box). `npm run dev` — frontend only. `scripts/install.sh` — build an
-  optimized release and install it as a launchable app (search "WFIT" in KRunner).
+- `npm run tauri:dev` — run the desktop app. The WebKitGTK/Wayland workaround env vars are set in
+  `main()` on Linux (override by exporting them yourself). `npm run dev` — frontend only.
+  `scripts/install.sh` — build an optimized release and install it as a launchable app (search
+  "WFIT" in KRunner). Release bundles: push a `v*` tag → `.github/workflows/release.yml` builds
+  Linux + Windows bundles into a draft GitHub release.
 - `npm run build` — `tsc` typecheck + Vite build. In `src-tauri/`: `cargo build` / `cargo clippy` /
   `cargo test` (Rust unit tests exist — pricing/valuation/gamescan logic).
 - "Verify" = gates green (`cargo test`/`clippy`, `tsc`, `npm run build`, `biome`) AND it builds/runs.

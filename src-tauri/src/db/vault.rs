@@ -35,7 +35,7 @@ fn bundled_map() -> Vec<(String, bool)> {
 /// request, but TTL-gated to ~monthly so it almost always no-ops.
 async fn fetch_remote() -> AppResult<Vec<(String, bool)>> {
     let http = reqwest::Client::builder()
-        .user_agent("wfit-desktop/0.1")
+        .user_agent(crate::USER_AGENT)
         .timeout(std::time::Duration::from_secs(120))
         .build()?;
     let bytes = http

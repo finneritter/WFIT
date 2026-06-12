@@ -249,9 +249,9 @@ npm run dev                 # frontend only (no Rust window)
 npm run build               # tsc typecheck + Vite production build
 ```
 
-`npm run tauri:dev` wraps `tauri dev` with the WebKitGTK/Wayland env vars this machine needs
-(`WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1`); plain `tauri dev` crashes on
-Wayland with a renderer bug.
+The WebKitGTK/Wayland renderer workaround (`WEBKIT_DISABLE_DMABUF_RENDERER=1
+WEBKIT_DISABLE_COMPOSITING_MODE=1`) is set inside `main()` on Linux — no wrapper needed; export the
+vars yourself to override.
 
 **Linux prereq:** `webkit2gtk-4.1` (`sudo pacman -S webkit2gtk-4.1` on CachyOS).
 

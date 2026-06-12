@@ -1,8 +1,10 @@
 // Thin invoke() wrappers around the Rust command surface. All domain transforms
 // live in Rust; these just type the boundary.
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   ArcaneDashboard,
+  BackupInfo,
   BuyRow,
   CatalogRow,
   DucatRow,
@@ -20,12 +22,26 @@ import type {
   ScanApply,
   ScanDiffRow,
   SetRow,
+  StartupStatus,
   Summary,
   TrendsData,
   WatchRow,
   WfmAccount,
   Worldstate,
 } from "./types";
+
+// app
+export const appVersion = () => getVersion();
+
+// startup / recovery (work without AppState — usable on the recovery screen)
+export const startupStatus = () => invoke<StartupStatus>("startup_status");
+export const recoveryBackupDb = () => invoke<string>("recovery_backup_db");
+export const recoveryResetDb = () => invoke<void>("recovery_reset_db");
+
+// backups
+export const backupNow = () => invoke<string>("backup_now");
+export const listBackups = () => invoke<BackupInfo[]>("list_backups");
+export const openBackupsDir = () => invoke<void>("open_backups_dir");
 
 // catalog
 export const catalogCount = () => invoke<number>("catalog_count");

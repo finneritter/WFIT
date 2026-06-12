@@ -140,7 +140,7 @@ async fn hold(status: &str, rx: &mut watch::Receiver<Desired>) -> HoldEnd {
     if let Ok(v) = WS_PROTOCOL.parse() {
         headers.insert("Sec-WebSocket-Protocol", v);
     }
-    if let Ok(v) = "wfit-desktop/0.1".parse() {
+    if let Ok(v) = crate::USER_AGENT.parse() {
         headers.insert("User-Agent", v);
     }
 

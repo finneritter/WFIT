@@ -15,7 +15,7 @@ const HOST: &str = "https://mobile.warframe.com";
 pub async fn fetch_inventory(account_id: &str, nonce: &str) -> AppResult<Value> {
     let url = format!("{HOST}/api/inventory.php?accountId={account_id}&nonce={nonce}");
     let client = reqwest::Client::builder()
-        .user_agent("wfit-desktop/0.1")
+        .user_agent(crate::USER_AGENT)
         .timeout(Duration::from_secs(30))
         .build()?;
     let resp = client.get(url).send().await?.error_for_status()?;

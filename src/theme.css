@@ -3204,6 +3204,88 @@ code {
   color: var(--soft);
   border-color: var(--line-2);
 }
+
+/* Startup-failure recovery screen (RecoveryScreen.tsx) */
+.recovery {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.recovery-panel {
+  max-width: 640px;
+  width: 100%;
+  border-color: var(--neg);
+}
+.recovery-panel .tpanel-h h3 {
+  color: var(--neg);
+}
+.recovery-body {
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.recovery-err {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--neg);
+  padding: 9px 11px;
+  margin: 10px 0;
+}
+.recovery-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0 8px;
+}
+.recovery-actions .btn.warn {
+  background: var(--neg);
+  color: #fff;
+  border-color: var(--neg);
+}
+.recovery-ok {
+  color: var(--pos);
+}
+.recovery-fail {
+  color: var(--neg);
+}
+
+/* Settings → Backups list */
+.backup-list {
+  border-top: 1px solid var(--line);
+}
+.backup-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 5px 14px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+}
+.backup-row:first-child {
+  border-top: none;
+}
+.backup-row .bk-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.backup-row .bk-size {
+  color: var(--soft);
+}
+.backup-row .bk-date {
+  font-size: 10.5px;
+}
 .ws-stale {
   margin-bottom: 12px;
   padding: 9px 12px;

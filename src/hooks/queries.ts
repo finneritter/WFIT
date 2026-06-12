@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo } from "react";
 import * as api from "../lib/api";
+import { pushToast } from "../lib/toast";
 import type { CatalogRow, RepriceApply, ScanApply } from "../lib/types";
 
 type QC = ReturnType<typeof useQueryClient>;
@@ -43,6 +44,7 @@ export const keys = {
   wfmAccount: ["wfmAccount"] as const,
   listings: ["listings"] as const,
   gameScan: ["gameScan"] as const,
+  backups: ["backups"] as const,
 };
 
 // Anything that touches inventory ripples into these derived views.
@@ -67,6 +69,12 @@ function invalidateInventoryDerived(qc: QC) {
 }
 
 // ---- reads ----
+export const useAppVersion = () =>
+  useQuery({
+    queryKey: ["appVersion"],
+    queryFn: api.appVersion,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 export const useInventory = () => useQuery({ queryKey: keys.inventory, queryFn: api.getInventory });
 export const useSummary = () => useQuery({ queryKey: keys.summary, queryFn: api.getSummary });
 export const useSales = () => useQuery({ queryKey: keys.sales, queryFn: () => api.getSales() });
@@ -390,6 +398,19 @@ export function useRebuildCache() {
   return useMutation({
     mutationFn: () => api.rebuildCache(),
     onSuccess: () => qc.invalidateQueries(), // caches wiped — refetch everything
+  });
+}
+
+// ---- backups ----
+export const useBackups = () => useQuery({ queryKey: keys.backups, queryFn: api.listBackups });
+export function useBackupNow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.backupNow(),
+    onSuccess: (path) => {
+      pushToast(`Backup saved: ${path}`, "info");
+      qc.invalidateQueries({ queryKey: keys.backups });
+    },
   });
 }
 

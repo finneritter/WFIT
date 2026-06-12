@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { GameScanPanel } from "../components/GameScanPanel";
 import type { ScreenId } from "../components/Sidebar";
 import {
+  useAppVersion,
+  useBackupNow,
+  useBackups,
   useCatalogRefresh,
   useExcludedMinPlat,
   useExcludedMinPlatByCat,
@@ -16,6 +19,9 @@ import {
   useWfmAccount,
 } from "../hooks/queries";
 
+const fmtBytes = (n: number): string =>
+  n >= 1_048_576 ? `${(n / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+
 // Categories that can have a per-category cheap-item floor.
 const CAT_FLOORS: [string, string][] = [
   ["warframe", "Warframe"],
@@ -24,7 +30,7 @@ const CAT_FLOORS: [string, string][] = [
   ["mod", "Mod"],
   ["arcane", "Arcane"],
 ];
-import { wipeApp } from "../lib/api";
+import { openBackupsDir, wipeApp } from "../lib/api";
 import { syncedAgo } from "../lib/format";
 import {
   FONTS,
@@ -152,6 +158,9 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
   const [prefs, setPrefs] = useState<Prefs>(() => loadPrefs());
   const { data: summary } = useSummary();
   const { data: account } = useWfmAccount();
+  const { data: version } = useAppVersion();
+  const { data: backups = [] } = useBackups();
+  const backup = useBackupNow();
   const prices = usePricesRefresh();
   const catalog = useCatalogRefresh();
   const sets = useSetsRefresh();
@@ -410,6 +419,42 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
 
       <section className="tpanel">
         <div className="tpanel-h">
+          <h3>Backups</h3>
+          <span className="meta">snapshots also happen automatically before any DB migration</span>
+        </div>
+        <Row
+          label="Back up now"
+          hint="Snapshot the database into …/backups — the newest 10 are kept"
+        >
+          <button
+            type="button"
+            className="btn"
+            disabled={backup.isPending}
+            onClick={() => backup.mutate()}
+          >
+            {backup.isPending ? "Backing up…" : "Back up"}
+          </button>{" "}
+          <button type="button" className="btn" onClick={() => openBackupsDir()}>
+            Open folder
+          </button>
+        </Row>
+        {backups.length === 0 ? (
+          <div className="empty">No backups yet.</div>
+        ) : (
+          <div className="backup-list">
+            {backups.map((b) => (
+              <div key={b.file_name} className="backup-row">
+                <span className="num bk-name">{b.file_name}</span>
+                <span className="num bk-size">{fmtBytes(b.size_bytes)}</span>
+                <span className="muted bk-date">{new Date(b.modified_at).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="tpanel">
+        <div className="tpanel-h">
           <h3>warframe.market account</h3>
         </div>
         <Row
@@ -433,7 +478,7 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
           <h3>About</h3>
         </div>
         <Row label="Version" hint="WFIT — Warframe Item Tracker">
-          <span className="num">v0.1.0</span>
+          <span className="num">v{version ?? "…"}</span>
         </Row>
         <Row
           label="Data sources"

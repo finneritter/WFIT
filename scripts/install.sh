@@ -20,15 +20,15 @@ mkdir -p "$(dirname "$BIN")" "$(dirname "$ICON")" "$(dirname "$DESKTOP")"
 install -m755 "$REPO/src-tauri/target/release/wfit" "$BIN"
 install -m644 "$REPO/src-tauri/icons/128x128@2x.png" "$ICON"
 
-# WebKit/Wayland env vars are baked into Exec — without them the GUI crashes
-# on this machine's Wayland session (known WebKitGTK renderer bug).
+# The WebKit/Wayland renderer workaround lives in main() now (Linux-only,
+# override by exporting the WEBKIT_* vars yourself) — Exec stays plain.
 cat > "$DESKTOP" <<EOF
 [Desktop Entry]
 Type=Application
 Name=WFIT
 GenericName=Warframe Item Tracker
 Comment=Track Warframe items, warframe.market prices, sets and sales
-Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 $BIN
+Exec=$BIN
 Icon=wfit
 Terminal=false
 Categories=Utility;

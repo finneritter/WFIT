@@ -256,7 +256,7 @@ mod tests {
     #[ignore]
     async fn arbys_probe() {
         let http = Client::builder()
-            .user_agent("wfit-desktop/0.1")
+            .user_agent(crate::USER_AGENT)
             .timeout(std::time::Duration::from_secs(20))
             .build()
             .unwrap();

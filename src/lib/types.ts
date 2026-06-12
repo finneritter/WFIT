@@ -478,6 +478,18 @@ export interface Invasion {
   completion: number; // attacker-side progress, 0–100
   eta: string | null;
 }
+// Startup health + DB backups
+export interface StartupStatus {
+  ok: boolean;
+  error: string | null;
+  db_path: string | null;
+}
+export interface BackupInfo {
+  file_name: string;
+  size_bytes: number;
+  modified_at: string;
+}
+
 export interface PricingProgress {
   active: boolean;
   priced: number;

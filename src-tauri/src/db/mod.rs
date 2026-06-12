@@ -9,6 +9,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 pub mod arcanes;
+pub mod backup;
 pub mod buylist;
 pub mod catalog;
 pub mod gamescan;
@@ -22,6 +23,11 @@ pub mod trends;
 pub mod vault;
 pub mod watchlist;
 pub mod wfm;
+
+/// The schema version the MIGRATIONS list produces (`PRAGMA user_version` after
+/// `to_latest`). Bump in lockstep when appending a migration — the pre-migration
+/// backup gate and its test both pin it.
+pub const SCHEMA_VERSION: i64 = 10;
 
 // Append future migrations here; never edit a shipped one.
 static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
@@ -72,9 +78,33 @@ impl Db {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         tune(&conn)?;
+
+        // Existing DB about to be migrated → snapshot it first, so a botched
+        // migration can never be the thing that loses the inventory/sales data.
+        // A failed snapshot is logged, not fatal: a backup hiccup must not
+        // block startup on a healthy DB.
+        let user_version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+        let mut pre_migration: Option<std::path::PathBuf> = None;
+        if user_version > 0 && user_version < SCHEMA_VERSION {
+            match backup::snapshot_conn(&conn, &backup::backups_dir(path), Some("pre-migration")) {
+                Ok(p) => {
+                    tracing::info!(path = %p.display(), "pre-migration snapshot saved");
+                    pre_migration = Some(p);
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "pre-migration snapshot failed; migrating anyway")
+                }
+            }
+        }
         MIGRATIONS
             .to_latest(&mut conn)
-            .map_err(AppError::Migration)?;
+            .map_err(|e| match &pre_migration {
+                Some(p) => AppError::Other(format!(
+                    "migration failed: {e}. A pre-migration snapshot was saved to {}",
+                    p.display()
+                )),
+                None => AppError::Migration(e),
+            })?;
 
         // Build the read pool AFTER migrations so the schema is in place. Each
         // reader is `query_only` so an accidental write routed to `read` errors
@@ -203,6 +233,21 @@ mod tests {
         );
         assert!(n >= 0);
         let _ = std::fs::remove_file(&dir);
+    }
+
+    // SCHEMA_VERSION must track the migration list — the pre-migration backup
+    // gate compares user_version against it. Forgetting the bump would silently
+    // skip the snapshot for the new migration.
+    #[test]
+    fn schema_version_matches_migrations() {
+        let db = testutil::test_db("schemaver");
+        let v: i64 = db
+            .with(|c| Ok(c.query_row("PRAGMA user_version", [], |r| r.get(0))?))
+            .unwrap();
+        assert_eq!(
+            v, SCHEMA_VERSION,
+            "bump SCHEMA_VERSION with the migration list"
+        );
     }
 
     // Upgrade-path guard: applying every migration in sequence must succeed on a

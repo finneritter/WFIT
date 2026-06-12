@@ -4,7 +4,7 @@
 //! Detail:     GET https://api.warframe.market/v2/items/<slug>    (plural; singular 404s)
 //! Statistics: GET https://api.warframe.market/v1/items/<slug>/statistics  (v2 404s)
 //!
-//! Headers on every request: User-Agent: wfit-desktop/0.1, Language: en,
+//! Headers on every request: User-Agent: wfit-desktop/<crate version> (lib.rs USER_AGENT), Language: en,
 //! Platform: pc, Accept: application/json. ONE global throttle (350 ms min-gap,
 //! ~3 req/s) across every warframe.market call — the single rate-limit chokepoint.
 
@@ -45,7 +45,7 @@ impl Market {
             reqwest::header::HeaderValue::from_static("application/json"),
         );
         let http = Client::builder()
-            .user_agent("wfit-desktop/0.1")
+            .user_agent(crate::USER_AGENT)
             .default_headers(headers)
             .timeout(Duration::from_secs(10))
             .build()

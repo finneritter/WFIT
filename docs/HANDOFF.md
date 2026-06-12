@@ -22,11 +22,15 @@ DB via `#[ignore]` probe tests (see below).
 
 ```fish
 pkill -x wfit                       # stop the running instance (exact-name; broad pkill -f self-kills the shell)
-npm run tauri:dev                   # dev; bakes in the WebKitGTK/Wayland env vars (plain `tauri dev` crashes)
+npm run tauri:dev                   # dev; the WebKitGTK/Wayland env-var workaround lives in main() now
 scripts/install.sh                  # build optimized release + install as a launchable app ("WFIT" in KRunner)
 ```
 - **Linux prereq:** `webkit2gtk-4.1` (≥2.46 for `content-visibility`; this box runs 2.52).
-- Live DB: `~/.local/share/dev.finn.wfit/wfit.sqlite`. Migrations `0001`–`0009` applied on launch.
+- Live DB: `~/.local/share/dev.finn.wfit/wfit.sqlite`. Migrations `0001`–`0010` applied on launch
+  (`db/mod.rs::SCHEMA_VERSION` must be bumped with the list). A pre-migration snapshot is saved
+  automatically to `…/backups/` before any pending migration; manual backups via Settings →
+  Backups (`VACUUM INTO`, newest 10 kept). If the DB fails to open/migrate, the app boots into a
+  recovery screen (back up / reset-aside / quit) instead of panicking.
 - **Live-DB verification pattern (used heavily this session):** `#[ignore]` probe tests open a DB copy
   and print/compare derived values. Run: `WFIT_PROBE_DB=/tmp/copy.sqlite cargo test --lib <probe>
   -- --ignored --nocapture`. Make the copy with `sqlite3 $DB ".backup /tmp/copy.sqlite"` (consistent

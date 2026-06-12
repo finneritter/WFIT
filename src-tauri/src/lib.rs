@@ -15,6 +15,10 @@ use std::sync::Arc;
 use tauri::Manager;
 use tracing_subscriber::EnvFilter;
 
+/// One User-Agent for every outbound request; tracks the crate version so a
+/// release bump can never leave a stale version string behind.
+pub const USER_AGENT: &str = concat!("wfit-desktop/", env!("CARGO_PKG_VERSION"));
+
 pub struct AppState {
     pub db: db::Db,
     pub market: market::Market,
@@ -25,6 +29,15 @@ pub struct AppState {
     /// can show a "syncing…" indicator the entire time prices are still filling in —
     /// distinguishing "still loading" from a settled value (incl. a fresh post-wipe sync).
     pub pricing_active: AtomicBool,
+}
+
+/// Managed INSTEAD of AppState when startup fails (corrupt DB, failed
+/// migration, unwritable data dir): the window still opens and the frontend
+/// renders the recovery screen from this. Mutually exclusive with AppState —
+/// `commands::startup_status` tells the frontend which mode it's in.
+pub struct RecoveryInfo {
+    pub error: String,
+    pub db_path: std::path::PathBuf,
 }
 
 const CATALOG_STALE_HOURS: i64 = 24;
@@ -97,45 +110,21 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
-            let app_data_dir = app.path().app_data_dir().expect("resolve app data dir");
-            std::fs::create_dir_all(&app_data_dir).expect("create app data dir");
+            // app_data_dir failing is OS-level breakage; fall back so even that
+            // lands in the recovery screen instead of a pre-window panic.
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
             init_logging(&app_data_dir.join("logs"));
-            let db_path = app_data_dir.join("wfit.sqlite");
-            tracing::info!(?db_path, "opening database");
-
-            let db = db::Db::open(&db_path).expect("open db");
-            // Presence is per-session and not restored: we hold no socket until the
-            // user picks a status, so reset the mirror to invisible on launch (it
-            // naturally clears to offline when WFIT closes).
-            let _ = db::wfm::set_status(&db, "invisible");
-            let (presence, presence_rx) = wfm_socket::Presence::new();
-            let state = Arc::new(AppState {
-                db,
-                market: market::Market::new(),
-                worldstate: worldstate::WorldstateClient::new(),
-                presence,
-                pricing_active: AtomicBool::new(false),
-            });
-            app.manage(state.clone());
-
-            // Presence keeper: holds the warframe.market socket open while the
-            // user is online/ingame so their orders show active to buyers.
-            tauri::async_runtime::spawn(wfm_socket::supervisor(presence_rx));
-
-            // Keep the worldstate cache confirmed-fresh every ~3min — the
-            // Rotation screen's own poll stops when the window is backgrounded.
-            state.worldstate.spawn_refresher();
-
-            // Live price heartbeat: rolling tiered repricer + UI notifications,
-            // so data keeps arriving the whole session, not just at launch.
-            spawn_price_heartbeat(state.clone(), app.handle().clone());
-
-            // Kick off catalog/price warm-up off the UI thread; never block launch.
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = launch_refresh(state).await {
-                    tracing::warn!(error = %e, "launch refresh failed");
-                }
-            });
+            if let Err(e) = init_app(app, &app_data_dir) {
+                tracing::error!(error = %e, "startup failed — entering recovery mode");
+                app.manage(RecoveryInfo {
+                    error: e.to_string(),
+                    db_path: app_data_dir.join("wfit.sqlite"),
+                });
+            }
+            // Never Err: the window must open either way so the user can act.
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -187,6 +176,14 @@ pub fn run() {
             commands::get_item_sellers,
             commands::rebuild_cache,
             commands::wipe_app,
+            // backups
+            commands::backup_now,
+            commands::list_backups,
+            commands::open_backups_dir,
+            // startup / recovery
+            commands::startup_status,
+            commands::recovery_backup_db,
+            commands::recovery_reset_db,
             // worldstate
             commands::get_worldstate,
             commands::force_worldstate_refresh,
@@ -218,6 +215,50 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Everything fallible about startup: data dir, DB open/migration, state +
+/// background tasks. On Err the caller manages [`RecoveryInfo`] instead of
+/// AppState and the frontend shows the recovery screen.
+fn init_app(app: &tauri::App, app_data_dir: &std::path::Path) -> error::AppResult<()> {
+    std::fs::create_dir_all(app_data_dir)?;
+    let db_path = app_data_dir.join("wfit.sqlite");
+    tracing::info!(?db_path, "opening database");
+
+    let db = db::Db::open(&db_path)?;
+    // Presence is per-session and not restored: we hold no socket until the
+    // user picks a status, so reset the mirror to invisible on launch (it
+    // naturally clears to offline when WFIT closes).
+    let _ = db::wfm::set_status(&db, "invisible");
+    let (presence, presence_rx) = wfm_socket::Presence::new();
+    let state = Arc::new(AppState {
+        db,
+        market: market::Market::new(),
+        worldstate: worldstate::WorldstateClient::new(),
+        presence,
+        pricing_active: AtomicBool::new(false),
+    });
+    app.manage(state.clone());
+
+    // Presence keeper: holds the warframe.market socket open while the
+    // user is online/ingame so their orders show active to buyers.
+    tauri::async_runtime::spawn(wfm_socket::supervisor(presence_rx));
+
+    // Keep the worldstate cache confirmed-fresh every ~3min — the
+    // Rotation screen's own poll stops when the window is backgrounded.
+    state.worldstate.spawn_refresher();
+
+    // Live price heartbeat: rolling tiered repricer + UI notifications,
+    // so data keeps arriving the whole session, not just at launch.
+    spawn_price_heartbeat(state.clone(), app.handle().clone());
+
+    // Kick off catalog/price warm-up off the UI thread; never block launch.
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = launch_refresh(state).await {
+            tracing::warn!(error = %e, "launch refresh failed");
+        }
+    });
+    Ok(())
 }
 
 /// RAII flag for the "syncing…" indicator: marks `pricing_active` true for its
@@ -498,4 +539,18 @@ pub(crate) async fn refresh_owned_orders(
     }
     tracing::info!(priced, of = slugs.len(), "live sell orders refreshed");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn user_agent_tracks_crate_version() {
+        assert_eq!(
+            USER_AGENT,
+            format!("wfit-desktop/{}", env!("CARGO_PKG_VERSION"))
+        );
+        assert!(USER_AGENT.starts_with("wfit-desktop/1."));
+    }
 }

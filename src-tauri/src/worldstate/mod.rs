@@ -176,7 +176,7 @@ impl Default for WorldstateClient {
 impl WorldstateClient {
     pub fn new() -> Self {
         let http = Client::builder()
-            .user_agent("wfit-desktop/0.1")
+            .user_agent(crate::USER_AGENT)
             .timeout(Duration::from_secs(20))
             .build()
             .expect("reqwest client");
