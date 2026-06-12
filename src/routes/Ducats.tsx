@@ -1,20 +1,57 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Icon } from "../components/Icon";
 import { ItemTags } from "../components/ItemTags";
-import { ItemName, StatBox, TableStatus, rowAction } from "../components/ui";
+import { Chip, ItemName, SortTh, StatBox, TableStatus, rowAction } from "../components/ui";
 import { useDucats, useListedSlugs } from "../hooks/queries";
+import { useColumnSort, usePaged } from "../hooks/useTable";
 import { clsx, fmt } from "../lib/format";
+import { usePersisted } from "../lib/persist";
+import type { DucatRow } from "../lib/types";
+
+const TRASH_PLAT = 8; // the "trash-tier" cutoff used in the stat band
+const HIGH_DP = 10; // d/p at/above which dissolving clearly beats selling
+
+type DucatCol = "name" | "qty" | "plat" | "ducats" | "dp";
+const DUCAT_CMP: Record<DucatCol, (a: DucatRow, b: DucatRow) => number> = {
+  name: (a, b) => a.display_name.localeCompare(b.display_name),
+  qty: (a, b) => a.qty - b.qty,
+  plat: (a, b) => (a.median_plat ?? 0) - (b.median_plat ?? 0),
+  ducats: (a, b) => a.ducats - b.ducats,
+  dp: (a, b) => (a.ducats_per_plat ?? 0) - (b.ducats_per_plat ?? 0),
+};
 
 export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
   const { data: rows = [], isLoading, isError } = useDucats();
   const listed = useListedSlugs();
+  const [search, setSearch] = useState("");
+  const [highDp, setHighDp] = usePersisted<"1" | "0">("wfit-duc-highdp", "0");
+  const [trash, setTrash] = usePersisted<"1" | "0">("wfit-duc-trash", "0");
+  const [vaulted, setVaulted] = usePersisted<"1" | "0">("wfit-duc-vault", "0");
+  const { sort, cycle, apply } = useColumnSort<DucatRow, DucatCol>("wfit-duc-sort", DUCAT_CMP, {
+    key: "dp",
+    dir: "desc",
+  });
 
   const stats = useMemo(() => {
     const invDucats = rows.reduce((s, r) => s + r.ducats * r.qty, 0);
-    const trash = rows.filter((r) => (r.median_plat ?? 0) <= 8);
-    const trashDucats = trash.reduce((s, r) => s + r.ducats * r.qty, 0);
+    const trashRows = rows.filter((r) => (r.median_plat ?? 0) <= TRASH_PLAT);
+    const trashDucats = trashRows.reduce((s, r) => s + r.ducats * r.qty, 0);
     const avg = rows.length ? Math.round(rows.reduce((s, r) => s + r.ducats, 0) / rows.length) : 0;
-    return { invDucats, trashDucats, trashCount: trash.length, avg };
+    return { invDucats, trashDucats, trashCount: trashRows.length, avg };
   }, [rows]);
+
+  const q = search.trim().toLowerCase();
+  const view = useMemo(() => {
+    const filtered = rows.filter((r) => {
+      if (highDp === "1" && (r.ducats_per_plat ?? 0) < HIGH_DP) return false;
+      if (trash === "1" && (r.median_plat ?? 0) > TRASH_PLAT) return false;
+      if (vaulted === "1" && !r.is_vaulted) return false;
+      if (q && !`${r.display_name} ${r.part_type}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+    return apply(filtered);
+  }, [rows, highDp, trash, vaulted, q, apply]);
+  const { visible, hasMore, shown, total, more } = usePaged(view, 60);
 
   return (
     <>
@@ -25,6 +62,27 @@ export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
         <StatBox k="Avg ducats/part" v={fmt(stats.avg)} unit="d" />
       </div>
 
+      <div className="mkt-filters" style={{ marginBottom: 12 }}>
+        <span className="search mkt-search" style={{ maxWidth: 220 }}>
+          <Icon name="search" />
+          <input
+            placeholder="Filter parts…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </span>
+        <span className="mkt-sep" />
+        <Chip active={highDp === "1"} onClick={() => setHighDp(highDp === "1" ? "0" : "1")}>
+          d/p ≥ {HIGH_DP}
+        </Chip>
+        <Chip active={trash === "1"} onClick={() => setTrash(trash === "1" ? "0" : "1")}>
+          Trash ≤ {TRASH_PLAT}p
+        </Chip>
+        <Chip active={vaulted === "1"} onClick={() => setVaulted(vaulted === "1" ? "0" : "1")}>
+          Vaulted
+        </Chip>
+      </div>
+
       <div className="tpanel">
         <div className="tpanel-h">
           <h3>Best ducat value</h3>
@@ -32,30 +90,31 @@ export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
         <table className="dtable">
           <thead>
             <tr>
-              <th>Part</th>
-              <th className="r">Plat</th>
-              <th className="r">Ducats</th>
-              <th className="r">d/p</th>
+              <SortTh<DucatCol> label="Part" col="name" sort={sort} onSort={cycle} />
+              <SortTh<DucatCol> label="Qty" col="qty" sort={sort} onSort={cycle} right />
+              <SortTh<DucatCol> label="Plat" col="plat" sort={sort} onSort={cycle} right />
+              <SortTh<DucatCol> label="Ducats" col="ducats" sort={sort} onSort={cycle} right />
+              <SortTh<DucatCol> label="d/p" col="dp" sort={sort} onSort={cycle} right />
               <th>Verdict</th>
             </tr>
           </thead>
           <tbody>
-            {isLoading || isError || rows.length === 0 ? (
+            {isLoading || isError || visible.length === 0 ? (
               <TableStatus
-                span={5}
+                span={6}
                 loading={isLoading}
                 error={isError}
                 emptyText="Own some prime parts to see ducat efficiency."
               />
             ) : (
-              rows.map((r) => (
+              visible.map((r) => (
                 <tr key={r.slug} {...rowAction(() => onOpen(r.slug))}>
                   <td>
                     <ItemName
                       name={r.display_name}
                       plat={r.median_plat}
                       thumb={r.thumbnail_url}
-                      sub={`${r.part_type} · ×${r.qty}`}
+                      sub={r.part_type}
                       tags={
                         <ItemTags
                           trend={r.trend}
@@ -65,9 +124,10 @@ export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
                       }
                     />
                   </td>
+                  <td className="r num">×{fmt(r.qty)}</td>
                   <td className="r">{fmt(r.median_plat)}p</td>
                   <td className="r">{fmt(r.ducats)}d</td>
-                  <td className="r">
+                  <td className="r num">
                     {r.ducats_per_plat == null ? "—" : r.ducats_per_plat.toFixed(1)}
                   </td>
                   <td>
@@ -80,6 +140,11 @@ export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
             )}
           </tbody>
         </table>
+        {hasMore ? (
+          <button type="button" className="btn load-more" onClick={more}>
+            Showing {shown} of {fmt(total)} — load more
+          </button>
+        ) : null}
       </div>
     </>
   );

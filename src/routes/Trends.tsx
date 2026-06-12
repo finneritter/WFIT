@@ -1,8 +1,9 @@
-import { useState } from "react";
 import { MiniArea, RangeBar, Spark } from "../components/charts";
 import { BlockStatus, Glyph } from "../components/ui";
 import { useTrends } from "../hooks/queries";
+import { usePaged } from "../hooks/useTable";
 import { CATEGORY_LABELS, clsx, fmt, pct } from "../lib/format";
+import { usePersisted } from "../lib/persist";
 import type { HeatRow, TrendRow } from "../lib/types";
 
 const TFS = ["24h", "7d", "30d", "90d"] as const;
@@ -47,6 +48,9 @@ function SignalRow({
       <span className="sr">
         <span className="sp num">{fmt(row.median_plat)}p</span>
         <Move delta={row.delta} z={row.z} />
+        <span className="svol num muted" title="avg daily trade volume (liquidity)">
+          {fmt(row.volume)}/d
+        </span>
       </span>
     </button>
   );
@@ -67,6 +71,7 @@ function Panel({
   empty: string;
   onOpen: (s: string) => void;
 }) {
+  const { visible, hasMore, shown, total, more } = usePaged(rows, 12);
   return (
     <div className="tpanel">
       <div className="tpanel-h">
@@ -76,7 +81,16 @@ function Panel({
       {rows.length === 0 ? (
         <div className="empty">{empty}</div>
       ) : (
-        rows.map((r) => <SignalRow key={r.slug} row={r} mode={mode} onOpen={onOpen} />)
+        <>
+          {visible.map((r) => (
+            <SignalRow key={r.slug} row={r} mode={mode} onOpen={onOpen} />
+          ))}
+          {hasMore ? (
+            <button type="button" className="btn load-more" onClick={more}>
+              Showing {shown} of {fmt(total)} — load more
+            </button>
+          ) : null}
+        </>
       )}
     </div>
   );
@@ -106,8 +120,9 @@ function HeatRowView({ row, scale }: { row: HeatRow; scale: number }) {
 }
 
 export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
-  const [tf, setTf] = useState<(typeof TFS)[number]>("7d");
-  const [excludeOutliers, setExcludeOutliers] = useState(true);
+  const [tf, setTf] = usePersisted<(typeof TFS)[number]>("wfit-trends-tf", "7d");
+  const [outliers, setOutliers] = usePersisted<"1" | "0">("wfit-trends-outliers", "1");
+  const excludeOutliers = outliers === "1";
   const { data, isLoading, isError } = useTrends(tf, excludeOutliers);
 
   if (isError)
@@ -199,7 +214,7 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
           className="chip"
           aria-pressed={excludeOutliers}
           title="Clamp troll/fat-finger price prints so they don't skew the index or signals"
-          onClick={() => setExcludeOutliers((v) => !v)}
+          onClick={() => setOutliers(excludeOutliers ? "0" : "1")}
         >
           Exclude outliers
         </button>
