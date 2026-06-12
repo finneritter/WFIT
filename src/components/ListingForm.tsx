@@ -8,7 +8,7 @@ import {
 } from "../hooks/queries";
 import { useEscape } from "../hooks/useEscape";
 import { clsx, fmt } from "../lib/format";
-import { Glyph } from "./ui";
+import { Glyph, Scrim } from "./ui";
 
 /** When editing, the order is already posted: rank is fixed, only price/qty/visibility change. */
 export interface ListingEdit {
@@ -144,8 +144,8 @@ export function ListingForm({
   };
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
-      <div className="modal lf-modal" onClick={(e) => e.stopPropagation()}>
+    <Scrim onClose={onClose}>
+      <div className="modal lf-modal">
         <div className="modal-h">
           <h2>{isEdit ? "Edit listing" : "List for sale"}</h2>
           <span style={{ flex: 1 }} />
@@ -206,6 +206,7 @@ export function ListingForm({
                 onChange={(e) => onRankChange(Number.parseInt(e.target.value, 10))}
               >
                 {Array.from({ length: (item.max_rank ?? 0) + 1 }, (_, r) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: r IS the rank — a stable identity, not a position
                   <option key={r} value={r}>
                     Rank {r}
                     {r === 0 ? " (unranked)" : ""}
@@ -303,6 +304,6 @@ export function ListingForm({
           </button>
         </div>
       </div>
-    </div>
+    </Scrim>
   );
 }

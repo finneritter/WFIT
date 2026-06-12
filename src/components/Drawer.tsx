@@ -14,6 +14,7 @@ import type { HistoryPoint } from "../lib/types";
 import { openWiki } from "../lib/wiki";
 import { ListingForm } from "./ListingForm";
 import { type Candle, CandleChart } from "./charts";
+import { Scrim } from "./ui";
 
 const TF = ["24h", "7d", "30d", "90d"] as const;
 const TF_DAYS: Record<string, number> = { "24h": 2, "7d": 7, "30d": 30, "90d": 90 };
@@ -88,6 +89,7 @@ export function Drawer({
     window.addEventListener("pointerup", onUp);
   };
   const grip = (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: pointer-only resize affordance (no keyboard equivalent)
     <div
       className="drawer-grip"
       style={{ right: width }}
@@ -117,9 +119,9 @@ export function Drawer({
 
   if (!item) {
     return (
-      <div className="scrim" onClick={onClose}>
+      <Scrim className="scrim" onClose={onClose}>
         {grip}
-        <div className="drawer" style={{ width }} onClick={(e) => e.stopPropagation()}>
+        <div className="drawer" style={{ width }}>
           <div className="drawer-h">
             <div className="di">
               <div className="nm">{isError ? "Couldn't load this item." : "Loading…"}</div>
@@ -129,7 +131,7 @@ export function Drawer({
             </button>
           </div>
         </div>
-      </div>
+      </Scrim>
     );
   }
 
@@ -146,9 +148,9 @@ export function Drawer({
   const dPerPlat = item.ducats != null && price ? item.ducats / price : null;
 
   return (
-    <div className="scrim" onClick={onClose}>
+    <Scrim className="scrim" onClose={onClose}>
       {grip}
-      <div className="drawer" style={{ width }} onClick={(e) => e.stopPropagation()}>
+      <div className="drawer" style={{ width }}>
         <div className="drawer-h">
           <div className={clsx("ph", `t-${tier(price)}`)}>
             {item.thumbnail_url ? <img src={item.thumbnail_url} alt="" /> : null}
@@ -406,6 +408,6 @@ export function Drawer({
         </div>
       </div>
       {listing ? <ListingForm slug={item.slug} onClose={() => setListing(false)} /> : null}
-    </div>
+    </Scrim>
   );
 }

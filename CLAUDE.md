@@ -17,7 +17,7 @@ pricing, liquidation-adjusted ("realizable") valuation, an **Arcanes/Vosfor diss
 backend perf pass (read-connection pool + batched valuation), UI micro-animations, and per-category
 cheap-item exclusion. The app now has **11 screens** (Arcanes added beyond the 9-screen wireframe).
 `docs/HANDOFF.md` is the current-state doc; read it first. The `.claude/plans/` and
-`reference/CLAUDE_ECONOMIC_RESEARCH/` files are now historical design references, not a to-do list.
+`docs/CLAUDE_ECONOMIC_RESEARCH/` files are now historical design references, not a to-do list.
 
 ## Authoritative documents (read before coding)
 
@@ -122,7 +122,7 @@ Only **multi-copy mod/arcane stacks** are haircut: liquidate into the live **buy
 best-bid-first) then a volume-capped, discounted tail (`TAIL_FACTOR`, `WINDOW_DAYS`); units beyond real
 demand ≈ 0. Exclusions (rarity list + per-category min-plat, `settings`) zero a row's value via the
 `excluded` flag. `Summary.realizable_plat` is the honest headline, `total_plat` the optimistic "ceiling";
-per-item `confidence` gates presentation. Economics in `reference/CLAUDE_ECONOMIC_RESEARCH/`.
+per-item `confidence` gates presentation. Economics in `docs/CLAUDE_ECONOMIC_RESEARCH/`.
 
 **Live heartbeat** (`lib.rs::spawn_price_heartbeat`): a perpetual 45s-tick rolling repricer —
 tiered watchlist (~10min) → owned (~60min) → catalog tail (6h TTL), ~12 stats + ~6 order books per

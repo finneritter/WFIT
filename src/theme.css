@@ -164,17 +164,19 @@ body.light {
   --line-2: #c7ccd4;
   --ink: #14161a;
   --soft: #474b53;
-  --faint: #868b95;
+  /* darkened just enough for WCAG AA on the lightest panel (#f3f4f7):
+     text tokens >= 4.5:1, tier-edge (graphic) tokens >= 3:1 */
+  --faint: #6b707b;
   --hover: #e9ebf0;
   --accent: #2a2d33;
   --accent-ink: #f5f6f8;
-  --pos: #2e9e57;
-  --neg: #cf4436;
-  --hot: #b9781a;
-  --t-exotic: #b2902a;
+  --pos: #257f46;
+  --neg: #ca3e30;
+  --hot: #9b6416;
+  --t-exotic: #aa8928;
   --t-legend: #6f57c4;
   --t-rare: #3d6fc0;
-  --t-basic: #9298a2;
+  --t-basic: #878e99;
 }
 
 * {
@@ -446,6 +448,23 @@ body.flat-deltas .neg {
 }
 .nav-item[aria-current="true"] .ct {
   color: var(--soft);
+}
+
+.nav-group {
+  padding: 2px 0;
+}
+.nav-top + .nav-group {
+  padding-top: 6px;
+}
+.nav-group + .nav-group {
+  border-top: 1px solid var(--line);
+}
+.nav-group-h {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--faint);
+  padding: 8px 12px 3px;
 }
 
 .nav-sp {
@@ -3250,6 +3269,243 @@ code {
   gap: 12px;
   margin-bottom: 12px;
 }
+
+/* ===================== Dashboard (Home) — launch pad ===================== */
+/* ==================================================================
+   Dashboard — Rotation-idiom overview: .fwx hero variant, .rsetbar world
+   strip, "Do next" rows. Reuses .fwx/.rsetbar/.tpanel/.fgroup-h/.arb* CSS.
+   ================================================================== */
+
+/* portfolio hero: accent-tinted .fwx variant (clone of .fwx.hit geometry) */
+.fwx--port {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line-2));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 5%, transparent),
+    var(--panel)
+  );
+}
+.fwx--port .fwx-top .led {
+  background: var(--accent);
+}
+.fwx--port .fwx-top .status {
+  color: var(--accent);
+}
+
+/* world strip: the Rotation reset-bar as one click target, five cells */
+button.rsetbar {
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--sans);
+  color: var(--ink);
+}
+.rsetbar.r5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+.rsetbox .k,
+.rsetbox .v {
+  display: block;
+}
+button.rsetbar:hover .rsetbox {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line-2));
+}
+
+/* "Do next" / movers rows — visual siblings of .arb-row/.nw-row */
+.dx-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink);
+  font-family: var(--sans);
+}
+.dx-row:hover {
+  background: var(--hover);
+}
+.dx-row.mv {
+  grid-template-columns: 1fr auto auto auto;
+}
+.dx-row .dnm {
+  min-width: 0;
+}
+.tpanel-h + .dx-row,
+.fgroup-h + .dx-row {
+  border-top: none;
+}
+.dx-val {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.dx-sum {
+  font-size: 12px;
+  padding: 2px 0;
+}
+.dx-clear {
+  padding: 14px 12px;
+  font-size: 11.5px;
+  color: var(--soft);
+}
+
+/* group headers double as "open the owning screen" buttons */
+button.fgroup-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--sans);
+}
+.fg-go {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .04em;
+  text-transform: none;
+  color: var(--faint);
+}
+button.fgroup-h:hover .fg-go {
+  color: var(--ink);
+}
+
+/* tpanel-header nav link (movers / arbitration / market panels) */
+.tp-link {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--faint);
+}
+.meta + .tp-link {
+  margin-left: 8px;
+}
+.tp-link:hover {
+  color: var(--ink);
+}
+.tpanel-h .meta.pos {
+  color: var(--pos);
+}
+.tpanel-h .meta.neg {
+  color: var(--neg);
+}
+
+/* Market · 30d body */
+.dx-m30 {
+  padding: 10px 12px 6px;
+}
+.dx-m30 > svg {
+  width: 100%;
+  height: 56px;
+  display: block;
+}
+
+/* ---- market search panel body (inside its tpanel) ---- */
+.lb-search {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px 14px 12px;
+}
+.lb-search-rel {
+  position: relative;
+}
+.lb-search .search {
+  padding: 9px 12px;
+  background: var(--bg-2);
+}
+.lb-search .search input {
+  font-size: 13px;
+}
+.lb-search .search svg {
+  width: 16px;
+  height: 16px;
+}
+/* hot-movers mini list — fills the panel under the search */
+.lb-hot {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.lb-hot-h {
+  font-size: 8.5px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--faint);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.lb-hot-empty {
+  font-size: 11px;
+  color: var(--faint);
+  padding: 4px 0;
+}
+.lb-hot-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--line);
+  padding: 6px 2px;
+  cursor: pointer;
+  color: var(--ink);
+  font-family: var(--sans);
+}
+.lb-hot-row:first-of-type {
+  border-top: none;
+}
+.lb-hot-row:hover {
+  background: var(--hover);
+}
+.lb-hot-n {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lb-hot-p {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--soft);
+  flex: none;
+}
+.lb-hot-d {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  flex: none;
+  width: 52px;
+  text-align: right;
+}
+
 .trow-band {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -4409,4 +4665,96 @@ code {
   color: var(--pos);
   border: 1px solid var(--pos);
   padding: 0 3px;
+}
+
+/* ---- TOASTS (global error surface; pushed from the mutation cache) ---- */
+.toasts {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 360px;
+}
+.toast {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  text-align: left;
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  padding: 8px 10px;
+  cursor: pointer;
+  animation: toastIn .14s ease-out;
+}
+.toast-err {
+  border-color: var(--neg);
+}
+.toast-k {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: .06em;
+  color: var(--neg);
+  flex: none;
+}
+.toast .toast-m {
+  font-size: 11px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- keyboard focus (keyboard-only; mouse clicks don't trigger these) ---- */
+.btn:focus-visible,
+.chip:focus-visible,
+.icon-btn:focus-visible,
+.nav-item:focus-visible,
+.nav-add:focus-visible,
+.rm:focus-visible,
+.x:focus-visible,
+.toast:focus-visible,
+.sr-row:focus-visible,
+.crow:focus-visible,
+.agrp-h:focus-visible,
+.sec-h:focus-visible,
+.pchip:focus-visible,
+.tile:focus-visible,
+.dx-row:focus-visible,
+.fgroup-h:focus-visible,
+.tp-link:focus-visible,
+.rsetbar:focus-visible,
+.lb-hot-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.dtable tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+/* Composite field boxes: the chromeless inner input must not draw its own
+   outline — the container border is the focus indicator. */
+.search input:focus-visible,
+.budget input:focus-visible {
+  outline: none;
+}
+.search:focus-within,
+.budget:focus-within {
+  border-color: var(--accent);
 }

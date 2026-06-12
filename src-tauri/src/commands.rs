@@ -1107,10 +1107,7 @@ pub async fn wfm_mark_sold(state: State<'_, Arc<AppState>>, order_id: String) ->
 /// has no REST status endpoint — presence is held over a WebSocket — so this drives
 /// the background presence keeper (`wfm_socket`) rather than making a one-shot call.
 #[tauri::command]
-pub fn wfm_set_status(
-    state: State<'_, Arc<AppState>>,
-    status: String,
-) -> AppResult<WfmAccount> {
+pub fn wfm_set_status(state: State<'_, Arc<AppState>>, status: String) -> AppResult<WfmAccount> {
     if !STATUSES.contains(&status.as_str()) {
         return Err(AppError::Invalid(format!("unknown status: {status}")));
     }

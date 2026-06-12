@@ -276,3 +276,71 @@ pub fn get(db: &Db, slug: &str) -> AppResult<Option<CatalogRow>> {
         Ok(row)
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::testutil::test_db;
+
+    fn up(slug: &str, name: &str, category: &str) -> CatalogUpsert {
+        CatalogUpsert {
+            slug: slug.into(),
+            display_name: name.into(),
+            part_type: "Part".into(),
+            category: category.into(),
+            set_slug: None,
+            ducats: Some(45),
+            game_ref: None,
+            max_rank: None,
+            is_vaulted: false,
+            is_tradeable: true,
+            thumbnail_url: None,
+            wfm_id: None,
+        }
+    }
+
+    #[test]
+    fn upsert_inserts_then_updates_in_place() {
+        let db = test_db("catalog-upsert");
+        let n = upsert_many(
+            &db,
+            &[up("saryn_prime_chassis", "Saryn Prime Chassis", "warframe")],
+        )
+        .unwrap();
+        assert_eq!(n, 1);
+        assert_eq!(count(&db).unwrap(), 1);
+
+        // Re-upserting the same slug must update, not duplicate.
+        upsert_many(
+            &db,
+            &[up(
+                "saryn_prime_chassis",
+                "Saryn Prime Chassis!",
+                "warframe",
+            )],
+        )
+        .unwrap();
+        assert_eq!(count(&db).unwrap(), 1);
+        let row = get(&db, "saryn_prime_chassis").unwrap().unwrap();
+        assert_eq!(row.display_name, "Saryn Prime Chassis!");
+    }
+
+    #[test]
+    fn search_is_case_insensitive_and_bounded() {
+        let db = test_db("catalog-search");
+        upsert_many(
+            &db,
+            &[
+                up("saryn_prime_chassis", "Saryn Prime Chassis", "warframe"),
+                up("saryn_prime_systems", "Saryn Prime Systems", "warframe"),
+                up("mesa_prime_chassis", "Mesa Prime Chassis", "warframe"),
+            ],
+        )
+        .unwrap();
+        let hits = search(&db, "saryn", 10).unwrap();
+        assert_eq!(hits.len(), 2);
+        let hits = search(&db, "SARYN", 1).unwrap();
+        assert_eq!(hits.len(), 1, "limit must bound the result");
+        assert!(search(&db, "zzz_nothing", 10).unwrap().is_empty());
+    }
+}

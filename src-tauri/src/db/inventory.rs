@@ -233,7 +233,7 @@ fn row_value(r: &InventoryRow) -> i64 {
 // orders (the demand curve) best-bid-first, then a volume-capped tail for what
 // off-book demand could absorb over the window (discounted), and anything beyond
 // that is worth ~0. So 500 copies of a mod nobody is bidding on ≈ nothing.
-// (See .claude/plans/pricing-rework + reference/CLAUDE_ECONOMIC_RESEARCH.)
+// (See .claude/plans/pricing-rework + docs/CLAUDE_ECONOMIC_RESEARCH.)
 const WINDOW_DAYS: f64 = 30.0; // horizon for off-book (volume-driven) sales
 const K: f64 = 1.0; // share of market volume you could capture
 const TAIL_FACTOR: f64 = 0.35; // off-book sales beyond live bids net ~a third of sticker
@@ -241,6 +241,9 @@ const TAIL_FACTOR: f64 = 0.35; // off-book sales beyond live bids net ~a third o
 /// Realizable plat for a stack: `bids` (price, qty) filled best-first, plus a
 /// volume-capped, discounted tail; units beyond both real bids and that capacity
 /// are worth ~0. `per_unit` is the reference price for the tail.
+///
+/// TWIN: `split_sell_dissolve` walks this same curve with a dissolve floor —
+/// change the fill/tail math in BOTH or the no-floor property test fails.
 pub fn realizable_value(
     per_unit: i64,
     qty: i64,
@@ -298,6 +301,18 @@ pub fn confidence_of(
     })
 }
 
+/// `realizable_value` with the app defaults (`WINDOW_DAYS`/`K`/`TAIL_FACTOR`), no
+/// market clamp. Lets other modules value a stack on the same realizable curve the
+/// inventory uses without reaching into the private consts.
+pub fn realizable_value_default(
+    per_unit: i64,
+    qty: i64,
+    volume_7d: Option<i64>,
+    bids: &[(i64, i64)],
+) -> i64 {
+    realizable_value(per_unit, qty, volume_7d, bids, WINDOW_DAYS, K, TAIL_FACTOR)
+}
+
 /// `realizable_value` with the app defaults, clamped to the market ceiling, plus
 /// φ = realizable / market.
 pub fn realizable_default(
@@ -324,6 +339,9 @@ pub fn realizable_default(
 /// marginal price beats the dissolve floor. The curve is monotonically decreasing, so
 /// this is the value-maximizing split. Returns `(sell_qty, sell_plat)`; the remaining
 /// `qty − sell_qty` units are the ones worth dissolving instead.
+///
+/// TWIN: with `dissolve_unit < 0` this must equal `realizable_value` exactly —
+/// change the fill/tail math in BOTH or the no-floor property test fails.
 #[allow(clippy::too_many_arguments)]
 pub fn split_sell_dissolve(
     per_unit: i64,
@@ -361,7 +379,9 @@ pub fn split_sell_dissolve(
         let filled = qty - remaining;
         let tail_units = (capacity - filled).max(0).min(remaining);
         sell_qty += tail_units;
-        sell_plat += (tail_units as f64 * tail_price).round() as i64;
+        // Same association order as realizable_value's tail — float multiply
+        // isn't associative, and units × (price × factor) can round 1p apart.
+        sell_plat += (tail_units as f64 * per_unit.max(0) as f64 * tail_factor).round() as i64;
     }
     (sell_qty, sell_plat)
 }
@@ -375,36 +395,39 @@ pub fn split_sell_dissolve_default(
     bids: &[(i64, i64)],
     dissolve_unit: f64,
 ) -> (i64, i64) {
-    let (sell_qty, sell_plat) =
-        split_sell_dissolve(per_unit, qty, volume_7d, bids, dissolve_unit, WINDOW_DAYS, K, TAIL_FACTOR);
+    let (sell_qty, sell_plat) = split_sell_dissolve(
+        per_unit,
+        qty,
+        volume_7d,
+        bids,
+        dissolve_unit,
+        WINDOW_DAYS,
+        K,
+        TAIL_FACTOR,
+    );
     let ceiling = (per_unit.max(0) * sell_qty.max(0)).max(0);
     (sell_qty, sell_plat.min(ceiling))
 }
 
-/// Number of complete sets currently owned (all member parts present).
+/// Number of complete sets currently owned (all member parts present): the
+/// minimum owned qty across every catalog member, in one read-pool query
+/// (a member with no inventory row counts as 0; no members at all → 0).
 pub fn complete_set_count(db: &Db, set_slug: &str) -> AppResult<i64> {
-    let members = set_members(db, set_slug)?;
-    if members.is_empty() {
-        return Ok(0);
-    }
-    db.with(|c| {
-        let mut min_qty = i64::MAX;
-        for m in &members {
-            let q: i64 = c
-                .query_row(
-                    "SELECT qty FROM inventory_items WHERE slug = ?1",
-                    params![m],
-                    |r| r.get(0),
-                )
-                .unwrap_or(0);
-            min_qty = min_qty.min(q);
-        }
-        Ok(min_qty.max(0))
+    db.read(|c| {
+        let n: i64 = c.query_row(
+            "SELECT COALESCE(MIN(COALESCE(ii.qty, 0)), 0)
+             FROM catalog_items ci
+             LEFT JOIN inventory_items ii ON ii.slug = ci.slug
+             WHERE ci.set_slug = ?1",
+            params![set_slug],
+            |r| r.get(0),
+        )?;
+        Ok(n.max(0))
     })
 }
 
 pub fn set_members(db: &Db, set_slug: &str) -> AppResult<Vec<String>> {
-    db.with(|c| {
+    db.read(|c| {
         let mut stmt = c.prepare("SELECT slug FROM catalog_items WHERE set_slug = ?1")?;
         let rows = stmt.query_map(params![set_slug], |r| r.get::<_, String>(0))?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
@@ -563,13 +586,13 @@ fn memberships(
 }
 
 fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
-    // Exclusion settings read on the writer first (separate lock), then the whole
-    // valuation runs on a single pooled read connection — no writer contention.
-    let excluded = settings::excluded_rarities(db)?;
-    let min_plat = settings::excluded_min_plat(db)?;
-    let min_by_cat = settings::excluded_min_plat_by_cat(db)?;
-
+    // The whole valuation — exclusion settings included — runs on a single
+    // pooled read connection, so it never queues behind the writer mutex.
     db.read(|c| {
+        let excluded = settings::excluded_rarities_conn(c)?;
+        let min_plat = settings::excluded_min_plat_conn(c)?;
+        let min_by_cat = settings::excluded_min_plat_by_cat_conn(c)?;
+
         let owned = fetch_owned(c)?;
         let templates = set_templates(c)?;
 
@@ -712,47 +735,98 @@ pub fn owned_slugs(db: &Db) -> AppResult<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{realizable_default, realizable_value, split_sell_dissolve, split_sell_dissolve_default};
+    use super::{
+        realizable_default, realizable_value, split_sell_dissolve, split_sell_dissolve_default,
+    };
 
     const W: f64 = 30.0;
     const K: f64 = 1.0;
     const T: f64 = 0.35;
 
+    /// Pins the two liquidation walks together: with a dissolve floor below any
+    /// possible price, `split_sell_dissolve` must trace exactly the same demand
+    /// curve as `realizable_value` (same bids-then-tail fill, same rounding).
+    /// If one is ever edited without the other, this property breaks.
+    #[test]
+    fn split_with_no_floor_equals_realizable_value() {
+        let bid_books: &[&[(i64, i64)]] = &[
+            &[],
+            &[(40, 5)],
+            &[(40, 2), (35, 3), (10, 50)],
+            &[(1, 1)],
+            &[(100, 1), (1, 1000)],
+        ];
+        for &per_unit in &[0i64, 1, 13, 50, 400] {
+            for &qty in &[1i64, 2, 7, 40, 500] {
+                for &vol in &[None, Some(0i64), Some(3), Some(70), Some(10_000)] {
+                    for bids in bid_books {
+                        let rz = realizable_value(per_unit, qty, vol, bids, W, K, T);
+                        let (sell_qty, sell_plat) =
+                            split_sell_dissolve(per_unit, qty, vol, bids, -1.0, W, K, T);
+                        assert_eq!(
+                            sell_plat, rz,
+                            "diverged: per_unit={per_unit} qty={qty} vol={vol:?} bids={bids:?}"
+                        );
+                        assert!(sell_qty <= qty);
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn split_sells_all_when_bids_beat_dissolve() {
         // 3 copies, a deep 40p bid, dissolve worth 20p/copy → sell all 3 to the bid.
-        assert_eq!(split_sell_dissolve(50, 3, Some(0), &[(40, 5)], 20.0, W, K, T), (3, 120));
+        assert_eq!(
+            split_sell_dissolve(50, 3, Some(0), &[(40, 5)], 20.0, W, K, T),
+            (3, 120)
+        );
     }
 
     #[test]
     fn split_dissolves_all_when_floor_beats_market() {
         // Bids (15p) and the off-book tail (50×0.35 ≈ 17.5p) both lose to a 30p
         // dissolve floor → keep nothing for sale.
-        assert_eq!(split_sell_dissolve(50, 5, Some(100), &[(15, 10)], 30.0, W, K, T), (0, 0));
+        assert_eq!(
+            split_sell_dissolve(50, 5, Some(100), &[(15, 10)], 30.0, W, K, T),
+            (0, 0)
+        );
     }
 
     #[test]
     fn split_sells_to_bids_then_dissolves_the_tail() {
         // One 30p bid for 2 (beats the 20p floor); the tail (40×0.35 = 14p) does not.
         // → sell 2 @ 30, dissolve the other 3.
-        assert_eq!(split_sell_dissolve(40, 5, Some(0), &[(30, 2)], 20.0, W, K, T), (2, 60));
+        assert_eq!(
+            split_sell_dissolve(40, 5, Some(0), &[(30, 2)], 20.0, W, K, T),
+            (2, 60)
+        );
     }
 
     #[test]
     fn split_no_bids_thin_volume_dissolves_all() {
         // Junk common: 500 @ 3p, no bids, ~1 sale/wk, dissolve worth 5p → dissolve all.
-        assert_eq!(split_sell_dissolve(3, 500, Some(1), &[], 5.0, W, K, T), (0, 0));
+        assert_eq!(
+            split_sell_dissolve(3, 500, Some(1), &[], 5.0, W, K, T),
+            (0, 0)
+        );
     }
 
     #[test]
     fn split_unpriced_sells_nothing() {
-        assert_eq!(split_sell_dissolve(0, 10, Some(50), &[], 5.0, W, K, T), (0, 0));
+        assert_eq!(
+            split_sell_dissolve(0, 10, Some(50), &[], 5.0, W, K, T),
+            (0, 0)
+        );
     }
 
     #[test]
     fn split_default_clamps_sale_to_market() {
         // A pathological 99p bid can't value 3 copies above 3 × 50p = 150p.
-        assert_eq!(split_sell_dissolve_default(50, 3, Some(0), &[(99, 5)], 20.0), (3, 150));
+        assert_eq!(
+            split_sell_dissolve_default(50, 3, Some(0), &[(99, 5)], 20.0),
+            (3, 150)
+        );
     }
 
     #[test]

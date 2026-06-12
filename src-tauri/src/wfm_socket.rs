@@ -69,11 +69,17 @@ fn envelope(route: &str, payload: serde_json::Value) -> Message {
 }
 
 fn sign_in_msg(token: &str) -> Message {
-    envelope("@wfm|cmd/auth/signIn", serde_json::json!({ "token": token }))
+    envelope(
+        "@wfm|cmd/auth/signIn",
+        serde_json::json!({ "token": token }),
+    )
 }
 
 fn set_status_msg(status: &str) -> Message {
-    envelope("@wfm|cmd/status/set", serde_json::json!({ "status": status }))
+    envelope(
+        "@wfm|cmd/status/set",
+        serde_json::json!({ "status": status }),
+    )
 }
 
 /// Long-lived task: reconcile the live socket with the desired presence.
@@ -92,7 +98,9 @@ pub async fn supervisor(mut rx: watch::Receiver<Desired>) {
                 HoldEnd::DesiredChanged => {}
                 // Socket dropped / connect failed — back off, then reconnect
                 // (the loop re-reads `desired`; if still online, we retry).
-                HoldEnd::SocketLost => tokio::time::sleep(Duration::from_secs(RECONNECT_SECS)).await,
+                HoldEnd::SocketLost => {
+                    tokio::time::sleep(Duration::from_secs(RECONNECT_SECS)).await
+                }
                 // Supervisor should stop (channel closed).
                 HoldEnd::Shutdown => return,
             },

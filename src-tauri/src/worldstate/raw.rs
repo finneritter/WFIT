@@ -495,7 +495,33 @@ pub struct DeWorld {
     pub invasions: Vec<Invasion>,
 }
 
+/// Warn once when `empty` flips true (and re-arm when it heals) — every section
+/// of `RawWorld` is `#[serde(default)]`, so a DE field rename silently yields an
+/// empty vec; this is the only signal that the schema moved under us.
+fn warn_if_newly_empty(flag: &std::sync::atomic::AtomicBool, empty: bool, what: &str) {
+    use std::sync::atomic::Ordering;
+    if empty {
+        if !flag.swap(true, Ordering::Relaxed) {
+            tracing::warn!(
+                section = what,
+                "DE worldstate section empty — outage or schema change"
+            );
+        }
+    } else {
+        flag.store(false, Ordering::Relaxed);
+    }
+}
+
 fn parse(raw: RawWorld) -> DeWorld {
+    use std::sync::atomic::AtomicBool;
+    static MISSIONS_EMPTY: AtomicBool = AtomicBool::new(false);
+    static ANCHOR_EMPTY: AtomicBool = AtomicBool::new(false);
+    warn_if_newly_empty(
+        &MISSIONS_EMPTY,
+        raw.active_missions.is_empty(),
+        "ActiveMissions (fissures)",
+    );
+
     let mut fissures = Vec::new();
 
     // ActiveMissions = normal + Steel Path (`Hard`) relic fissures.
@@ -546,6 +572,12 @@ fn parse(raw: RawWorld) -> DeWorld {
         .and_then(|s| s.expiry.as_ref())
         .and_then(|d| d.date.ms.parse::<i64>().ok())
         .map(|ms| ms / 1000);
+    // The Cetus bounty window is the anchor every derived world clock hangs off.
+    warn_if_newly_empty(
+        &ANCHOR_EMPTY,
+        cetus_night_end.is_none(),
+        "CetusSyndicate bounty window (cycle anchor)",
+    );
 
     // Daily sortie: Boss + Variants (mission/modifier/node internal IDs).
     let sortie = raw.sorties.into_iter().next().and_then(|s| {

@@ -49,21 +49,57 @@ const LISTINGS_SYNC_TICKS: u64 = 13; // listings piggyback every ~10 min (1 call
                                      // "rebuild cache" and stale old-logic prices can't survive behind the TTL.
 const PRICING_VERSION: &str = "4"; // 4: delta_7d = None (not 0%) when there's no prior window
 
+/// Keeps the non-blocking file-log writer alive for the app's lifetime —
+/// dropping it would silently stop file logging.
+static LOG_GUARD: std::sync::OnceLock<tracing_appender::non_blocking::WorkerGuard> =
+    std::sync::OnceLock::new();
+
+/// Stdout (dev) + a daily-rolling file in `app_data_dir/logs/` (~7 days kept) —
+/// the installed app has no visible stdout, and market/worldstate failures are
+/// exactly the things that need diagnosing after the fact.
+fn init_logging(log_dir: &std::path::Path) {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+
+    // The appender's retention scan reads the dir at build time — make sure it
+    // exists first or the very first launch prints a spurious error.
+    let _ = std::fs::create_dir_all(log_dir);
+
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,wfit_lib=debug"));
+    let stdout = tracing_subscriber::fmt::layer();
+
+    let file_layer = tracing_appender::rolling::Builder::new()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix("wfit")
+        .filename_suffix("log")
+        .max_log_files(7)
+        .build(log_dir)
+        .ok()
+        .map(|appender| {
+            let (writer, guard) = tracing_appender::non_blocking(appender);
+            let _ = LOG_GUARD.set(guard);
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(writer)
+        });
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(stdout)
+        .with(file_layer) // Option<Layer> — file logging degrades gracefully
+        .init();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info,wfit_lib=debug")),
-        )
-        .init();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir().expect("resolve app data dir");
             std::fs::create_dir_all(&app_data_dir).expect("create app data dir");
+            init_logging(&app_data_dir.join("logs"));
             let db_path = app_data_dir.join("wfit.sqlite");
             tracing::info!(?db_path, "opening database");
 
@@ -217,7 +253,7 @@ async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
         tracing::info!("pricing logic changed → clearing price caches for a clean reprice");
         state.db.with(|c| {
             c.execute_batch(
-                "DELETE FROM price_cache; DELETE FROM price_rank; DELETE FROM order_cache; DELETE FROM buy_orders;",
+                "DELETE FROM price_cache; DELETE FROM price_rank; DELETE FROM order_cache; DELETE FROM buy_orders; DELETE FROM order_fetch_meta;",
             )?;
             Ok(())
         })?;
@@ -391,11 +427,13 @@ async fn heartbeat_tick(state: &Arc<AppState>) -> error::AppResult<usize> {
     order_slugs.truncate(HEARTBEAT_ORDER_BATCH);
     for slug in &order_slugs {
         match state.market.fetch_order_book(slug).await {
-            Ok(book) if !book.sells.is_empty() || !book.bids.is_empty() => {
+            // An empty book is stored too: it clears stale ladders and stamps
+            // freshness so the slug isn't refetched every tick.
+            Ok(Some(book)) => {
                 prices::store_order_book(&state.db, slug, &book.sells, &book.bids)?;
                 touched += 1;
             }
-            Ok(_) => {}
+            Ok(None) => {} // non-2xx (warned in the client); keep stale data
             Err(e) => tracing::warn!(slug, error = %e, "heartbeat order book failed"),
         }
     }
@@ -450,11 +488,11 @@ pub(crate) async fn refresh_owned_orders(
     let mut priced = 0usize;
     for slug in &slugs {
         match state.market.fetch_order_book(slug).await {
-            Ok(book) if !book.sells.is_empty() || !book.bids.is_empty() => {
+            Ok(Some(book)) => {
                 prices::store_order_book(&state.db, slug, &book.sells, &book.bids)?;
                 priced += 1;
             }
-            Ok(_) => {}
+            Ok(None) => {} // non-2xx (warned in the client); keep stale data
             Err(e) => tracing::warn!(slug, error = %e, "fetch_order_book failed"),
         }
     }

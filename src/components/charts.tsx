@@ -41,7 +41,13 @@ export const Spark = memo(function Spark({
   if (!data || data.length < 2) return <svg width={w} height={h} />;
   const up = upProp ?? data[data.length - 1] >= data[0];
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+    <svg
+      aria-hidden="true"
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+    >
       <polyline
         points={points(data, w, h, 1, 0.12)}
         fill="none"
@@ -67,7 +73,7 @@ export function MiniArea({
   const line = points(data, w, h, 2);
   const area = `${line} ${w - 2},${h} 2,${h}`;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+    <svg aria-hidden="true" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
       <polygon points={area} fill={accent} opacity="0.08" />
       <polyline points={line} fill="none" stroke={accent} strokeWidth="1.5" />
     </svg>
@@ -99,7 +105,7 @@ export function BigChart({ data, w = 380, h = 150 }: { data: number[]; w?: numbe
   const line = points(data, w, h, 3);
   const area = `${line} ${w - 3},${h} 3,${h}`;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+    <svg aria-hidden="true" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
       <polygon points={area} fill={stroke} opacity="0.08" />
       <polyline points={line} fill="none" stroke={stroke} strokeWidth="1.6" />
     </svg>
@@ -212,7 +218,7 @@ export const CandleChart = memo(function CandleChart({
   }
 
   return (
-    <svg className="candle" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+    <svg aria-hidden="true" className="candle" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
       {/* period hi/lo reference lines */}
       <line x1="0" y1={geo.hiY} x2={w} y2={geo.hiY} className="cref" />
       <line x1="0" y1={geo.loY} x2={w} y2={geo.loY} className="cref" />

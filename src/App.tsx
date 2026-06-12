@@ -8,6 +8,7 @@ import { SearchResults } from "./components/SearchResults";
 import { type ScreenId, Sidebar } from "./components/Sidebar";
 import { SyncNow } from "./components/SyncNow";
 import { TitleBar } from "./components/TitleBar";
+import { Toasts } from "./components/Toasts";
 import {
   useLivePriceEvents,
   usePricesRefresh,
@@ -22,6 +23,7 @@ import { Arcanes } from "./routes/Arcanes";
 // from disk, so code-splitting saves nothing at startup and only adds a chunk-
 // fetch delay (and a Suspense flash) when navigating to a screen.
 import { BuyList } from "./routes/BuyList";
+import { Dashboard } from "./routes/Dashboard";
 import { Ducats } from "./routes/Ducats";
 import { Inventory } from "./routes/Inventory";
 import { Listings } from "./routes/Listings";
@@ -34,6 +36,7 @@ import { Trends } from "./routes/Trends";
 import { Watchlist } from "./routes/Watchlist";
 
 const TITLES: Record<ScreenId, string> = {
+  home: "Home",
   inventory: "Inventory",
   sets: "Sets",
   trends: "Trends",
@@ -49,7 +52,7 @@ const TITLES: Record<ScreenId, string> = {
 };
 
 export default function App() {
-  const [screen, setScreen] = useState<ScreenId>("inventory");
+  const [screen, setScreen] = useState<ScreenId>("home");
   const [search, setSearch] = useState("");
   // Input stays on `search`; screens filter on the deferred value so keystrokes
   // never block on a large grid re-render.
@@ -188,6 +191,15 @@ export default function App() {
                 its heavy grid on every navigation (covered by the root boundary
                 in main.tsx instead). */}
             <ErrorBoundary key={screen}>
+              {screen === "home" && (
+                <Dashboard
+                  onOpen={open}
+                  onNavigate={(s) => {
+                    setScreen(s);
+                    setSearch("");
+                  }}
+                />
+              )}
               {screen === "sets" && <Sets onOpen={open} />}
               {screen === "trends" && <Trends onOpen={open} />}
               {screen === "watchlist" && <Watchlist onOpen={open} />}
@@ -227,6 +239,7 @@ export default function App() {
             onClose={() => setAdding(false)}
           />
         ) : null}
+        <Toasts />
       </div>
     </div>
   );

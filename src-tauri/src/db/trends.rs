@@ -79,11 +79,14 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })?;
 
-    // Pull the daily (median, volume) history once and bucket by slug.
+    // Pull the daily (median, volume) history once and bucket by slug. Bounded
+    // to the last 90 days — the longest timeframe any metric uses — so the scan
+    // doesn't grow without limit as history accumulates.
     let (med_hist, vol_hist) = db.read(|c| {
         let mut stmt = c.prepare(
             "SELECT slug, median, COALESCE(volume, 0) FROM price_history
-             WHERE median IS NOT NULL ORDER BY slug, day ASC",
+             WHERE median IS NOT NULL AND day >= date('now', '-90 day')
+             ORDER BY slug, day ASC",
         )?;
         let rows = stmt.query_map([], |r| {
             Ok((

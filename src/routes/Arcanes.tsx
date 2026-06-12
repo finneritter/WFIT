@@ -1,5 +1,5 @@
 import { ItemTags } from "../components/ItemTags";
-import { Glyph, StatBox, TableStatus } from "../components/ui";
+import { ItemName, StatBox, TableStatus, rowAction } from "../components/ui";
 import { useArcaneDashboard, useListedSlugs } from "../hooks/queries";
 import { fmt } from "../lib/format";
 
@@ -47,7 +47,7 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
       <div className="tpanel">
         <div className="tpanel-h">
           <h3>Best collection to spend Vosfor on</h3>
-          <span className="meta">expected platinum per 200 Vosfor pull</span>
+          <span className="meta">realizable platinum per 200 Vosfor pull (liquidity-adjusted)</span>
         </div>
         <table className="dtable">
           <thead>
@@ -112,21 +112,20 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
               />
             ) : (
               owned.map((a) => (
-                <tr key={a.slug} onClick={() => onOpen(a.slug)}>
+                <tr key={a.slug} {...rowAction(() => onOpen(a.slug))}>
                   <td>
-                    <div className="dnm">
-                      <Glyph name={a.display_name} plat={a.plat} thumb={a.thumbnail_url} />
-                      <div className="di">
-                        <span className="nm">
-                          {a.display_name}
-                          <ItemTags trend={a.trend} listed={listed.has(a.slug)} />
-                        </span>
-                        <span className="sub">
+                    <ItemName
+                      name={a.display_name}
+                      plat={a.plat}
+                      thumb={a.thumbnail_url}
+                      sub={
+                        <>
                           {a.collection ?? "no collection"} · {a.rank0_copies} unranked
                           {a.rank0_copies !== a.qty ? ` of ${a.qty}` : ""}
-                        </span>
-                      </div>
-                    </div>
+                        </>
+                      }
+                      tags={<ItemTags trend={a.trend} listed={listed.has(a.slug)} />}
+                    />
                   </td>
                   <td className="r">{a.plat == null ? "—" : `${fmt(a.plat)}p`}</td>
                   <td>

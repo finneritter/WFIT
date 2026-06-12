@@ -220,10 +220,10 @@ pub struct OwnedArcane {
     pub maxed_plat: Option<i64>, // top-rank price (muted info only; ranking-to-sell loses)
     pub vosfor: i64,             // Vosfor per unranked copy
     // Liquidity-aware split of `rank0_copies`: how many are worth selling vs dissolving.
-    pub sell_qty: i64,           // copies recommended to sell
-    pub sell_plat: i64,          // realizable plat from selling sell_qty (bids + capped tail)
-    pub dissolve_qty: i64,       // copies recommended to dissolve (rank0_copies − sell_qty)
-    pub vosfor_total: i64,       // dissolve_qty × vosfor — the recommended-dissolve Vosfor
+    pub sell_qty: i64,            // copies recommended to sell
+    pub sell_plat: i64,           // realizable plat from selling sell_qty (bids + capped tail)
+    pub dissolve_qty: i64,        // copies recommended to dissolve (rank0_copies − sell_qty)
+    pub vosfor_total: i64,        // dissolve_qty × vosfor — the recommended-dissolve Vosfor
     pub dissolve_plat_equiv: i64, // vosfor_total × implied plat-per-Vosfor (best collection)
     pub collection: Option<String>,
     pub rarity: Option<String>,
@@ -234,9 +234,9 @@ pub struct OwnedArcane {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArcaneSummary {
-    pub total_vosfor: i64,    // Vosfor from dissolving the recommended-dissolve copies
+    pub total_vosfor: i64, // Vosfor from dissolving the recommended-dissolve copies
     pub owned_count: i64,
-    pub sell_plat: i64,       // total realizable plat from the recommended-sell copies
+    pub sell_plat: i64, // total realizable plat from the recommended-sell copies
     pub best_collection: Option<String>,
     pub best_plat_per_200: f64,
     pub plat_per_vosfor: f64, // implied Vosfor value (best collection) — the conversion rate

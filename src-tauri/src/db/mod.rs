@@ -35,6 +35,7 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         M::up(include_str!("../../migrations/0007_mod_rarity.sql")),
         M::up(include_str!("../../migrations/0008_vault_status.sql")),
         M::up(include_str!("../../migrations/0009_perf_indexes.sql")),
+        M::up(include_str!("../../migrations/0010_order_fetch_meta.sql")),
     ])
 });
 
@@ -119,6 +120,45 @@ impl Db {
     }
 }
 
+/// Test fixture: a fully-migrated Db on a fresh temp file, with a helper to
+/// seed catalog rows (most CRUD paths require the slug to exist there).
+#[cfg(test)]
+pub(crate) mod testutil {
+    use super::Db;
+
+    pub fn test_db(tag: &str) -> Db {
+        let path = std::env::temp_dir().join(format!(
+            "wfit-test-{tag}-{}-{}.sqlite",
+            std::process::id(),
+            std::thread::current()
+                .name()
+                .unwrap_or("t")
+                .replace("::", "-")
+        ));
+        let _ = std::fs::remove_file(&path);
+        Db::open(&path).unwrap()
+    }
+
+    pub fn seed_item(db: &Db, slug: &str, category: &str, median: Option<i64>) {
+        db.with(|c| {
+            c.execute(
+                "INSERT INTO catalog_items (slug, display_name, part_type, category)
+                 VALUES (?1, ?1, 'Part', ?2)",
+                rusqlite::params![slug, category],
+            )?;
+            if let Some(m) = median {
+                c.execute(
+                    "INSERT INTO price_cache (slug, median_plat, trend, fetched_at, expires_at)
+                     VALUES (?1, ?2, 'flat', '2026-01-01', '2099-01-01')",
+                    rusqlite::params![slug, m],
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,5 +203,53 @@ mod tests {
         );
         assert!(n >= 0);
         let _ = std::fs::remove_file(&dir);
+    }
+
+    // Upgrade-path guard: applying every migration in sequence must succeed on a
+    // fresh file (the install path) AND when re-opened later (the upgrade path,
+    // i.e. what the two real machines do on every launch) — with user data
+    // surviving the re-open. Catches a future 0011+ that breaks on existing DBs.
+    #[test]
+    fn migrations_apply_and_reapply_with_data_intact() {
+        let path = std::env::temp_dir().join(format!("wfit-migrate-{}", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+
+        // Fresh install: full chain applies, schema is present.
+        {
+            let db = Db::open(&path).unwrap();
+            db.with(|c| {
+                let n: i64 = c.query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table'",
+                    [],
+                    |r| r.get(0),
+                )?;
+                assert!(n > 10, "expected the full schema, got {n} tables");
+                // Seed a user-data row (inventory is NOT a rebuildable cache).
+                c.execute_batch(
+                    "INSERT INTO catalog_items (slug, display_name, part_type, category)
+                     VALUES ('probe_item', 'Probe Item', 'Part', 'mod');
+                     INSERT INTO inventory_items (slug, qty, first_added_at, last_modified_at, source)
+                     VALUES ('probe_item', 3, '2026-01-01', '2026-01-01', 'manual');",
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        }
+
+        // Re-open (the upgrade path): migrations re-run idempotently, data intact.
+        {
+            let db = Db::open(&path).unwrap();
+            let qty: i64 = db
+                .read(|c| {
+                    Ok(c.query_row(
+                        "SELECT qty FROM inventory_items WHERE slug='probe_item'",
+                        [],
+                        |r| r.get(0),
+                    )?)
+                })
+                .unwrap();
+            assert_eq!(qty, 3, "user data must survive a re-open/migration run");
+        }
+        let _ = std::fs::remove_file(&path);
     }
 }

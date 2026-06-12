@@ -206,7 +206,8 @@ pub fn effective_price_from(maps: &PriceMaps, slug: &str, rank: Option<i64>) -> 
 
 /// Σ qty_r × effective per-rank price for a slug's owned rank breakdown, using
 /// preloaded maps. `None` when the slug has no breakdown (callers fall back to the
-/// non-ranked effective price). In-memory twin of inventory's `rank_aware_value`.
+/// non-ranked effective price). Must always equal summing the SQL
+/// [`effective_price`] per rank — the twin test pins this.
 pub fn rank_aware_value_from(
     maps: &PriceMaps,
     slug: &str,
@@ -258,6 +259,44 @@ pub fn bid_ladders_for(
     Ok(out)
 }
 
+/// Like `bid_ladders_for`, but restricted to a single `rank`. Arcanes (and mods)
+/// trade as distinct goods per rank — an unranked (rank-0) copy and a maxed copy
+/// have separate demand curves — so a per-rank decision must only see its own bids.
+/// (`bid_ladders_for` stays rank-agnostic for the general inventory path.)
+pub fn bid_ladders_for_rank(
+    c: &Connection,
+    slugs: &[String],
+    rank: i64,
+) -> AppResult<HashMap<String, Vec<(i64, i64)>>> {
+    let mut out: HashMap<String, Vec<(i64, i64)>> = HashMap::new();
+    if slugs.is_empty() {
+        return Ok(out);
+    }
+    let sql = format!(
+        "SELECT slug, price, qty FROM buy_orders WHERE rank = ? AND slug IN ({})
+         ORDER BY slug, price DESC",
+        placeholders(slugs.len())
+    );
+    let mut stmt = c.prepare(&sql)?;
+    let mut bind: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(slugs.len() + 1);
+    bind.push(&rank);
+    for s in slugs {
+        bind.push(s);
+    }
+    let rows = stmt.query_map(bind.as_slice(), |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, i64>(1)?,
+            r.get::<_, i64>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (slug, price, qty) = row?;
+        out.entry(slug).or_default().push((price, qty));
+    }
+    Ok(out)
+}
+
 /// Recent daily medians (≤12, chronological) for many slugs in one query.
 /// Batched twin of inventory's `recent_medians`.
 pub fn recent_medians_for(
@@ -296,7 +335,10 @@ pub fn recent_medians_for(
 }
 
 /// Replace the cached order book for a slug: robust asks (`order_cache`) + the
-/// online bid ladder (`buy_orders`).
+/// online bid ladder (`buy_orders`). An empty book is a real market state and is
+/// stored as such (rows cleared); `order_fetch_meta` stamps the fetch either way
+/// so `owned_order_slugs` doesn't refetch orderless items every cycle. Callers
+/// must NOT call this on a failed fetch — stale bids beat no bids.
 pub fn store_order_book(
     db: &Db,
     slug: &str,
@@ -306,6 +348,11 @@ pub fn store_order_book(
     db.with_mut(|conn| {
         let tx = conn.transaction()?;
         let now = Utc::now().to_rfc3339();
+        tx.execute(
+            "INSERT INTO order_fetch_meta (slug, fetched_at) VALUES (?1, ?2)
+             ON CONFLICT(slug) DO UPDATE SET fetched_at = excluded.fetched_at",
+            params![slug, now],
+        )?;
         tx.execute("DELETE FROM order_cache WHERE slug = ?1", params![slug])?;
         tx.execute("DELETE FROM buy_orders WHERE slug = ?1", params![slug])?;
         for (rank, sell) in sells {
@@ -346,7 +393,7 @@ pub fn owned_order_slugs(db: &Db, fresh_cutoff: &str) -> AppResult<Vec<String>> 
             "SELECT ii.slug FROM inventory_items ii
              WHERE ii.qty > 0
              AND NOT EXISTS (
-                 SELECT 1 FROM order_cache oc WHERE oc.slug = ii.slug AND oc.fetched_at > ?1
+                 SELECT 1 FROM order_fetch_meta m WHERE m.slug = ii.slug AND m.fetched_at > ?1
              )",
         )?;
         let rows = stmt.query_map(params![fresh_cutoff], |r| r.get::<_, String>(0))?;
@@ -631,6 +678,36 @@ mod tests {
                 let mem = effective_price_from(&maps, slug, rank);
                 assert_eq!(sql, mem, "slug={slug} rank={rank:?}");
             }
+        }
+    }
+
+    // The second twin CLAUDE.md pins: valuing a rank breakdown through the maps
+    // must equal summing the SQL effective_price per rank — across live-ask,
+    // per-rank-median, and headline precedence paths.
+    #[test]
+    fn rank_aware_value_from_matches_sql_sum() {
+        let c = fixture();
+        c.execute_batch(
+            "INSERT INTO inventory_items VALUES ('liveask', 1), ('rankmed', 1), ('headline', 1);
+             INSERT INTO order_cache VALUES ('liveask', 0, 100), ('liveask', 5, 140);
+             INSERT INTO price_rank VALUES ('rankmed', 0, 30), ('rankmed', 10, 90);
+             INSERT INTO price_cache VALUES ('headline', 25), ('rankmed', 7), ('liveask', 9);",
+        )
+        .unwrap();
+        let maps = load_owned_price_maps(&c).unwrap();
+        let breakdown = [(0i64, 2i64), (3, 1), (5, 4), (10, 1)];
+        for slug in ["liveask", "rankmed", "headline"] {
+            let sql_sum: i64 = breakdown
+                .iter()
+                .map(|&(rank, qty)| {
+                    effective_price(&c, slug, Some(rank)).unwrap().unwrap_or(0) * qty
+                })
+                .sum();
+            assert_eq!(
+                rank_aware_value_from(&maps, slug, &breakdown),
+                Some(sql_sum),
+                "slug={slug}"
+            );
         }
     }
 

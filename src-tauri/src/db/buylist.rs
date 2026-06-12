@@ -115,3 +115,47 @@ pub fn list(db: &Db) -> AppResult<Vec<BuyRow>> {
         Ok(out)
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::testutil::{seed_item, test_db};
+
+    #[test]
+    fn add_accumulates_and_set_qty_zero_removes() {
+        let db = test_db("buy-add");
+        seed_item(&db, "wisp_prime_set", "set", Some(120));
+        add(&db, "wisp_prime_set", 1).unwrap();
+        add(&db, "wisp_prime_set", 2).unwrap(); // accumulates, not replaces
+        assert_eq!(list(&db).unwrap()[0].buy_qty, 3);
+        set_qty(&db, "wisp_prime_set", 0).unwrap();
+        assert!(list(&db).unwrap().is_empty());
+        assert!(add(&db, "unknown_slug", 1).is_err());
+    }
+
+    #[test]
+    fn purchase_moves_the_line_into_inventory() {
+        let db = test_db("buy-purchase");
+        seed_item(&db, "nova_prime_set", "set", Some(55));
+        add(&db, "nova_prime_set", 2).unwrap();
+        purchase(&db, "nova_prime_set").unwrap();
+        assert!(
+            list(&db).unwrap().is_empty(),
+            "purchased line leaves the buy list"
+        );
+        // A set purchase lands as owned parts/sets — assert SOMETHING was added.
+        let owned: i64 = db
+            .read(|c| {
+                Ok(c.query_row(
+                    "SELECT COALESCE(SUM(qty),0) FROM inventory_items",
+                    [],
+                    |r| r.get(0),
+                )?)
+            })
+            .unwrap();
+        assert!(
+            owned >= 2,
+            "expected inventory rows after purchase, got {owned}"
+        );
+    }
+}

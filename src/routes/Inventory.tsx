@@ -3,7 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Dropdown, type DropdownOption } from "../components/Dropdown";
 import { Icon } from "../components/Icon";
 import { Spark } from "../components/charts";
-import { Glyph, StatBox } from "../components/ui";
+import { Glyph, StatBox, rowAction } from "../components/ui";
 import { useInventory, useListings, usePricingProgress, useSummary } from "../hooks/queries";
 import { CATEGORY_LABELS, clsx, fmt, fmtK, glyph, pct, tier, trendOf } from "../lib/format";
 import type { InventoryRow } from "../lib/types";
@@ -261,7 +261,7 @@ const InvTable = memo(function InvTable({
             <tr
               key={row.slug}
               className={clsx(row.excluded && "excluded")}
-              onClick={() => onOpen(row.slug)}
+              {...rowAction(() => onOpen(row.slug))}
             >
               <td>
                 <div className="dnm">
@@ -323,7 +323,20 @@ const Section = memo(function Section({
   const stack = rows.reduce((s, r) => s + realValue(r), 0);
   return (
     <div className="section">
-      <div className="sec-h" onClick={() => setOpen((o) => !o)}>
+      <div
+        className="sec-h"
+        // biome-ignore lint/a11y/useSemanticElements: header contains an <h2> — invalid inside a native button
+        role="button"
+        aria-expanded={open}
+        tabIndex={0}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+            e.preventDefault();
+            setOpen((o) => !o);
+          }
+        }}
+      >
         <span className={clsx("tw", open && "open")}>▸</span>
         <h2>{title}</h2>
         <span className="ct">{rows.length}</span>

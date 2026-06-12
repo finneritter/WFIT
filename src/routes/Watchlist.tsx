@@ -1,17 +1,17 @@
 import { useMemo } from "react";
 import { ItemTags } from "../components/ItemTags";
-import { Glyph, StatBox, TableStatus } from "../components/ui";
+import { ItemName, StatBox, TableStatus, rowAction } from "../components/ui";
 import { useAddToBuyList, useListedSlugs, useRemoveWatch, useWatchlist } from "../hooks/queries";
 import { clsx, fmt, pct } from "../lib/format";
+
+const atTarget = (r: { median_plat: number | null; target_plat: number | null }) =>
+  r.target_plat != null && r.median_plat != null && r.median_plat <= r.target_plat;
 
 export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
   const { data: rows = [], isLoading, isError } = useWatchlist();
   const listed = useListedSlugs();
   const buy = useAddToBuyList();
   const remove = useRemoveWatch();
-
-  const atTarget = (r: { median_plat: number | null; target_plat: number | null }) =>
-    r.target_plat != null && r.median_plat != null && r.median_plat <= r.target_plat;
 
   const sorted = useMemo(
     () =>
@@ -72,22 +72,21 @@ export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
                     ? Math.round(((r.median_plat - r.target_plat) / r.target_plat) * 100)
                     : null;
                 return (
-                  <tr key={r.slug} onClick={() => onOpen(r.slug)}>
+                  <tr key={r.slug} {...rowAction(() => onOpen(r.slug))}>
                     <td>
-                      <div className="dnm">
-                        <Glyph name={r.display_name} plat={r.median_plat} thumb={r.thumbnail_url} />
-                        <div className="di">
-                          <span className="nm">
-                            {r.display_name}
-                            <ItemTags
-                              trend={r.trend}
-                              vaulted={r.is_vaulted}
-                              listed={listed.has(r.slug)}
-                            />
-                          </span>
-                          <span className="sub">{r.part_type}</span>
-                        </div>
-                      </div>
+                      <ItemName
+                        name={r.display_name}
+                        plat={r.median_plat}
+                        thumb={r.thumbnail_url}
+                        sub={r.part_type}
+                        tags={
+                          <ItemTags
+                            trend={r.trend}
+                            vaulted={r.is_vaulted}
+                            listed={listed.has(r.slug)}
+                          />
+                        }
+                      />
                     </td>
                     <td className="r">{fmt(r.median_plat)}p</td>
                     <td className={clsx("r", (r.delta_7d ?? 0) >= 0 ? "pos" : "neg")}>
@@ -101,7 +100,11 @@ export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
                         <span className="badge above">{gap == null ? "—" : `+${gap}% to go`}</span>
                       )}
                     </td>
-                    <td className="r" onClick={(e) => e.stopPropagation()}>
+                    <td
+                      className="r"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
                       <button
                         type="button"
                         className="btn sm"

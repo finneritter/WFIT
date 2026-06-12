@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Glyph, StatBox, TableStatus } from "../components/ui";
+import { ItemName, StatBox, TableStatus, rowAction } from "../components/ui";
 import { useSales, useUndoSale } from "../hooks/queries";
 import { fmt, relativeDay } from "../lib/format";
 
@@ -42,7 +42,7 @@ export function SoldHistory({ onOpen }: { onOpen: (slug: string) => void }) {
               <th className="r">Qty</th>
               <th className="r">Unit</th>
               <th className="r">Total</th>
-              <th className="r"></th>
+              <th className="r" />
             </tr>
           </thead>
           <tbody>
@@ -55,21 +55,24 @@ export function SoldHistory({ onOpen }: { onOpen: (slug: string) => void }) {
               />
             ) : (
               rows.map((r) => (
-                <tr key={r.id} onClick={() => onOpen(r.slug)}>
+                <tr key={r.id} {...rowAction(() => onOpen(r.slug))}>
                   <td className="when">{relativeDay(r.sold_at)}</td>
                   <td>
-                    <div className="dnm">
-                      <Glyph name={r.display_name} plat={r.plat_per_unit} thumb={r.thumbnail_url} />
-                      <div className="di">
-                        <span className="nm">{r.display_name}</span>
-                        <span className="sub">{r.category}</span>
-                      </div>
-                    </div>
+                    <ItemName
+                      name={r.display_name}
+                      plat={r.plat_per_unit}
+                      thumb={r.thumbnail_url}
+                      sub={r.category}
+                    />
                   </td>
                   <td className="r">{r.qty}</td>
                   <td className="r">{fmt(r.plat_per_unit)}p</td>
                   <td className="r">{fmt((r.plat_per_unit ?? 0) * r.qty)}p</td>
-                  <td className="r" onClick={(e) => e.stopPropagation()}>
+                  <td
+                    className="r"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
                     {isToday(r.sold_at) ? (
                       <button
                         type="button"

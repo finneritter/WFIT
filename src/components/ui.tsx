@@ -64,6 +64,78 @@ export function Chip({
   );
 }
 
+/** The item name cell used by every table screen: tier glyph + display name
+ *  (+ inline tags) over a muted sub line. One component instead of the same
+ *  .dnm/.di markup copy-pasted per route. */
+export function ItemName({
+  name,
+  plat,
+  thumb,
+  sub,
+  tags,
+}: {
+  name: string;
+  plat: number | null | undefined;
+  thumb?: string | null;
+  sub?: React.ReactNode;
+  tags?: React.ReactNode;
+}) {
+  return (
+    <div className="dnm">
+      <Glyph name={name} plat={plat} thumb={thumb} />
+      <div className="di">
+        <span className="nm">
+          {name}
+          {tags}
+        </span>
+        {sub != null ? <span className="sub">{sub}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+/** Click + keyboard activation props for an interactive table row:
+ *  spread onto a <tr> to make it Tab-focusable and Enter/Space-activatable.
+ *  Inner controls keep working — keyboard activation only fires when the row
+ *  itself has focus, and clicks on cells that stopPropagation stay theirs. */
+export function rowAction(activate: () => void) {
+  return {
+    tabIndex: 0,
+    onClick: activate,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+        e.preventDefault();
+        activate();
+      }
+    },
+  };
+}
+
+/** Modal backdrop: clicking the backdrop itself (not anything inside it)
+ *  closes. Children need no stopPropagation. Every modal pairs this with
+ *  useEscape — Escape is the keyboard path, the click is pointer-only. */
+export function Scrim({
+  onClose,
+  className = "modal-scrim",
+  children,
+}: {
+  onClose: () => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape (useEscape) is the keyboard equivalent
+    <div
+      className={className}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** One full-width <tbody> status row: loading / error / empty. Mirrors the
  *  Market.tsx convention so every table screen reads the same. Render exactly
  *  one of these in place of the row map when there's nothing to show. */

@@ -115,7 +115,6 @@ export function Market({ onOpen }: { onOpen: (slug: string) => void }) {
           <div className="search">
             <Icon name="search" />
             <input
-              // biome-ignore lint/a11y/noAutofocus: search-first page, focus is expected
               autoFocus
               placeholder="Search any item to buy…"
               value={query}

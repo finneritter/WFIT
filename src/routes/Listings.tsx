@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ItemTags } from "../components/ItemTags";
 import { ListingForm } from "../components/ListingForm";
-import { Glyph, StatBox, TableStatus } from "../components/ui";
+import { Glyph, ItemName, Scrim, StatBox, TableStatus, rowAction } from "../components/ui";
 import {
   useInventory,
   useListings,
@@ -97,8 +97,8 @@ function NewListingModal({
   const empty = owned.length === 0 && others.length === 0;
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
-      <div className="modal np-modal" onClick={(e) => e.stopPropagation()}>
+    <Scrim onClose={onClose}>
+      <div className="modal np-modal">
         <div className="modal-h">
           <h2>New listing</h2>
           <span style={{ flex: 1 }} />
@@ -145,7 +145,7 @@ function NewListingModal({
           ))}
         </div>
       </div>
-    </div>
+    </Scrim>
   );
 }
 
@@ -370,13 +370,12 @@ function RepricePanel({ rows, onClose }: { rows: RepriceRow[]; onClose: () => vo
             return (
               <tr key={r.order_id} className={changed ? undefined : "row-hidden"}>
                 <td>
-                  <div className="dnm">
-                    <Glyph name={r.display_name} plat={r.new_price} thumb={r.thumbnail_url} />
-                    <div className="di">
-                      <span className="nm">{r.display_name}</span>
-                      <span className="sub">{r.part_type}</span>
-                    </div>
-                  </div>
+                  <ItemName
+                    name={r.display_name}
+                    plat={r.new_price}
+                    thumb={r.thumbnail_url}
+                    sub={r.part_type}
+                  />
                 </td>
                 <td className="r num">{fmt(r.current_price)}p</td>
                 <td className="r num">{fmt(r.new_price)}p</td>
@@ -636,20 +635,17 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
                 return (
                   <tr
                     key={l.order_id}
-                    onClick={() => onOpen(l.slug)}
+                    {...rowAction(() => onOpen(l.slug))}
                     className={l.visible ? undefined : "row-hidden"}
                   >
                     <td>
-                      <div className="dnm">
-                        <Glyph name={l.display_name} plat={l.your_price} thumb={l.thumbnail_url} />
-                        <div className="di">
-                          <span className="nm">
-                            {l.display_name}
-                            <ItemTags trend={l.trend} vaulted={l.is_vaulted} />
-                          </span>
-                          <span className="sub">{l.part_type}</span>
-                        </div>
-                      </div>
+                      <ItemName
+                        name={l.display_name}
+                        plat={l.your_price}
+                        thumb={l.thumbnail_url}
+                        sub={l.part_type}
+                        tags={<ItemTags trend={l.trend} vaulted={l.is_vaulted} />}
+                      />
                     </td>
                     <td className="r num">{fmt(l.your_price)}p</td>
                     <td className="r num">{l.qty}</td>
@@ -666,7 +662,11 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
                         <span className="badge above">+{fmt(over)}p over</span>
                       )}
                     </td>
-                    <td className="r" onClick={(e) => e.stopPropagation()}>
+                    <td
+                      className="r"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
                       {!session ? (
                         <span className="muted">—</span>
                       ) : confirming ? (

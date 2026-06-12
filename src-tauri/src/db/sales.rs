@@ -292,3 +292,94 @@ pub fn earned_since(db: &Db, days: i64) -> AppResult<i64> {
         Ok(total)
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::testutil::{seed_item, test_db};
+
+    fn sale(slug: &str, qty: i64, plat: Option<i64>) -> SaleRecord {
+        SaleRecord {
+            slug: slug.into(),
+            qty,
+            plat_per_unit: plat,
+            notes: None,
+        }
+    }
+
+    #[test]
+    fn record_decrements_inventory_and_logs_the_event() {
+        let db = test_db("sales-record");
+        seed_item(&db, "ash_prime_set", "set", Some(100));
+        crate::db::inventory::add(&db, "ash_prime_set", 3).unwrap();
+
+        let left = record(&db, sale("ash_prime_set", 2, Some(95))).unwrap();
+        assert_eq!(left, 1);
+        let rows = list_recent(&db, 10).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].qty, 2);
+        assert_eq!(rows[0].plat_per_unit, Some(95));
+        // Snapshots the cached median for later honesty checks.
+        assert_eq!(earned_since(&db, 7).unwrap(), 190);
+    }
+
+    #[test]
+    fn record_falls_back_to_cached_median_and_clears_empty_rows() {
+        let db = test_db("sales-median");
+        seed_item(&db, "soma_prime_set", "set", Some(40));
+        crate::db::inventory::add(&db, "soma_prime_set", 1).unwrap();
+
+        // No explicit price → the cached median is the per-unit price.
+        let left = record(&db, sale("soma_prime_set", 1, None)).unwrap();
+        assert_eq!(left, 0);
+        assert_eq!(earned_since(&db, 7).unwrap(), 40);
+        // Selling the last copy removes the inventory row entirely.
+        let n: i64 = db
+            .read(|c| {
+                Ok(c.query_row(
+                    "SELECT COUNT(*) FROM inventory_items WHERE slug='soma_prime_set'",
+                    [],
+                    |r| r.get(0),
+                )?)
+            })
+            .unwrap();
+        assert_eq!(n, 0);
+    }
+
+    #[test]
+    fn record_rejects_overselling_and_unknown_items() {
+        let db = test_db("sales-reject");
+        seed_item(&db, "ember_prime_set", "set", None);
+        crate::db::inventory::add(&db, "ember_prime_set", 1).unwrap();
+        assert!(record(&db, sale("ember_prime_set", 2, None)).is_err());
+        assert!(record(&db, sale("not_in_inventory", 1, None)).is_err());
+        // The failed sale must not have touched inventory (transactional).
+        let rows = list_recent(&db, 10).unwrap();
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn undo_restores_inventory_same_day() {
+        let db = test_db("sales-undo");
+        seed_item(&db, "loki_prime_set", "set", Some(60));
+        crate::db::inventory::add(&db, "loki_prime_set", 2).unwrap();
+        let id = {
+            record(&db, sale("loki_prime_set", 2, Some(50))).unwrap();
+            list_recent(&db, 1).unwrap()[0].id
+        };
+        undo(&db, id).unwrap();
+        let qty: i64 = db
+            .read(|c| {
+                Ok(c.query_row(
+                    "SELECT qty FROM inventory_items WHERE slug='loki_prime_set'",
+                    [],
+                    |r| r.get(0),
+                )?)
+            })
+            .unwrap();
+        assert_eq!(qty, 2);
+        assert!(list_recent(&db, 10).unwrap().is_empty());
+        // A second undo of the same id must fail (already gone).
+        assert!(undo(&db, id).is_err());
+    }
+}

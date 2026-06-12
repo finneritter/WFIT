@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ItemTags } from "../components/ItemTags";
-import { Glyph, StatBox, TableStatus } from "../components/ui";
+import { ItemName, StatBox, TableStatus, rowAction } from "../components/ui";
 import {
   useBudget,
   useBuyList,
@@ -70,7 +70,9 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
             type="button"
             className="btn sm"
             style={{ marginLeft: 8 }}
-            onClick={() => rows.forEach((r) => purchase.mutate(r.slug))}
+            onClick={() => {
+              for (const r of rows) purchase.mutate(r.slug);
+            }}
           >
             Purchase all → inventory
           </button>
@@ -95,25 +97,28 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
               />
             ) : (
               rows.map((r) => (
-                <tr key={r.slug} onClick={() => onOpen(r.slug)}>
+                <tr key={r.slug} {...rowAction(() => onOpen(r.slug))}>
                   <td>
-                    <div className="dnm">
-                      <Glyph name={r.display_name} plat={r.median_plat} thumb={r.thumbnail_url} />
-                      <div className="di">
-                        <span className="nm">
-                          {r.display_name}
-                          <ItemTags
-                            trend={r.trend}
-                            vaulted={r.is_vaulted}
-                            listed={listed.has(r.slug)}
-                          />
-                        </span>
-                        <span className="sub">{r.part_type}</span>
-                      </div>
-                    </div>
+                    <ItemName
+                      name={r.display_name}
+                      plat={r.median_plat}
+                      thumb={r.thumbnail_url}
+                      sub={r.part_type}
+                      tags={
+                        <ItemTags
+                          trend={r.trend}
+                          vaulted={r.is_vaulted}
+                          listed={listed.has(r.slug)}
+                        />
+                      }
+                    />
                   </td>
                   <td className="r">{fmt(r.median_plat)}p</td>
-                  <td className="r" onClick={(e) => e.stopPropagation()}>
+                  <td
+                    className="r"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
                     <span className="qstep" style={{ display: "inline-flex" }}>
                       <button
                         type="button"
@@ -131,7 +136,11 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
                     </span>
                   </td>
                   <td className="r">{fmt((r.median_plat ?? 0) * r.buy_qty)}p</td>
-                  <td className="r" onClick={(e) => e.stopPropagation()}>
+                  <td
+                    className="r"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
                     <button
                       type="button"
                       className="btn sm"
