@@ -554,8 +554,7 @@ impl Market {
                 "buy" if is_online(&status) => {
                     buyers += 1;
                     best_buy = Some(best_buy.map_or(p, |b| b.max(p)));
-                    *bid_levels.entry((o.rank, p)).or_insert(0) +=
-                        o.quantity.unwrap_or(1).max(1);
+                    *bid_levels.entry((o.rank, p)).or_insert(0) += o.quantity.unwrap_or(1).max(1);
                 }
                 "sell" => {
                     if is_online(&status) {

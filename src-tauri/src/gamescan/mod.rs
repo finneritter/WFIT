@@ -1,28 +1,44 @@
 //! Game inventory import — memory-scan of the running Warframe client.
 //!
 //! ISOLATED, like `worldstate.rs`: own concern, never on the warframe.market data
-//! path. Opt-in, consent-gated (typed phrase), Linux-only, off by default.
+//! path. Opt-in, consent-gated (typed phrase), off by default. Supported on
+//! **Linux and Windows**; macOS is unsupported (SIP/hardened-runtime block reading
+//! another process's memory, and Warframe has no native Mac client).
 //! **ToS-prohibited and ban-risky** — see `docs/GAME_INVENTORY_IMPORT.md`.
 //!
-//! Build status: **Phase B2 verified live (2026-06-01).** `consent` + `map` are
-//! unit-tested; `process`/`memory`/`api` implement the live read from the public
-//! protocol (signature `accountId=<24 hex>&nonce=<digits>`; endpoint
-//! `mobile.warframe.com/api/inventory.php`). No upstream code is copied. A real
-//! scan imported correct counts across prime parts, mods and arcanes; the count
-//! fix was reading `RawUpgrades` (stacked mods/arcanes) — see `map.rs`. Note
-//! `ptrace_scope` can block the read on a locked-down kernel (see `memory.rs`).
+//! Build status: Linux verified live (2026-06-01); Windows implemented and
+//! type-checked, runtime-unverified pending a Windows test. `consent`/`map`/`scan`
+//! are unit-tested. The portable search/parse lives in `scan.rs`; each OS supplies a
+//! `MemReader` (`memory_linux` via `/proc/<pid>/{maps,mem}`, `memory_windows` via
+//! `VirtualQueryEx`/`ReadProcessMemory`). Signature `accountId=<24 hex>&nonce=<digits>`,
+//! endpoint `mobile.warframe.com/api/inventory.php`. No upstream code is copied.
 
 pub mod consent;
 pub mod map;
 
-#[cfg(target_os = "linux")]
+// The portable scan core is always compiled so its tests run on every host; it's
+// only *used* on supported OSes (hence the dead-code allowance elsewhere).
+#[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
+mod scan;
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 mod api;
+
 #[cfg(target_os = "linux")]
-mod memory;
-#[cfg(target_os = "linux")]
+#[path = "process_linux.rs"]
+mod process;
+#[cfg(target_os = "windows")]
+#[path = "process_windows.rs"]
 mod process;
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "linux")]
+#[path = "memory_linux.rs"]
+mod memory;
+#[cfg(target_os = "windows")]
+#[path = "memory_windows.rs"]
+mod memory;
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 use crate::error::AppError;
 use crate::error::AppResult;
 use serde::{Deserialize, Serialize};
@@ -54,47 +70,48 @@ pub struct ScanItem {
     pub qty: i64,
 }
 
-/// Whether the platform can support memory-scanning at all. Linux only — macOS
-/// (SIP/hardened runtime) and Windows are not supported in v1.
+/// Whether the platform can support memory-scanning at all. Linux + Windows;
+/// macOS is unsupported (SIP/hardened runtime block reading another process).
 pub const fn is_supported() -> bool {
-    cfg!(target_os = "linux")
+    cfg!(target_os = "linux") || cfg!(target_os = "windows")
 }
 
 /// Best-effort detection of a running Warframe client. Process listing only (NOT
 /// memory). Returns false on unsupported platforms.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 pub fn warframe_running() -> bool {
     process::find_pid().is_some()
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 pub fn warframe_running() -> bool {
     false
 }
 
 /// Perform a live scan: process → memory (accountId + nonce) → DE inventory
-/// endpoint → normalized `RawInventory`. Linux-only.
+/// endpoint → normalized `RawInventory`. Linux + Windows.
 pub async fn scan() -> AppResult<RawInventory> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     {
-        linux_scan().await
+        real_scan().await
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     {
         Err(AppError::Invalid(
-            "game inventory scan is Linux-only".into(),
+            "game inventory scan is not supported on this OS".into(),
         ))
     }
 }
 
-#[cfg(target_os = "linux")]
-async fn linux_scan() -> AppResult<RawInventory> {
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+async fn real_scan() -> AppResult<RawInventory> {
     use crate::error::AppError;
 
     let pid = process::find_pid()
         .ok_or_else(|| AppError::NotConnected("Warframe is not running".into()))?;
 
-    // ptrace_scope 2/3 always blocks the read — fail early with guidance.
+    // Linux: ptrace_scope 2/3 always blocks the read — fail early with guidance.
+    #[cfg(target_os = "linux")]
     if let Some(scope) = process::ptrace_scope() {
         if scope >= 2 {
             return Err(AppError::Invalid(format!(

@@ -179,7 +179,7 @@ the rarity exclusion** (affects value, not the raw owned-count). Applied in `own
   timers, so lag there is mostly harmless).
 - Per-category/rarity exclusion affects portfolio **value**, not the "Parts" count stat (matches the
   existing rarity-exclusion behavior).
-- Pass B set composition still uses the `set_slug` heuristic; game-scan is manual + Linux-only; Listings
+- Pass B set composition still uses the `set_slug` heuristic; game-scan is manual + Linux/Windows (macOS unsupported); Listings
   write actions and macOS build still deferred.
 
 ---

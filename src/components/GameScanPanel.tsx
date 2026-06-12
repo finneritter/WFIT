@@ -141,13 +141,18 @@ export function GameScanPanel() {
           <div className="set-h">
             Reads the live Warframe client's memory to import your <b>true owned counts</b> — the
             one thing warframe.market can't give. This{" "}
-            <b>violates DE's Terms of Service and could get your account banned.</b> Opt-in,
-            Linux-only, never logs in.
+            <b>violates DE's Terms of Service and could get your account banned.</b> Opt-in, never
+            logs in. Supported on Linux &amp; Windows.
           </div>
         </div>
         <div className="set-c">
           {!supported ? (
-            <span className="muted">Linux only</span>
+            <span
+              className="muted"
+              title="macOS blocks reading another app's memory (SIP / hardened runtime), and Warframe has no native Mac client."
+            >
+              Not available on macOS
+            </span>
           ) : consented ? (
             <span className="seg">
               <span className="chip" aria-pressed>

@@ -233,9 +233,10 @@ Two tiers, both **read-only**:
 Settings → **Game inventory** can read your *real* owned counts directly from the running Warframe
 client (memory-scan → DE mobile inventory endpoint) — the one thing market listings can't give.
 **This violates DE's Terms of Service and could get your account banned.** It is opt-in, gated
-behind a typed consent phrase, Linux-only, and off by default. It never logs in — it reuses the
-live game session. On a locked-down kernel, `kernel.yama.ptrace_scope` may need to be `0`.
-See `docs/GAME_INVENTORY_IMPORT.md`.
+behind a typed consent phrase, and off by default. It never logs in — it reuses the live game
+session. Supported on **Linux and Windows** (macOS can't — SIP blocks reading another app's
+memory). On a locked-down Linux kernel, `kernel.yama.ptrace_scope` may need to be `0`; on Windows,
+run WFIT as the same user that launched the game. See `docs/GAME_INVENTORY_IMPORT.md`.
 
 ---
 

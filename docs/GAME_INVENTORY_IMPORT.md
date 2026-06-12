@@ -13,7 +13,8 @@
 > `WFM_ACCOUNT_SIGNIN.md` rules this exact approach out of scope citing ban risk. Building this is a
 > deliberate, documented reversal of that decision — §8 updates the constraint language so the docs
 > stop contradicting the code. **It carries a real, documented ban risk to the account.** It must stay
-> opt-in, consent-gated, isolated, and Linux-only.
+> opt-in, consent-gated, isolated, and supported only where memory reads are possible (Linux + Windows;
+> not macOS).
 >
 > **Why it belongs anyway:** the whole point is to be an AlecaFrame alternative. Listings ≠ inventory;
 > only a game-side read gives true owned counts. Everything else WFIT needs (prices, ducats, sets,
@@ -219,7 +220,7 @@ So the repo stops contradicting itself, update:
 - **`CLAUDE.md` hard constraints:** change "No game-account (DE) auth, ever — every path is dead" to
   something like: *"No programmatic DE login (Akamai-blocked). Real inventory is available only via an
   opt-in, consent-gated **memory-scan** of the running client (`gamescan` module, isolated from the
-  market path, Linux-only) — ToS-prohibited and ban-risky; off by default. See `GAME_INVENTORY_IMPORT.md`."*
+  market path, Linux + Windows) — ToS-prohibited and ban-risky; off by default. See `GAME_INVENTORY_IMPORT.md`."*
 - **`WFM_ACCOUNT_SIGNIN.md`:** it currently says memory-scan is "Out of scope, deliberately." Add a
   pointer: *"Superseded for users who opt in — see `GAME_INVENTORY_IMPORT.md`. Listings import remains
   the safe default; game scan is the AlecaFrame-parity power-user path."* Keep listings as the
@@ -232,15 +233,23 @@ Keep the listings-import path. The two coexist: listings = safe default; game sc
 
 ## 9. Platform, automation, and open items
 
-**Linux (primary).** Reads use `process_vm_readv` / `/proc/<pid>/mem`. With the common
-`kernel.yama.ptrace_scope = 1`, a non-root process can read another process **owned by the same user** —
-which is your case (you launched both). No root in the normal case. If `ptrace_scope` is 2/3, reads
-fail — detect and surface a clear message instead of silently returning empty.
+**Linux.** Reads use `/proc/<pid>/mem` (`pread`-backed `File::read_at`) over the writable anonymous
+regions from `/proc/<pid>/maps`. With the common `kernel.yama.ptrace_scope = 1`, a non-root process can
+read another process **owned by the same user** — which is your case (you launched both). No root in the
+normal case. If `ptrace_scope` is 2/3, reads fail — detected and surfaced as a clear message.
 
-**macOS (impractical — keep manual/listings there).** `task_for_pid` + SIP/hardened-runtime make
-reading another process's memory effectively impossible without disabling SIP — a non-starter. Gate the
-feature behind a Linux check; on macOS, WFIT stays the manual + warframe.market + listings tool. (Your
-`HANDOFF.md` already notes the macOS build is pending; this just confirms the scan is Linux-only.)
+**Windows.** Same idea via the Win32 APIs: `CreateToolhelp32Snapshot` finds `Warframe.x64.exe`,
+`OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION)` opens it, `VirtualQueryEx` enumerates the
+committed writable non-image regions, and `ReadProcessMemory` reads them. No admin needed for a process
+you launched yourself (same user); on an access-denied open, surface "run WFIT as the same user (or as
+administrator)." Warframe ships no kernel anti-cheat, so the read itself isn't detected — the ban risk is
+the unauthorized session reuse, identical to Linux. The OS-specific code lives in
+`gamescan/process_windows.rs` + `memory_windows.rs`, behind the shared `scan.rs` `MemReader` trait.
+
+**macOS (unsupported).** `task_for_pid` + SIP/hardened-runtime make reading another process's memory
+effectively impossible without disabling SIP or running as root — non-starters — and Warframe has no
+native Mac client (it runs under CrossOver/Whisky). `is_supported()` returns false; the Settings panel
+shows "Not available on macOS." WFIT stays the manual + warframe.market + listings tool there.
 
 **`auto` — AlecaFrame-style automatic sync.** Baseline is a manual "Scan now" button. For parity, add an
 **opt-in `auto_sync`** that, *while Warframe is running*, re-scans on a conservative interval (e.g. every
@@ -284,7 +293,7 @@ preserved and the whole thing off by default and clearly labeled ban-risky.
 > Optional **AlecaFrame-parity real-inventory** feature, reversing the old "no DE auth" rule. It does
 > **not** log in (that path is Akamai-dead); it **memory-scans the running client** for `accountId`+`nonce`
 > and calls the DE mobile inventory endpoint — **ToS-prohibited, ban-risky, opt-in, consent-gated
-> (typed phrase), Linux-only, off by default.** Lives in an isolated `gamescan` module (never on the
+> (typed phrase), Linux + Windows (not macOS), off by default.** Lives in an isolated `gamescan` module (never on the
 > warframe.market path), like `worldstate.rs`. Maps DE `uniqueName` → `catalog_items.game_ref` → slug
 > (the join key is already in `/v2/items` `gameRef`, just newly stored). Scan = ground truth for owned
 > qty (`source='de_scan'`, reviewable diff first, manual rows preserved). Endpoint host/path + byte

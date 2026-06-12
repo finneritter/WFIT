@@ -59,8 +59,9 @@ Retired (do not build from): `reference/design/` (old "Primely" hi-fi),
   decommissioned). The safe, default "sign-in" is to a *warframe.market* account, only for reading
   your own orders. **Exception (opt-in):** real owned inventory is available via a consent-gated
   **memory-scan** of the running game client (`gamescan` module — isolated from the market path,
-  Linux-only, off by default). It does NOT log in; it reuses the live session. **ToS-prohibited and
-  ban-risky.** See `docs/GAME_INVENTORY_IMPORT.md` and `.claude/plans/game-inventory-import.md`.
+  **Linux + Windows**, off by default; macOS unsupported — SIP blocks cross-process reads). It does
+  NOT log in; it reuses the live session. **ToS-prohibited and ban-risky.** See
+  `docs/GAME_INVENTORY_IMPORT.md` and `.claude/plans/game-inventory-import.md`.
 - Endpoint quirks: catalog = `GET /v2/items`; per-item detail = `GET /v2/items/<slug>` (plural;
   singular 404s); statistics = `GET /v1/items/<slug>/statistics` (v2 stats 404). Your orders =
   `GET /v2/orders/user/<name>`; public item orders = `GET /v2/orders/item/<slug>`. `vaulted` is
@@ -91,7 +92,8 @@ Retired (do not build from): `reference/design/` (old "Primely" hi-fi),
 
 Rust core in `src-tauri/src/`: `market.rs` (warframe.market v2 client + throttle), `worldstate.rs`
 (api.warframestat.us, isolated), `wfm_account.rs` (account/orders + keychain), `gamescan/`
-(opt-in DE memory-scan inventory import — isolated like worldstate, Linux-only, off by default), `domain/`
+(opt-in DE memory-scan inventory import — isolated like worldstate, Linux + Windows, off by default;
+per-OS backend behind a shared `scan.rs` `MemReader` trait), `domain/`
 (`classify`/`partname`/`mod_rarity`/`arcane` — pure; the rarity & arcane datasets are bundled `.tsv`s
 loaded into `Lazy` maps, no DB table), `db/` (rusqlite modules per table incl. `arcanes.rs`,
 transactional writes), `commands.rs` (the `#[command]` surface), `lib.rs` (`AppState` + handler registry).
