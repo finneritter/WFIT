@@ -28,6 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # tauri::generate_context! panics at COMPILE time if frontendDist
+      # (../dist) doesn't exist; this job never builds the frontend, so give it
+      # an empty dir. (rust-cache masked this until lib.rs changed.)
+      - run: mkdir -p dist
       # Tauri links against the system webview/gtk stack even for `cargo test`.
       - name: Install Tauri Linux dependencies
         run: |
