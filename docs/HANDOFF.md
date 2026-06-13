@@ -130,7 +130,7 @@ the rarity exclusion** (affects value, not the raw owned-count). Applied in `own
 ### 7. Live heartbeat ("the app should feel alive") — 2026-06-03
 - **`lib.rs::spawn_price_heartbeat`**: perpetual 45s ticks; each refreshes the stalest tiered slice —
   watchlist (>10min old) → owned (>60min) → stale catalog tail (6h TTL) — capped at ~12 statistics +
-  ~6 order-book calls/tick (~24 req/min worst case vs the 350ms throttle's ~170 ceiling; steady state
+  ~6 order-book calls/tick (~24 req/min worst case vs the 400ms throttle's ~150 ceiling; steady state
   ~13/min). Listings mirror piggybacks every ~13th tick via `commands::sync_listings_impl`. Skips
   while `pricing_active` (launch drain / manual refresh owns the throttle).
 - Each tick that changed anything stamps `app_meta.last_price_sync` and **emits `prices-updated`**;

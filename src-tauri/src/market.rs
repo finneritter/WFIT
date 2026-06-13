@@ -5,23 +5,30 @@
 //! Statistics: GET https://api.warframe.market/v1/items/<slug>/statistics  (v2 404s)
 //!
 //! Headers on every request: User-Agent: wfit-desktop/<crate version> (lib.rs USER_AGENT), Language: en,
-//! Platform: pc, Accept: application/json. ONE global throttle (350 ms min-gap,
-//! ~3 req/s) across every warframe.market call — the single rate-limit chokepoint.
+//! Platform: pc, Accept: application/json. ONE global throttle (400 ms min-gap,
+//! serialized across concurrent callers) across every warframe.market call — the
+//! single rate-limit chokepoint. Writes additionally retry on a 429.
 
 use crate::db::catalog::CatalogUpsert;
 use crate::db::prices::{DayStat, PriceUpsert};
 use crate::domain::classify;
 use crate::error::{AppError, AppResult};
-use parking_lot::Mutex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 
 const API_V1: &str = "https://api.warframe.market/v1";
 const API_V2: &str = "https://api.warframe.market/v2";
 const STATIC_BASE: &str = "https://warframe.market/static/assets/";
-const MIN_REQUEST_GAP_MS: u64 = 350; // ~3 req/sec ceiling
+// ~2.5 req/sec — a hair under warframe.market's ~3/s ceiling, with headroom for
+// timing jitter now that the throttle truly serializes concurrent callers.
+const MIN_REQUEST_GAP_MS: u64 = 400;
+// Writes (create/edit/delete order) retry on a 429 — they're rejected before
+// processing, so a retry is safe even for the non-idempotent create POST.
+const WRITE_MAX_ATTEMPTS: u32 = 3;
+const RETRY_AFTER_CAP: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
 pub struct Market {
@@ -57,21 +64,19 @@ impl Market {
     }
 
     /// Block until at least MIN_REQUEST_GAP_MS has passed since the last call.
+    ///
+    /// The async lock is held across the sleep, so concurrent callers (the
+    /// launch drain, the heartbeat, a user-initiated command) are *serialized*:
+    /// each waits its full gap behind the last one rather than all reading the
+    /// same timestamp and firing together. That burst was the source of the 429s.
     pub async fn throttled(&self) {
-        let wait = {
-            let last = *self.last_call.lock();
-            let since = last.elapsed();
-            let gap = Duration::from_millis(MIN_REQUEST_GAP_MS);
-            if since >= gap {
-                Duration::ZERO
-            } else {
-                gap - since
-            }
-        };
-        if wait > Duration::ZERO {
-            tokio::time::sleep(wait).await;
+        let mut last = self.last_call.lock().await;
+        let since = last.elapsed();
+        let gap = Duration::from_millis(MIN_REQUEST_GAP_MS);
+        if since < gap {
+            tokio::time::sleep(gap - since).await;
         }
-        *self.last_call.lock() = Instant::now();
+        *last = Instant::now();
     }
 
     /// Throttled GET with ONE retry on transient failures (timeout/connect
@@ -661,7 +666,7 @@ impl Market {
             .get(format!("{API_V2}/me"))
             .header("Authorization", format!("JWT {jwt}"))
             .header("Cookie", format!("JWT={jwt}"));
-        send_checked(req).await?;
+        self.send_checked(req).await?;
         Ok(())
     }
 
@@ -711,7 +716,7 @@ impl Market {
                 rank,
                 visible,
             });
-        let resp: Resp = send_checked(req).await?.json().await?;
+        let resp: Resp = self.send_checked(req).await?.json().await?;
         Ok(resp.data)
     }
 
@@ -748,7 +753,7 @@ impl Market {
                 quantity,
                 visible,
             });
-        let resp: Resp = send_checked(req).await?.json().await?;
+        let resp: Resp = self.send_checked(req).await?.json().await?;
         Ok(resp.data)
     }
 
@@ -761,21 +766,58 @@ impl Market {
             .delete(url)
             .header("Authorization", format!("JWT {jwt}"))
             .header("Cookie", format!("JWT={jwt}"));
-        send_checked(req).await?;
+        self.send_checked(req).await?;
         Ok(())
+    }
+
+    /// Send an authed write, retrying on a 429 (rate-limited → rejected before
+    /// processing, so safe to resend even for the create POST). Honors
+    /// `Retry-After` when present, else backs off; each retry re-enters the
+    /// global throttle. The caller throttles the first attempt. On a final
+    /// non-2xx it surfaces the response **body** (where warframe.market puts the
+    /// actual reason) instead of a bare status code.
+    async fn send_checked(&self, req: reqwest::RequestBuilder) -> AppResult<reqwest::Response> {
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            // Clone so we can resend; JSON bodies always clone (only streams don't).
+            let send = req
+                .try_clone()
+                .ok_or_else(|| AppError::Other("request body not cloneable for retry".into()))?;
+            let r = send.send().await?;
+            let status = r.status();
+            if status.is_success() {
+                return Ok(r);
+            }
+            if status.as_u16() != 429 || attempt >= WRITE_MAX_ATTEMPTS {
+                let body = r.text().await.unwrap_or_default();
+                return Err(AppError::Other(format!("warframe.market {status}: {body}")));
+            }
+            let wait = retry_after(&r)
+                .map(|d| d.min(RETRY_AFTER_CAP))
+                .unwrap_or_else(|| Duration::from_millis(750 * attempt as u64));
+            tracing::warn!(
+                attempt,
+                ?wait,
+                "warframe.market write rate-limited — retrying"
+            );
+            tokio::time::sleep(wait).await;
+            self.throttled().await;
+        }
     }
 }
 
-/// Send an authed write and, on a non-2xx, surface the response **body** (where
-/// warframe.market puts the actual error reason) instead of a bare status code.
-async fn send_checked(req: reqwest::RequestBuilder) -> AppResult<reqwest::Response> {
-    let r = req.send().await?;
-    let status = r.status();
-    if status.is_success() {
-        return Ok(r);
-    }
-    let body = r.text().await.unwrap_or_default();
-    Err(AppError::Other(format!("warframe.market {status}: {body}")))
+/// warframe.market's `Retry-After` (seconds) when it includes one on a 429.
+fn retry_after(r: &reqwest::Response) -> Option<Duration> {
+    let secs: u64 = r
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse()
+        .ok()?;
+    Some(Duration::from_secs(secs))
 }
 
 /// The live order book for one item: robust asks per rank + the online bid ladder.
@@ -916,6 +958,30 @@ fn robust_price(series: &[(f64, f64)]) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The 429 fix: concurrent callers must be serialized, not all read the same
+    // timestamp and fire together. Four callers ⇒ at least three full gaps of
+    // (sequential) waiting after the first, so total ≥ 3 × gap.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn throttle_serializes_concurrent_callers() {
+        let m = Market::new();
+        let start = Instant::now();
+        let tasks: Vec<_> = (0..4)
+            .map(|_| {
+                let m = m.clone();
+                tokio::spawn(async move { m.throttled().await })
+            })
+            .collect();
+        for t in tasks {
+            t.await.unwrap();
+        }
+        let elapsed = start.elapsed();
+        let floor = Duration::from_millis(MIN_REQUEST_GAP_MS * 3);
+        assert!(
+            elapsed >= floor,
+            "throttle let callers burst: {elapsed:?} < {floor:?}"
+        );
+    }
 
     #[test]
     fn robust_price_ignores_low_volume_troll() {

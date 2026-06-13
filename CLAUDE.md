@@ -55,7 +55,10 @@ Retired (do not build from): `reference/design/` (old "Primely" hi-fi),
 - **warframe.market is the sole source for items/prices/ducats/sets.** Headers on every request:
   `User-Agent: wfit-desktop/<crate version>` (one shared constant: `lib.rs::USER_AGENT`, tied to
   `CARGO_PKG_VERSION`), `Language: en`, `Platform: pc`, `Accept: application/json`.
-  Global throttle: **350ms min-gap (~3 req/s)** across ALL warframe.market calls — one chokepoint.
+  Global throttle: **400ms min-gap (~2.5 req/s), serialized across concurrent callers** (the async
+  mutex is held across the wait — don't "optimize" it back to a read-release-sleep-stamp that lets
+  concurrent callers burst; that caused 429s). ALL warframe.market calls go through it — one
+  chokepoint. Writes (`create/update/delete_order`) additionally retry on a 429.
 - **No programmatic DE login** — POSTing credentials to DE's auth endpoint is dead (Akamai-blocked /
   decommissioned). The safe, default "sign-in" is to a *warframe.market* account, only for reading
   your own orders. **Exception (opt-in):** real owned inventory is available via a consent-gated
