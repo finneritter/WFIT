@@ -12,6 +12,7 @@
     "core:window:allow-close",
     "core:webview:allow-create-webview-window",
     "core:window:allow-set-focus",
-    "clipboard-manager:allow-write-text"
+    "clipboard-manager:allow-write-text",
+    "notification:default"
   ]
 }

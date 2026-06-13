@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo } from "react";
 import * as api from "../lib/api";
 import { pushToast } from "../lib/toast";
-import type { CatalogRow, RepriceApply, ScanApply } from "../lib/types";
+import type { CatalogRow, NotificationPrefs, RepriceApply, ScanApply } from "../lib/types";
 
 type QC = ReturnType<typeof useQueryClient>;
 
@@ -28,6 +28,7 @@ export const keys = {
   excludedRarities: ["excludedRarities"] as const,
   excludedMinPlat: ["excludedMinPlat"] as const,
   excludedMinPlatByCat: ["excludedMinPlatByCat"] as const,
+  notificationPrefs: ["notificationPrefs"] as const,
   sets: ["sets"] as const,
   ducats: ["ducats"] as const,
   arcanes: ["arcanes"] as const,
@@ -337,6 +338,17 @@ export function useSetExcludedMinPlatByCat() {
       qc.invalidateQueries({ queryKey: keys.excludedMinPlatByCat });
       invalidateInventoryDerived(qc);
     },
+  });
+}
+
+// ---- notifications + close-to-tray ----
+export const useNotificationPrefs = () =>
+  useQuery({ queryKey: keys.notificationPrefs, queryFn: api.getNotificationPrefs });
+export function useSetNotificationPrefs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (prefs: NotificationPrefs) => api.setNotificationPrefs(prefs),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.notificationPrefs }),
   });
 }
 

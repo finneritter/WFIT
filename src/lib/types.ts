@@ -499,6 +499,17 @@ export interface PricingProgress {
   last_price_sync: string | null;
 }
 
+// Desktop-notification + close-to-tray preferences (one JSON blob in app_settings).
+export interface NotificationPrefs {
+  master_enabled: boolean;
+  close_to_tray: boolean;
+  s_tier_arbitration: boolean;
+  void_cascade: boolean;
+  vendor_arrival: boolean;
+  daily_reset: boolean;
+  weekly_reset: boolean;
+}
+
 export interface Worldstate {
   cycles: Cycle[];
   fissures: Fissure[];

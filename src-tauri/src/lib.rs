@@ -4,6 +4,7 @@ mod domain;
 mod error;
 mod gamescan;
 mod market;
+mod notify;
 mod types;
 mod wfm_account;
 mod wfm_socket;
@@ -29,6 +30,11 @@ pub struct AppState {
     /// can show a "syncing…" indicator the entire time prices are still filling in —
     /// distinguishing "still loading" from a settled value (incl. a fresh post-wipe sync).
     pub pricing_active: AtomicBool,
+    /// When true, closing the main window hides it to the tray instead of quitting.
+    /// Mirrors the persisted notification pref; the close handler reads this (a DB
+    /// read inside the window event loop would be needless), and the set-prefs
+    /// command keeps it in sync. Forced false when the tray icon couldn't be built.
+    pub close_to_tray: AtomicBool,
 }
 
 /// Managed INSTEAD of AppState when startup fails (corrupt DB, failed
@@ -109,7 +115,39 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
+        .on_window_event(|window, event| {
+            // Close-to-tray: hide the main window instead of quitting when the
+            // pref is on (mirrored into AppState). `try_state` (not `state`) so
+            // recovery mode — which has no AppState and also no OS titlebar —
+            // falls through to a real close and never traps the user.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() != "main" {
+                    return;
+                }
+                let close_to_tray = window
+                    .app_handle()
+                    .try_state::<Arc<AppState>>()
+                    .map(|s| s.close_to_tray.load(Ordering::Relaxed))
+                    .unwrap_or(false);
+                if close_to_tray {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(|app| {
+            // Tray icon: always built (even in recovery mode) so "Quit" is always
+            // reachable. If it fails to build — e.g. no StatusNotifierItem host on
+            // a bare Wayland session — close-to-tray is force-disabled in init_app
+            // so the user can never be stranded with a hidden, unrecoverable window.
+            let tray_ok = match build_tray(app.handle()) {
+                Ok(()) => true,
+                Err(e) => {
+                    tracing::warn!(error = %e, "tray icon unavailable — close-to-tray disabled");
+                    false
+                }
+            };
             // app_data_dir failing is OS-level breakage; fall back so even that
             // lands in the recovery screen instead of a pre-window panic.
             let app_data_dir = app
@@ -117,7 +155,7 @@ pub fn run() {
                 .app_data_dir()
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
             init_logging(&app_data_dir.join("logs"));
-            if let Err(e) = init_app(app, &app_data_dir) {
+            if let Err(e) = init_app(app, &app_data_dir, tray_ok) {
                 tracing::error!(error = %e, "startup failed — entering recovery mode");
                 app.manage(RecoveryInfo {
                     error: e.to_string(),
@@ -162,6 +200,9 @@ pub fn run() {
             commands::set_excluded_min_plat,
             commands::get_excluded_min_plat_by_cat,
             commands::set_excluded_min_plat_by_cat,
+            commands::get_notification_prefs,
+            commands::set_notification_prefs,
+            commands::send_test_notification,
             commands::get_pricing_progress,
             // computed
             commands::get_sets,
@@ -217,10 +258,73 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
+/// Build the system-tray icon + menu (Show / Quit). Left-click toggles the main
+/// window; "Quit" calls `app.exit(0)`, which raises `ExitRequested` (NOT
+/// `CloseRequested`), so it bypasses the close-to-tray interception and really
+/// exits. Errs when the platform has no tray host — the caller disables
+/// close-to-tray in that case.
+fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+
+    let show = MenuItem::with_id(app, "show", "Show WFIT", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &quit])?;
+
+    let mut builder = TrayIconBuilder::with_id("main-tray")
+        .tooltip("WFIT")
+        .menu(&menu)
+        .show_menu_on_left_click(false) // left-click toggles; menu on right-click
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => show_main(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                toggle_main(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon().cloned() {
+        builder = builder.icon(icon);
+    }
+    builder.build(app)?;
+    Ok(())
+}
+
+/// Reveal + focus the main window (from the tray "Show" item or a left-click).
+fn show_main(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+}
+
+/// Toggle the main window's visibility (tray left-click).
+fn toggle_main(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        if w.is_visible().unwrap_or(false) {
+            let _ = w.hide();
+        } else {
+            show_main(app);
+        }
+    }
+}
+
 /// Everything fallible about startup: data dir, DB open/migration, state +
 /// background tasks. On Err the caller manages [`RecoveryInfo`] instead of
 /// AppState and the frontend shows the recovery screen.
-fn init_app(app: &tauri::App, app_data_dir: &std::path::Path) -> error::AppResult<()> {
+fn init_app(
+    app: &tauri::App,
+    app_data_dir: &std::path::Path,
+    tray_ok: bool,
+) -> error::AppResult<()> {
     std::fs::create_dir_all(app_data_dir)?;
     let db_path = app_data_dir.join("wfit.sqlite");
     tracing::info!(?db_path, "opening database");
@@ -230,6 +334,9 @@ fn init_app(app: &tauri::App, app_data_dir: &std::path::Path) -> error::AppResul
     // user picks a status, so reset the mirror to invisible on launch (it
     // naturally clears to offline when WFIT closes).
     let _ = db::wfm::set_status(&db, "invisible");
+    // Close-to-tray follows the persisted pref, but only if the tray actually
+    // built — otherwise hiding the window would leave no way to bring it back.
+    let close_to_tray = tray_ok && db::settings::notification_prefs(&db).unwrap_or_default().close_to_tray;
     let (presence, presence_rx) = wfm_socket::Presence::new();
     let state = Arc::new(AppState {
         db,
@@ -237,6 +344,7 @@ fn init_app(app: &tauri::App, app_data_dir: &std::path::Path) -> error::AppResul
         worldstate: worldstate::WorldstateClient::new(),
         presence,
         pricing_active: AtomicBool::new(false),
+        close_to_tray: AtomicBool::new(close_to_tray),
     });
     app.manage(state.clone());
 
@@ -251,6 +359,10 @@ fn init_app(app: &tauri::App, app_data_dir: &std::path::Path) -> error::AppResul
     // Live price heartbeat: rolling tiered repricer + UI notifications,
     // so data keeps arriving the whole session, not just at launch.
     spawn_price_heartbeat(state.clone(), app.handle().clone());
+
+    // Desktop-notification engine: watches world-state and fires OS toasts for
+    // the user's enabled event categories (works while the window is hidden).
+    notify::spawn(state.clone(), app.handle().clone());
 
     // Kick off catalog/price warm-up off the UI thread; never block launch.
     tauri::async_runtime::spawn(async move {

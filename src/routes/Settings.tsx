@@ -9,11 +9,13 @@ import {
   useExcludedMinPlat,
   useExcludedMinPlatByCat,
   useExcludedRarities,
+  useNotificationPrefs,
   usePricesRefresh,
   useRebuildCache,
   useSetExcludedMinPlat,
   useSetExcludedMinPlatByCat,
   useSetExcludedRarities,
+  useSetNotificationPrefs,
   useSetsRefresh,
   useSummary,
   useWfmAccount,
@@ -30,7 +32,7 @@ const CAT_FLOORS: [string, string][] = [
   ["mod", "Mod"],
   ["arcane", "Arcane"],
 ];
-import { openBackupsDir, wipeApp } from "../lib/api";
+import { openBackupsDir, sendTestNotification, wipeApp } from "../lib/api";
 import { syncedAgo } from "../lib/format";
 import {
   FONTS,
@@ -42,6 +44,7 @@ import {
   systemTimezone,
   timezoneOptions,
 } from "../lib/prefs";
+import type { NotificationPrefs } from "../lib/types";
 
 function Row({
   label,
@@ -86,6 +89,93 @@ function Seg({
         </button>
       ))}
     </div>
+  );
+}
+
+// Default while the pref query loads — matches the Rust `Default`.
+const NOTIF_DEFAULTS: NotificationPrefs = {
+  master_enabled: true,
+  close_to_tray: true,
+  s_tier_arbitration: true,
+  void_cascade: true,
+  vendor_arrival: true,
+  daily_reset: false,
+  weekly_reset: true,
+};
+
+const OFF_ON: [string, string][] = [
+  ["off", "Off"],
+  ["on", "On"],
+];
+
+function Notifications() {
+  const { data } = useNotificationPrefs();
+  const setPrefs = useSetNotificationPrefs();
+  const [testing, setTesting] = useState(false);
+  const prefs = data ?? NOTIF_DEFAULTS;
+  // Always write the full blob (the backend stores one JSON object), merging the patch.
+  const save = (patch: Partial<NotificationPrefs>) => setPrefs.mutate({ ...prefs, ...patch });
+  // Per-event toggle row — disabled (and dimmed) while the master switch is off.
+  const Evt = (key: keyof NotificationPrefs, label: string, hint: string) => (
+    <Row label={label} hint={hint}>
+      <div style={{ opacity: prefs.master_enabled ? 1 : 0.4 }}>
+        <Seg
+          value={prefs[key] ? "on" : "off"}
+          options={OFF_ON}
+          onChange={(v) => prefs.master_enabled && save({ [key]: v === "on" })}
+        />
+      </div>
+    </Row>
+  );
+  const doTest = async () => {
+    setTesting(true);
+    try {
+      await sendTestNotification();
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <section className="tpanel">
+      <div className="tpanel-h">
+        <h3>Notifications</h3>
+      </div>
+      <Row
+        label="Close to tray"
+        hint="Closing the window hides WFIT to the system tray instead of quitting. Reopen or quit it from the tray icon. (Needs a system tray; disabled automatically if one isn't available.)"
+      >
+        <Seg
+          value={prefs.close_to_tray ? "on" : "off"}
+          options={OFF_ON}
+          onChange={(v) => save({ close_to_tray: v === "on" })}
+        />
+      </Row>
+      <Row
+        label="Desktop notifications"
+        hint="Master switch for the OS notifications below. They fire from the background, so they reach you even while WFIT sits in the tray."
+      >
+        <Seg
+          value={prefs.master_enabled ? "on" : "off"}
+          options={OFF_ON}
+          onChange={(v) => save({ master_enabled: v === "on" })}
+        />
+      </Row>
+      {Evt(
+        "s_tier_arbitration",
+        "S/A-tier arbitrations",
+        "When a top-rated arbitration (community S or A tier) goes live.",
+      )}
+      {Evt("void_cascade", "Void Cascade fissures", "When a Void Cascade fissure appears.")}
+      {Evt("vendor_arrival", "Vendor arrivals", "When Baro Ki'Teer or Varzia is in.")}
+      {Evt("daily_reset", "Daily reset", "At the daily reset (00:00 UTC).")}
+      {Evt("weekly_reset", "Weekly reset", "At the weekly reset (Monday 00:00 UTC).")}
+      <Row label="Test" hint="Fire a sample notification now to confirm your OS shows them.">
+        <button type="button" className="btn" disabled={testing} onClick={doTest}>
+          {testing ? "Sending…" : "Send test"}
+        </button>
+      </Row>
+    </section>
   );
 }
 
@@ -287,6 +377,8 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
           </select>
         </Row>
       </section>
+
+      <Notifications />
 
       <section className="tpanel">
         <div className="tpanel-h">

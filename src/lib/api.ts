@@ -15,6 +15,7 @@ import type {
   ItemOrders,
   ItemSellers,
   ListingRow,
+  NotificationPrefs,
   PricingProgress,
   RepriceApply,
   RepriceRow,
@@ -103,6 +104,12 @@ export const getExcludedMinPlatByCat = () =>
 export const setExcludedMinPlatByCat = (thresholds: Record<string, number>) =>
   invoke<void>("set_excluded_min_plat_by_cat", { thresholds });
 export const getPricingProgress = () => invoke<PricingProgress>("get_pricing_progress");
+
+// notifications + close-to-tray
+export const getNotificationPrefs = () => invoke<NotificationPrefs>("get_notification_prefs");
+export const setNotificationPrefs = (prefs: NotificationPrefs) =>
+  invoke<void>("set_notification_prefs", { prefs });
+export const sendTestNotification = () => invoke<void>("send_test_notification");
 
 // computed
 export const getSets = () => invoke<SetRow[]>("get_sets");

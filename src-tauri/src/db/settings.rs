@@ -79,6 +79,53 @@ pub fn excluded_min_plat_by_cat(db: &Db) -> AppResult<std::collections::HashMap<
     db.read(excluded_min_plat_by_cat_conn)
 }
 
+/// Desktop-notification preferences + the close-to-tray behavior toggle, stored
+/// as one JSON blob (same approach as the per-category min-plat map above). The
+/// backend `notify` engine reads this each tick; `close_to_tray` is also mirrored
+/// into `AppState.close_to_tray` for the window-close handler.
+pub const KEY_NOTIFICATION_PREFS: &str = "notification_prefs";
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(default)] // missing fields fill from Default — adding a field can't break a stored blob
+pub struct NotificationPrefs {
+    pub master_enabled: bool,
+    pub close_to_tray: bool,
+    pub s_tier_arbitration: bool,
+    pub void_cascade: bool,
+    pub vendor_arrival: bool,
+    pub daily_reset: bool,
+    pub weekly_reset: bool,
+}
+
+impl Default for NotificationPrefs {
+    fn default() -> Self {
+        Self {
+            master_enabled: true,
+            close_to_tray: true, // the headline ask: closing hides to the tray
+            s_tier_arbitration: true,
+            void_cascade: true,
+            vendor_arrival: true,
+            daily_reset: false, // daily is noisy; opt-in
+            weekly_reset: true,
+        }
+    }
+}
+
+pub fn notification_prefs_conn(c: &Connection) -> AppResult<NotificationPrefs> {
+    Ok(get_conn(c, KEY_NOTIFICATION_PREFS)?
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default())
+}
+
+pub fn notification_prefs(db: &Db) -> AppResult<NotificationPrefs> {
+    db.read(notification_prefs_conn)
+}
+
+pub fn set_notification_prefs(db: &Db, prefs: &NotificationPrefs) -> AppResult<()> {
+    let json = serde_json::to_string(prefs)?;
+    set(db, KEY_NOTIFICATION_PREFS, &json)
+}
+
 /// Parsed list of excluded mod rarities (lowercase canonical slugs).
 pub fn excluded_rarities_conn(c: &Connection) -> AppResult<Vec<String>> {
     Ok(get_conn(c, KEY_EXCLUDED_RARITIES)?

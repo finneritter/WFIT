@@ -457,6 +457,41 @@ pub fn set_excluded_min_plat_by_cat(
     settings::set(&state.db, settings::KEY_EXCLUDED_MIN_PLAT_BY_CAT, &json)
 }
 
+#[tauri::command]
+pub fn get_notification_prefs(
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<settings::NotificationPrefs> {
+    settings::notification_prefs(&state.db)
+}
+
+#[tauri::command]
+pub fn set_notification_prefs(
+    state: State<'_, Arc<AppState>>,
+    prefs: settings::NotificationPrefs,
+) -> AppResult<()> {
+    settings::set_notification_prefs(&state.db, &prefs)?;
+    // Mirror into the cached flag the window-close handler reads, so the change
+    // takes effect on the very next close with no restart.
+    state
+        .close_to_tray
+        .store(prefs.close_to_tray, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
+/// Fire a notification immediately so the user can confirm OS toasts work (and
+/// grant the permission prompt on platforms that gate it).
+#[tauri::command]
+pub fn send_test_notification(app: tauri::AppHandle) -> AppResult<()> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification()
+        .builder()
+        .title("WFIT")
+        .body("Notifications are working.")
+        .show()
+        .map_err(|e| AppError::Other(e.to_string()))?;
+    Ok(())
+}
+
 // ===========================================================================
 // Sets + Ducats (computed)
 // ===========================================================================
