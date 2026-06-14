@@ -507,7 +507,7 @@ function ItemView({
         ) : null}
       </div>
 
-      <div className="statband" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+      <div className="statband">
         <StatBox
           k="Cheapest online"
           v={bestSell == null ? "—" : fmt(bestSell)}

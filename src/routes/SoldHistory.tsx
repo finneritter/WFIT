@@ -63,13 +63,17 @@ export function SoldHistory({ onOpen }: { onOpen: (slug: string) => void }) {
     () => apply(rows.filter((r) => (cat === "all" || r.category === cat) && test(r))),
     [rows, cat, test, apply],
   );
-  const { visible, hasMore, shown, total, more } = usePaged(view, 60);
+  const { visible, hasMore, shown, total, more } = usePaged(
+    view,
+    60,
+    `${cat}|${search}|${sort ? sort.key + sort.dir : ""}`,
+  );
 
   const isToday = (iso: string) => relativeDay(iso) === "today";
 
   return (
     <>
-      <div className="statband" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+      <div className="statband">
         <StatBox k="Earned · 7d" v={fmt(stats.e7)} unit="p" dcls="pos" />
         <StatBox k="Earned · 30d" v={fmt(stats.e30)} unit="p" />
         <StatBox k="Units sold" v={fmt(stats.units)} />

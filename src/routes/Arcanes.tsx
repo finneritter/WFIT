@@ -71,11 +71,15 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
     });
     return own.apply(filtered);
   }, [owned, sellOnly, dissolveOnly, noCommon, test, own.apply]);
-  const ownedPage = usePaged(ownedView, 50);
+  const ownedPage = usePaged(
+    ownedView,
+    50,
+    `${sellOnly}|${dissolveOnly}|${noCommon}|${search}|${own.sort ? own.sort.key + own.sort.dir : ""}`,
+  );
 
   return (
     <>
-      <div className="statband" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+      <div className="statband">
         <StatBox k="Sell value" v={fmt(s?.sell_plat)} unit="p" d="recommended sells" dcls="muted" />
         <StatBox
           k="Vosfor (dissolve)"

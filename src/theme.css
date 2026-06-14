@@ -1044,14 +1044,10 @@ body.flat-deltas .neg {
 /* rotation: world cycles + fissures */
 .cyclebar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* Reflow columns to fit the window instead of fixed counts + ad-hoc breakpoints. */
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 10px;
   margin-bottom: 10px;
-}
-@media (max-width: 760px) {
-  .cyclebar {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 /* cycle card — 3px left color stripe (the cycle's state color via --cc inline),
    lowercase state word large; the lowercase is a deliberate texture, don't "fix" it */
@@ -1129,14 +1125,9 @@ body.flat-deltas .neg {
 /* per-tier fissure refresh strip — 2px top border carries the relic-tier color */
 .ftypes {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
   margin-bottom: 10px;
-}
-@media (max-width: 1040px) {
-  .ftypes {
-    grid-template-columns: repeat(3, 1fr);
-  }
 }
 .ftype {
   border: 1px solid var(--line-2);
@@ -1213,7 +1204,7 @@ body.flat-deltas .neg {
 /* overview: 3 weighted column stacks so panel bottoms land near the same line */
 .rot-cols {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 10px;
   align-items: start;
 }
@@ -1225,7 +1216,7 @@ body.flat-deltas .neg {
 }
 .rot-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 10px;
   align-items: start;
 }
@@ -1235,17 +1226,11 @@ body.flat-deltas .neg {
 .rot-grid.vend {
   grid-template-columns: 1.5fr 1fr;
 }
-@media (max-width: 1180px) {
-  .rot-grid,
-  .rot-cols {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-@media (max-width: 860px) {
-  .rot-grid,
+/* The auto-fit base grids reflow on their own; only the fixed v2/vend variants
+   need an explicit stack on narrow windows. */
+@media (max-width: 760px) {
   .rot-grid.v2,
-  .rot-grid.vend,
-  .rot-cols {
+  .rot-grid.vend {
     grid-template-columns: 1fr;
   }
 }
@@ -1559,7 +1544,7 @@ body.flat-deltas .neg {
 .modal-cols {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 1px;
   background: var(--line);
   min-height: 0;
@@ -1776,7 +1761,7 @@ body.flat-deltas .neg {
 /* ---- Listing create/edit panel (trading panel) ---- */
 .lf-modal {
   max-width: 460px;
-  width: 460px;
+  width: min(460px, 96vw);
   /* The scrim stretches children full-height; this compact panel shrink-wraps
      and centers instead, so there's no dead space below the content. */
   align-self: center;
@@ -1785,7 +1770,7 @@ body.flat-deltas .neg {
 /* New-listing picker: inventory-first, filterable, with a scrolling list. */
 .np-modal {
   max-width: 460px;
-  width: 460px;
+  width: min(460px, 96vw);
   align-self: center;
   max-height: 80vh;
 }
@@ -1944,13 +1929,6 @@ body.flat-deltas .neg {
 tr.row-hidden td {
   opacity: 0.5;
 }
-@media (max-width: 860px) {
-  .modal-cols {
-    grid-template-columns: repeat(2, 1fr);
-    overflow: auto;
-  }
-}
-
 .content {
   flex: 1;
   min-height: 0;
@@ -2044,14 +2022,9 @@ tr.row-hidden td {
 /* ---------------- stat band (small boxes) ---------------- */
 .statband {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
   margin-bottom: 12px;
-}
-@media (max-width: 900px) {
-  .statband {
-    grid-template-columns: repeat(3, 1fr);
-  }
 }
 .statbox {
   border: 1px solid var(--line);
@@ -2845,7 +2818,7 @@ code {
   justify-content: flex-end;
 }
 .drawer {
-  width: 420px;
+  width: min(420px, 100vw);
   max-width: 98vw;
   height: 100%;
   background: var(--bg-2);
@@ -3100,6 +3073,18 @@ code {
 }
 .set-c {
   flex: none;
+}
+/* On narrow windows stack the control under its label instead of cramming both
+   onto one line. */
+@media (max-width: 560px) {
+  .set-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .set-c {
+    align-self: flex-start;
+  }
 }
 .seg {
   display: inline-flex;
@@ -3610,19 +3595,13 @@ button.fgroup-h:hover .fg-go {
 
 .trow-band {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
   gap: 12px;
 }
 .trow2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
   gap: 12px;
-}
-@media (max-width: 1040px) {
-  .trow-band,
-  .trow2 {
-    grid-template-columns: 1fr;
-  }
 }
 
 .tpanel {

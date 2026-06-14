@@ -65,7 +65,11 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
     });
     return apply(filtered);
   }, [rows, vaulted, falling, rising, test, apply]);
-  const { visible, hasMore, shown, total, more } = usePaged(view, 60);
+  const { visible, hasMore, shown, total, more } = usePaged(
+    view,
+    60,
+    `${vaulted}|${falling}|${rising}|${search}|${sort ? sort.key + sort.dir : ""}`,
+  );
 
   const commitBudget = () => {
     const v = Number.parseInt(budgetInput, 10);
@@ -74,7 +78,7 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
 
   return (
     <>
-      <div className="statband" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+      <div className="statband">
         <StatBox k="Items" v={fmt(stats.items)} />
         <StatBox k="Units" v={fmt(stats.units)} />
         <StatBox k="Total cost" v={fmt(stats.total)} unit="p" />

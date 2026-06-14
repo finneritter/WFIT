@@ -37,6 +37,9 @@ import { SoldHistory } from "./routes/SoldHistory";
 import { Trends } from "./routes/Trends";
 import { Watchlist } from "./routes/Watchlist";
 
+// Below this window width the sidebar auto-collapses to reclaim space.
+const NAV_NARROW = "(max-width: 1000px)";
+
 const TITLES: Record<ScreenId, string> = {
   home: "Home",
   inventory: "Inventory",
@@ -68,8 +71,11 @@ export default function App() {
   const searchKeysRef = useRef<SearchKeyHandler | null>(null);
   const [drawer, setDrawer] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // The user's explicit collapse choice (persisted). On narrow windows the
+  // sidebar auto-collapses regardless; widening again restores this preference.
+  const manualNav = useRef(localStorage.getItem("wfit.navCollapsed") === "1");
   const [navCollapsed, setNavCollapsed] = useState(
-    () => localStorage.getItem("wfit.navCollapsed") === "1",
+    () => manualNav.current || window.matchMedia(NAV_NARROW).matches,
   );
   const { data: summary } = useSummary();
   const refresh = usePricesRefresh();
@@ -92,9 +98,21 @@ export default function App() {
 
   const toggleNav = useCallback(() => {
     setNavCollapsed((c) => {
-      localStorage.setItem("wfit.navCollapsed", c ? "0" : "1");
-      return !c;
+      const next = !c;
+      manualNav.current = next;
+      localStorage.setItem("wfit.navCollapsed", next ? "1" : "0");
+      return next;
     });
+  }, []);
+
+  // Force-collapse when the window gets narrow; restore the manual choice when
+  // it's wide again, so a small window never wastes space on the 182px sidebar.
+  useEffect(() => {
+    const mq = window.matchMedia(NAV_NARROW);
+    const onChange = (e: MediaQueryListEvent) =>
+      setNavCollapsed(e.matches ? true : manualNav.current);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
   }, []);
 
   const contentRef = useRef<HTMLDivElement | null>(null);

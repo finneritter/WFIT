@@ -19,6 +19,9 @@ export function attachSmoothScroll(el: HTMLElement): () => void {
   let raf: number | null = null;
 
   const tick = () => {
+    // The content can shrink between wheel events (a filter narrowing the list);
+    // clamp so a stale target can't strand past the new bottom and snap upward.
+    target = Math.min(target, Math.max(0, el.scrollHeight - el.clientHeight));
     const diff = target - el.scrollTop;
     if (Math.abs(diff) < MIN_DELTA) {
       el.scrollTop = target;

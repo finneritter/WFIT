@@ -35,12 +35,16 @@ export function useColumnSort<T, K extends string>(
   return { sort, cycle, apply };
 }
 
-/** Load-more paging over a (memoized) list. Resets to the first page whenever the
- *  source list changes identity (i.e. when filters/sort change upstream). */
-export function usePaged<T>(items: T[], page = 50) {
+/** Load-more paging over a (memoized) list. Resets to the first page when the
+ *  caller's filter/sort `resetKey` changes — NOT on every `items` identity change.
+ *  Background refetches (the price heartbeat) hand back a fresh array every ~45-60s;
+ *  keying the reset on `items` would collapse an expanded list out from under the
+ *  user mid-scroll. `slice` already tolerates `limit > items.length`, so a shrinking
+ *  list needs no reset. Omitting `resetKey` is safe (never auto-collapses). */
+export function usePaged<T>(items: T[], page = 50, resetKey?: unknown) {
   const [limit, setLimit] = useState(page);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset paging when the source list changes
-  useEffect(() => setLimit(page), [items, page]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset paging only when the filter/sort key changes
+  useEffect(() => setLimit(page), [resetKey, page]);
   return {
     visible: items.slice(0, limit),
     hasMore: items.length > limit,

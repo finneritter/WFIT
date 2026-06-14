@@ -52,11 +52,15 @@ export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
     });
     return apply(filtered);
   }, [rows, highDp, trash, vaulted, test, apply]);
-  const { visible, hasMore, shown, total, more } = usePaged(view, 60);
+  const { visible, hasMore, shown, total, more } = usePaged(
+    view,
+    60,
+    `${highDp}|${trash}|${vaulted}|${search}|${sort ? sort.key + sort.dir : ""}`,
+  );
 
   return (
     <>
-      <div className="statband" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+      <div className="statband">
         <StatBox k="Inventory ducats" v={fmt(stats.invDucats)} unit="d" />
         <StatBox k="Trash-tier ducats" v={fmt(stats.trashDucats)} unit="d" />
         <StatBox k="Trash candidates" v={fmt(stats.trashCount)} />

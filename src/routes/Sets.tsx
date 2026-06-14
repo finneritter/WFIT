@@ -119,7 +119,11 @@ export function Sets({ onOpen }: { onOpen: (slug: string) => void }) {
     });
     return apply(filtered);
   }, [sets, filter, test, apply]);
-  const { visible, hasMore, shown, total, more } = usePaged(rows, 36);
+  const { visible, hasMore, shown, total, more } = usePaged(
+    rows,
+    36,
+    `${filter}|${search}|${sort ? sort.key + sort.dir : ""}`,
+  );
 
   const sortChip = (col: SetCol, label: string) => (
     <Chip active={sort?.key === col} onClick={() => cycle(col)}>
@@ -130,7 +134,7 @@ export function Sets({ onOpen }: { onOpen: (slug: string) => void }) {
 
   return (
     <>
-      <div className="statband" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+      <div className="statband">
         <StatBox k="Complete sets" v={fmt(stats.complete)} />
         <StatBox k="One part away" v={fmt(stats.oneAway)} />
         <StatBox k="Completable value" v={fmt(stats.completableValue)} unit="p" />

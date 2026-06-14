@@ -595,7 +595,7 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
         <SessionCard onSkip={() => setSessionDismissed(true)} />
       ) : null}
 
-      <div className="statband" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+      <div className="statband">
         <StatBox k="Active listings" v={fmt(active)} />
         <StatBox k="Listed value" v={fmt(listedValue)} unit="p" />
         <StatBox k="At best price" v={fmt(atBest)} dcls="pos" />

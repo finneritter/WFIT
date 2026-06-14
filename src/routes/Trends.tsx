@@ -67,6 +67,7 @@ function Panel({
   mode,
   empty,
   onOpen,
+  resetKey,
 }: {
   title: string;
   note?: string;
@@ -74,8 +75,9 @@ function Panel({
   mode: "sell" | "buy" | "unusual";
   empty: string;
   onOpen: (s: string) => void;
+  resetKey?: unknown;
 }) {
-  const { visible, hasMore, shown, total, more } = usePaged(rows, 12);
+  const { visible, hasMore, shown, total, more } = usePaged(rows, 12, resetKey);
   return (
     <div className="tpanel">
       <div className="tpanel-h">
@@ -149,6 +151,9 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
   if (isLoading || !data) return <BlockStatus text="Loading market trends…" />;
 
   const heatScale = Math.max(1, ...data.category_heat.map((h) => Math.abs(h.avg_delta)));
+  // Reset each panel's paging only when the filters change — not on the heartbeat
+  // refetch that hands back fresh `panels` arrays every ~45-60s.
+  const pageKey = `${tf}|${outliers}|${search}`;
 
   return (
     <>
@@ -248,6 +253,7 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
           mode="sell"
           empty="Items you own that are high in their range or spiking will surface here."
           onOpen={onOpen}
+          resetKey={pageKey}
         />
         <Panel
           title="Buy / flip candidates"
@@ -256,6 +262,7 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
           mode="buy"
           empty="No clear dips in liquid items right now."
           onOpen={onOpen}
+          resetKey={pageKey}
         />
       </div>
 
@@ -268,6 +275,7 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
           mode="unusual"
           empty="Nothing moving unusually."
           onOpen={onOpen}
+          resetKey={pageKey}
         />
         <div className="tpanel">
           <div className="tpanel-h">

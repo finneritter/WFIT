@@ -66,11 +66,15 @@ export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
             a.display_name.localeCompare(b.display_name),
         );
   }, [rows, atOnly, vaulted, falling, test, sort, apply]);
-  const { visible, hasMore, shown, total, more } = usePaged(view, 60);
+  const { visible, hasMore, shown, total, more } = usePaged(
+    view,
+    60,
+    `${atOnly}|${vaulted}|${falling}|${search}|${sort ? sort.key + sort.dir : ""}`,
+  );
 
   return (
     <>
-      <div className="statband" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+      <div className="statband">
         <StatBox k="Watching" v={fmt(stats.watching)} />
         <StatBox k="At buy target" v={fmt(stats.at)} dcls="pos" />
         <StatBox k="Buy-now spend" v={fmt(stats.spend)} unit="p" />
