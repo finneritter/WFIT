@@ -114,7 +114,7 @@ src-tauri/src/
     inventory.rs    # gains a merge-from-scan path (provenance-aware)
 ```
 
-Its own HTTP client and throttle. It does **not** share `market.rs`'s 350 ms warframe.market limiter —
+Its own HTTP client and throttle. It does **not** share `market.rs`'s 400 ms warframe.market limiter —
 different host, different concern. The DB stays the source of truth for owned counts; the scan is just
 a new writer into `inventory_items`.
 

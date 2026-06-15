@@ -67,7 +67,7 @@ never in plaintext, never logged. The DB stays a pure cache of public game data;
 | `GET /v1/profile/{username}` (or `/settings/accounts`) | JWT | Confirm who's signed in; show linked-platform info (informational) |
 
 All requests keep the existing headers (`User-Agent: primely-desktop/0.1`, `Language: en`,
-`Platform: pc`, `Accept: application/json`) and the **same global 350 ms throttle** — no separate
+`Platform: pc`, `Accept: application/json`) and the **same global 400 ms throttle** — no separate
 rate-limit pool.
 
 ---
@@ -128,7 +128,7 @@ like `add_to_inventory` / `record_sale`.
   user's own orders. (Order management is explicitly out of scope.)
 - **Stays on the public/authenticated WFM API** — the sanctioned surface. No game-memory scanning, no
   private DE mobile endpoint, no scraping. This is the safe lane.
-- **Respect the throttle** (350 ms global min-gap, ~3 req/s) — Cloudflare will block bursts.
+- **Respect the throttle** (400 ms global min-gap, ~2.5 req/s) — Cloudflare will block bursts.
 - **Token hygiene:** keychain only; validate-then-use; expire gracefully; offer a clear "Disconnect."
 - **Fully optional & removable:** signed-out is the default and a first-class state. The feature can be
   cut entirely without touching the core data layer.
@@ -155,5 +155,5 @@ listings → import selected → inventory updates, with manual counts preserved
 > Optional WFM account connect that imports **listings (orders), not inventory** — there's no DE
 > inventory API. Tier 1 = public `GET /v1/profile/{username}/orders` (no auth, ship first); Tier 2 = pasted
 > **JWT** (`Authorization: JWT <token>`, keychain-stored) for invisible orders; Tier 3 = full
-> `/v1/auth/signin` (CSRF + Cloudflare, deferred). Read-only, reuses the 350 ms throttle, never clobbers
+> `/v1/auth/signin` (CSRF + Cloudflare, deferred). Read-only, reuses the 400 ms throttle, never clobbers
 > manual inventory, token lives in the OS keychain — never in the DB.

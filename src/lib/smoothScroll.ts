@@ -33,6 +33,14 @@ export function attachSmoothScroll(el: HTMLElement): () => void {
   };
 
   const onWheel = (e: WheelEvent) => {
+    // While a modal is open, don't intercept the wheel: let the modal's own
+    // scroller handle it natively. The page behind can't scroll because
+    // `body.modal-open .content` is locked to overflow:hidden. (Without this the
+    // programmatic scrollTop below scrolls the page even under overflow:hidden.)
+    if (document.body.classList.contains("modal-open")) {
+      target = el.scrollTop;
+      return;
+    }
     if (!isMouseWheel(e)) {
       // Keep target in sync so the next wheel tick doesn't snap backwards
       // to a stale value left over from a previous mouse-wheel animation.

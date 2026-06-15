@@ -113,7 +113,7 @@ function WorldStrip({
 }: {
   ws: Worldstate | undefined;
   lastSynced: string | null | undefined;
-  onNavigate: (s: ScreenId) => void;
+  onNavigate: (s: ScreenId, opts?: { listingsTab?: "mine" | "recommended" }) => void;
 }) {
   const ground = (ws?.fissures ?? []).filter((f) => msUntil(f.expiry) > 0 && !f.is_storm);
   // If both Normal + Steel Path cascades are up, show the longer-lived one.
@@ -188,7 +188,7 @@ function DoNextPanel({
   onNavigate,
 }: {
   onOpen: (slug: string) => void;
-  onNavigate: (s: ScreenId) => void;
+  onNavigate: (s: ScreenId, opts?: { listingsTab?: "mine" | "recommended" }) => void;
 }) {
   const listingsQ = useListings();
   const watchQ = useWatchlist();
@@ -360,7 +360,7 @@ function DoNextPanel({
               <GroupHeader
                 label="Consider selling"
                 count={trendsQ.data?.sell_signal_count ?? sell.length}
-                onNav={() => onNavigate("trends")}
+                onNav={() => onNavigate("listings", { listingsTab: "recommended" })}
               />
               {sell.map((t) => (
                 <button
@@ -416,7 +416,7 @@ function MoversPanel({
   onNavigate,
 }: {
   onOpen: (slug: string) => void;
-  onNavigate: (s: ScreenId) => void;
+  onNavigate: (s: ScreenId, opts?: { listingsTab?: "mine" | "recommended" }) => void;
 }) {
   const invQ = useInventory();
   const movers = useMemo(
@@ -468,7 +468,7 @@ function ArbitrationPanel({
   onNavigate,
 }: {
   block: ArbitrationBlock | null;
-  onNavigate: (s: ScreenId) => void;
+  onNavigate: (s: ScreenId, opts?: { listingsTab?: "mine" | "recommended" }) => void;
 }) {
   return (
     <div className="tpanel">
@@ -535,7 +535,7 @@ function MarketPulsePanel({
 }: {
   trends: TrendsData | undefined;
   loading: boolean;
-  onNavigate: (s: ScreenId) => void;
+  onNavigate: (s: ScreenId, opts?: { listingsTab?: "mine" | "recommended" }) => void;
 }) {
   const up = (trends?.index_change ?? 0) >= 0;
   return (
@@ -675,7 +675,7 @@ export function Dashboard({
   onNavigate,
 }: {
   onOpen: (slug: string) => void;
-  onNavigate: (s: ScreenId) => void;
+  onNavigate: (s: ScreenId, opts?: { listingsTab?: "mine" | "recommended" }) => void;
 }) {
   const { data: summary } = useSummary();
   const { data: ws } = useWorldstate();

@@ -136,7 +136,7 @@ MARKET_V1   = "https://api.warframe.market/v1"
 MARKET_V2   = "https://api.warframe.market/v2"
 STATIC_BASE = "https://warframe.market/static/assets/"
 PRICE_TTL   = 6 hours
-MIN_GAP_MS  = 350           // ~3 req/s; enforce a global min-gap throttle
+MIN_GAP_MS  = 400           // ~2.5 req/s; enforce a global min-gap throttle
 ```
 Headers on every request: `User-Agent: primely-desktop/0.1`, `Language: en`, `Platform: pc`, `Accept: application/json`.
 
@@ -166,7 +166,7 @@ Headers on every request: `User-Agent: primely-desktop/0.1`, `Language: en`, `Pl
    - `median_plat` = median of the 90d `median` values.
    - `trend`: recent-7d avg vs prior-7d avg → `>×1.05` up, `<×0.95` down, else flat.
 4. Upsert `price_cache` with `fetched_at=now`, `expires_at=now+6h`.
-5. Throttle 350ms between calls.
+5. Throttle 400ms between calls.
 
 ### 5.2 Domain transforms — direct ports (no Supabase dependency, low risk)
 

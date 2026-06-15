@@ -26,10 +26,13 @@ export interface ListingEdit {
 export function ListingForm({
   slug,
   edit,
+  initialRank,
   onClose,
 }: {
   slug: string;
   edit?: ListingEdit;
+  /** Preselect a rank in create mode (e.g. opened from a per-rank recommendation). */
+  initialRank?: number;
   onClose: () => void;
 }) {
   const { data: item } = useItemDetail(slug);
@@ -44,7 +47,7 @@ export function ListingForm({
 
   const [price, setPrice] = useState<string>(edit?.price != null ? String(edit.price) : "");
   const [qty, setQty] = useState<string>(edit ? String(edit.qty) : "1");
-  const [rank, setRank] = useState<number>(0);
+  const [rank, setRank] = useState<number>(initialRank ?? 0);
   const [visible, setVisible] = useState<boolean>(edit?.visible ?? true);
 
   const ownedAtRank = useMemo(

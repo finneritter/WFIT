@@ -170,6 +170,7 @@ pub fn run() {
             commands::catalog_count,
             commands::catalog_refresh,
             commands::get_catalog,
+            commands::get_catalog_item,
             commands::search_catalog,
             // inventory
             commands::get_inventory,
@@ -208,7 +209,9 @@ pub fn run() {
             commands::get_sets,
             commands::get_ducats,
             commands::get_arcane_dashboard,
+            commands::get_collection_breakdown,
             commands::get_trends,
+            commands::get_listing_recommendations,
             // prices / detail
             commands::prices_refresh,
             commands::get_item_detail,
@@ -336,7 +339,10 @@ fn init_app(
     let _ = db::wfm::set_status(&db, "invisible");
     // Close-to-tray follows the persisted pref, but only if the tray actually
     // built — otherwise hiding the window would leave no way to bring it back.
-    let close_to_tray = tray_ok && db::settings::notification_prefs(&db).unwrap_or_default().close_to_tray;
+    let close_to_tray = tray_ok
+        && db::settings::notification_prefs(&db)
+            .unwrap_or_default()
+            .close_to_tray;
     let (presence, presence_rx) = wfm_socket::Presence::new();
     let state = Arc::new(AppState {
         db,

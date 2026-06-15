@@ -1937,6 +1937,12 @@ tr.row-hidden td {
   padding: 12px 16px 48px;
 }
 
+/* While a modal (Scrim) is open, freeze the page scroll so the wheel scrolls the
+   modal's own list, not the page behind it. */
+body.modal-open .content {
+  overflow: hidden;
+}
+
 /* ---------------- bucket header (summary boxes) ---------------- */
 .buckets {
   display: flex;

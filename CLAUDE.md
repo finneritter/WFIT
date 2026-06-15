@@ -21,6 +21,11 @@ cheap-item exclusion. The app now has **11 screens** (Arcanes added beyond the 9
 
 ## Authoritative documents (read before coding)
 
+- **`docs/FEATURE_PLAYBOOK.md`** — THE "how we add a feature" reference: the universal contracts
+  (Rust owns logic, types mirror 1:1, one market throttle, click-opens-Drawer, search on every
+  listing page), the frontend/backend checklists, and the shared pricing/valuation/exclusion
+  helpers that MUST be reused instead of reimplemented. **Open this whenever building a feature.**
+
 - **`.claude/plans/i-just-added-the-noble-widget.md`** — THE approved implementation plan (schema,
   module layout, command surface, build order, locked decisions). Start here — it's the build roadmap.
 - **`docs/DATA_SOURCING_MASTER_PLAN.md`** — the warframe.market data contract (3 endpoints, verified
@@ -109,6 +114,18 @@ reads, so a market sync holding the writer doesn't freeze the UI (WAL = concurre
 Frontend in `src/`: React Query hooks calling `invoke()` (`lib/api.ts`), components/routes ported
 from `wireframe.jsx` (Arcanes is beyond it), the wireframe's CSS lifted to `theme.css`
 (square/dense/mono, no radius; micro-animations + a `prefers-reduced-motion` guard).
+
+**Topbar search is a cross-cutting contract — maintain it on every new page/tab.** The topbar input
+is shared by all screens; a page filters its own rows with the DIM-style query grammar in
+`lib/searchQuery.ts`. When you add a screen OR a new tab that lists rows, you MUST: (1) add a
+`SearchSchema<Row>` in `lib/searchSchemas.ts` (`text`/`is`/`fields`), (2) register it in
+`PAGE_SCHEMAS` (+ a `PAGE_PLACEHOLDER`) for a full screen, and (3) in the component, call
+`usePageSearch()` → `compileQuery(search, schema)` → `rows.filter(test)` so the bar actually narrows
+the list. A tab inside a screen (e.g. Listings' "Recommended") compiles its own schema against
+`usePageSearch()` even though the topbar autocomplete uses the screen's registered schema. Prefer
+inventory-style filter controls (`components/Dropdown` + `chip` toggles in a `.filters` row) for
+category/sort axes that don't fit the text grammar. A page that renders rows without wiring search is
+considered incomplete.
 
 ## Pricing & valuation (the most-iterated subsystem — read before touching it)
 

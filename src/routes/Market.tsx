@@ -7,6 +7,7 @@ import {
   useAddToBuyList,
   useAddWatch,
   useCatalog,
+  useCatalogItem,
   useItemDetail,
   useItemSellers,
   useListedSlugs,
@@ -15,6 +16,7 @@ import {
 } from "../hooks/queries";
 import { copyText } from "../lib/clipboard";
 import { CATEGORY_LABELS, clsx, fmt, pct } from "../lib/format";
+import { openMarketExternal } from "../lib/wiki";
 import { compileQuery } from "../lib/searchQuery";
 import { marketSchema } from "../lib/searchSchemas";
 import type { BuyOrder, CatalogRow, Category, SellerOrder } from "../lib/types";
@@ -68,11 +70,28 @@ function whisperLine(o: SellerOrder, displayName: string, ranked: boolean): stri
   return `/w ${o.ingame_name} Hi! I want to buy: "${displayName}"${rankPart} for ${o.platinum} platinum. (warframe.market)`;
 }
 
-export function Market({ onOpen }: { onOpen: (slug: string) => void }) {
+export function Market({
+  onOpen,
+  initialSlug,
+}: {
+  onOpen: (slug: string) => void;
+  initialSlug?: string;
+}) {
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<CatalogRow | null>(null);
   const [prefs, setPrefs] = useState<MarketPrefs>(loadPrefs);
   const patch = (p: Partial<MarketPrefs>) => setPrefs((cur) => ({ ...cur, ...p }));
+
+  // Preselect the item view when navigated here with a slug (e.g. the Drawer's
+  // "Market" button). Resolve the slug to its catalog row, then open it once — a
+  // ref so going Back doesn't immediately reopen it.
+  const { data: initialRow } = useCatalogItem(initialSlug ?? null);
+  const didPreselect = useRef(false);
+  useEffect(() => {
+    if (didPreselect.current || !initialSlug || !initialRow) return;
+    didPreselect.current = true;
+    setPicked(initialRow);
+  }, [initialSlug, initialRow]);
 
   // Persist every control change so the screen reopens exactly as left.
   useEffect(() => {
@@ -460,6 +479,14 @@ function ItemView({
           }
         >
           {inBuy ? "In buy list" : "+ Buy list"}
+        </button>
+        <button
+          type="button"
+          className="btn sm"
+          title="Open this item's warframe.market page in your browser"
+          onClick={() => openMarketExternal(picked.slug)}
+        >
+          warframe.market ↗
         </button>
       </div>
 

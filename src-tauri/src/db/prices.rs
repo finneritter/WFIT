@@ -87,8 +87,20 @@ pub fn fair_sell_price(c: &Connection, slug: &str, rank: Option<i64>) -> AppResu
             )
             .optional()?,
     };
+    // The lowball anchor must be the SAME rank's trade median — a different rank is a
+    // different good (a rank-10 mod can be 2-3× a rank-7). `price_rank` only stores the
+    // ranks warframe.market reported trades for (usually 0 and max), so use an EXACT
+    // match: with no same-rank median there's nothing valid to anchor against, and we
+    // just undercut the live ask. (Nearest-rank fallback here let a rank-10 median
+    // inflate a rank-7 suggestion far above its own live floor.)
     let median: Option<i64> = match rank {
-        Some(r) => rank_price(c, slug, r)?,
+        Some(r) => c
+            .query_row(
+                "SELECT median FROM price_rank WHERE slug = ?1 AND rank = ?2",
+                params![slug, r],
+                |x| x.get(0),
+            )
+            .optional()?,
         None => c
             .query_row(
                 "SELECT median_plat FROM price_cache WHERE slug = ?1",
@@ -647,6 +659,29 @@ mod tests {
         // Never below 1p, never None when any signal exists.
         assert_eq!(fair_from(Some(1), None), Some(1));
         assert_eq!(fair_from(None, None), None);
+    }
+
+    // Regression (Primed Animal Instinct r7): the lowball anchor must use the SAME
+    // rank's trade median. price_rank holds only rank 0 (48) and rank 10 (127); the
+    // owned rank 7 has a live ask of 75. A nearest-rank median used to grab rank 10's
+    // 127, decide 75 was a lowball (75 < 0.7·127), and inflate the suggestion to 126.
+    // With an exact-rank anchor there's no rank-7 median → just undercut 75 → 74.
+    #[test]
+    fn fair_sell_price_anchors_to_same_rank_only() {
+        let c = fixture();
+        c.execute_batch(
+            "INSERT INTO order_cache VALUES
+                ('pai', 0, 30), ('pai', 7, 75), ('pai', 10, 99);
+             INSERT INTO price_rank VALUES ('pai', 0, 48), ('pai', 10, 127);
+             INSERT INTO price_cache VALUES ('pai', 48);",
+        )
+        .unwrap();
+        // Rank 7: no same-rank median → undercut the live ask, NOT inflated to 126.
+        assert_eq!(fair_sell_price(&c, "pai", Some(7)).unwrap(), Some(74));
+        // Rank 10: live ask 99 is healthy vs its own median 127 → undercut 99 → 98.
+        assert_eq!(fair_sell_price(&c, "pai", Some(10)).unwrap(), Some(98));
+        // Rank 0: live ask 30 is a lowball vs its own median 48 → anchor → 47.
+        assert_eq!(fair_sell_price(&c, "pai", Some(0)).unwrap(), Some(47));
     }
 
     // Prove the in-memory `effective_price_from` is a faithful twin of the SQL

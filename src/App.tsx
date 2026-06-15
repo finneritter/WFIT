@@ -59,6 +59,13 @@ const TITLES: Record<ScreenId, string> = {
 export default function App() {
   const [screen, setScreen] = useState<ScreenId>("home");
   const [search, setSearch] = useState("");
+  // Which tab the Listings screen opens on next time it mounts. Cross-screen links
+  // (e.g. the dashboard's "Consider selling → View all") set this to "recommended";
+  // any plain navigation resets it to "mine".
+  const [listingsTab, setListingsTab] = useState<"mine" | "recommended">("mine");
+  // Item to preselect on the Market screen (set by cross-screen links like the
+  // Drawer's "Market" button); cleared on any plain navigation.
+  const [marketSlug, setMarketSlug] = useState<string | null>(null);
   // Input stays on `search`; screens filter on the deferred value so keystrokes
   // never block on a large grid re-render.
   const deferredSearch = useDeferredValue(search);
@@ -96,6 +103,19 @@ export default function App() {
   // re-renders (e.g. the summary badge updating every 2s during a price sync).
   const open = useCallback((slug: string) => setDrawer(slug), []);
 
+  // Single navigation entry point: switch screen, clear the page search, and set
+  // which Listings tab to land on (defaults to "mine" so only explicit links go
+  // to "recommended").
+  const navigate = useCallback(
+    (s: ScreenId, opts?: { listingsTab?: "mine" | "recommended"; marketSlug?: string }) => {
+      setScreen(s);
+      setSearch("");
+      setListingsTab(opts?.listingsTab ?? "mine");
+      setMarketSlug(opts?.marketSlug ?? null);
+    },
+    [],
+  );
+
   const toggleNav = useCallback(() => {
     setNavCollapsed((c) => {
       const next = !c;
@@ -132,10 +152,7 @@ export default function App() {
       <div className={clsx("shell", navCollapsed && "nav-collapsed")}>
         <Sidebar
           screen={screen}
-          onNavigate={(s) => {
-            setScreen(s);
-            setSearch("");
-          }}
+          onNavigate={navigate}
           onAdd={() => setAdding(true)}
           badges={badges}
         />
@@ -205,33 +222,20 @@ export default function App() {
                 its heavy grid on every navigation (covered by the root boundary
                 in main.tsx instead). */}
               <ErrorBoundary key={screen}>
-                {screen === "home" && (
-                  <Dashboard
-                    onOpen={open}
-                    onNavigate={(s) => {
-                      setScreen(s);
-                      setSearch("");
-                    }}
-                  />
-                )}
+                {screen === "home" && <Dashboard onOpen={open} onNavigate={navigate} />}
                 {screen === "sets" && <Sets onOpen={open} />}
                 {screen === "trends" && <Trends onOpen={open} />}
                 {screen === "watchlist" && <Watchlist onOpen={open} />}
                 {screen === "buy" && <BuyList onOpen={open} />}
-                {screen === "market" && <Market onOpen={open} />}
-                {screen === "listings" && <Listings onOpen={open} />}
+                {screen === "market" && (
+                  <Market onOpen={open} initialSlug={marketSlug ?? undefined} />
+                )}
+                {screen === "listings" && <Listings onOpen={open} initialTab={listingsTab} />}
                 {screen === "ducats" && <Ducats onOpen={open} />}
                 {screen === "arcanes" && <Arcanes onOpen={open} />}
                 {screen === "rotation" && <Rotation />}
                 {screen === "sold" && <SoldHistory onOpen={open} />}
-                {screen === "settings" && (
-                  <Settings
-                    onNavigate={(s) => {
-                      setScreen(s);
-                      setSearch("");
-                    }}
-                  />
-                )}
+                {screen === "settings" && <Settings onNavigate={navigate} />}
               </ErrorBoundary>
             </SearchProvider>
           </div>
@@ -243,8 +247,11 @@ export default function App() {
             onClose={() => setDrawer(null)}
             onGoListings={() => {
               setDrawer(null);
-              setScreen("listings");
-              setSearch("");
+              navigate("listings");
+            }}
+            onGoMarket={(slug) => {
+              setDrawer(null);
+              navigate("market", { marketSlug: slug });
             }}
           />
         ) : null}

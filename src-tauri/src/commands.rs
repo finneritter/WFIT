@@ -1,7 +1,7 @@
 use crate::db::wfm::{ImportApply, ListingMirror};
 use crate::db::{
-    buylist, catalog, gamescan as gamescan_db, inventory, meta, prices, sales, sets, settings,
-    trends, watchlist, wfm,
+    buylist, catalog, gamescan as gamescan_db, inventory, meta, prices, recommend, sales, sets,
+    settings, trends, watchlist, wfm,
 };
 use crate::error::{AppError, AppResult};
 use crate::gamescan;
@@ -69,6 +69,16 @@ pub fn get_catalog(
     category: Option<String>,
 ) -> AppResult<Vec<CatalogRow>> {
     catalog::list(&state.db, category.as_deref())
+}
+
+/// A single catalog row by slug (or null). Lets a screen preselect an item it only
+/// has the slug for — e.g. the Drawer's "Market" button jumping to the Market view.
+#[tauri::command]
+pub fn get_catalog_item(
+    state: State<'_, Arc<AppState>>,
+    slug: String,
+) -> AppResult<Option<CatalogRow>> {
+    catalog::get(&state.db, &slug)
 }
 
 /// DEV factory reset: erase ALL local data — inventory, sales, watchlist, buy list,
@@ -568,6 +578,16 @@ pub fn get_arcane_dashboard(state: State<'_, Arc<AppState>>) -> AppResult<Arcane
     crate::db::arcanes::dashboard(&state.db)
 }
 
+/// Every arcane in one collection with its plat + Vosfor value, for the breakdown
+/// modal. Sorted by EV contribution (what's driving the collection's value).
+#[tauri::command]
+pub fn get_collection_breakdown(
+    state: State<'_, Arc<AppState>>,
+    key: String,
+) -> AppResult<Vec<ArcaneBreakdown>> {
+    crate::db::arcanes::collection_breakdown(&state.db, &key)
+}
+
 // ===========================================================================
 // Trends
 // ===========================================================================
@@ -583,6 +603,19 @@ pub fn get_trends(
         timeframe.as_deref().unwrap_or("7d"),
         exclude_outliers.unwrap_or(true),
     )
+}
+
+// ===========================================================================
+// Listing recommendations
+// ===========================================================================
+
+/// Owned items the user should list for plat: liquid (10+/day), not better
+/// ducated, outlier-cleaned, and not already up. Powers the Listings "Recommended" tab.
+#[tauri::command]
+pub fn get_listing_recommendations(
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<Vec<RecommendationRow>> {
+    recommend::list(&state.db)
 }
 
 // ===========================================================================
@@ -733,7 +766,10 @@ pub fn get_item_detail(state: State<'_, Arc<AppState>>, slug: String) -> AppResu
     let bids = state.db.read(|c| prices::bid_ladder(c, &slug))?;
     let (realizable_plat, liquidity, daily_volume, days_to_sell) = if owned_qty > 0 {
         let market = value_plat.unwrap_or_else(|| eff_median.unwrap_or(0) * owned_qty);
-        let (rz, phi) = inventory::realizable_default(
+        // Same rule as the inventory grid: single copies / prime parts liquidate
+        // fully (φ = 1.0); only multi-copy mod/arcane stacks take the haircut.
+        let (rz, phi) = inventory::realizable_for(
+            &row.category,
             eff_median.unwrap_or(0),
             owned_qty,
             market,

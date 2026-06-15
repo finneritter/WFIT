@@ -125,7 +125,11 @@ fn check_arbitration(ws: &Worldstate, st: &NotifyState, app: &tauri::AppHandle) 
 }
 
 fn check_void_cascade(ws: &Worldstate, st: &NotifyState, app: &tauri::AppHandle) {
-    for f in ws.fissures.iter().filter(|f| f.mission_type == "Void Cascade") {
+    for f in ws
+        .fissures
+        .iter()
+        .filter(|f| f.mission_type == "Void Cascade")
+    {
         let key = format!(
             "vc-{}-{}-{}-{}",
             f.node,
@@ -152,7 +156,11 @@ fn check_vendors(ws: &Worldstate, st: &NotifyState, app: &tauri::AppHandle) {
         let character = t.character.as_deref().unwrap_or("A vendor");
         // activation changes per fortnightly rotation → once per arrival (correct
         // even for Varzia, whose `active` stays true continuously between rotations).
-        let key = format!("vendor-{}-{}", character, t.activation.as_deref().unwrap_or(""));
+        let key = format!(
+            "vendor-{}-{}",
+            character,
+            t.activation.as_deref().unwrap_or("")
+        );
         if st.once(key) {
             let body = match t.location.as_deref() {
                 Some(loc) => format!("{character} has arrived at {loc}"),
@@ -219,15 +227,24 @@ mod tests {
     fn week_boundary_is_monday() {
         // 2026-06-13 is a Saturday; its week's Monday is 2026-06-08.
         let sat = Utc.with_ymd_and_hms(2026, 6, 13, 12, 0, 0).unwrap();
-        assert_eq!(current_week(sat), NaiveDate::from_ymd_opt(2026, 6, 8).unwrap());
+        assert_eq!(
+            current_week(sat),
+            NaiveDate::from_ymd_opt(2026, 6, 8).unwrap()
+        );
         // On the Monday itself the boundary is that same day.
         let mon = Utc.with_ymd_and_hms(2026, 6, 8, 0, 30, 0).unwrap();
-        assert_eq!(current_week(mon), NaiveDate::from_ymd_opt(2026, 6, 8).unwrap());
+        assert_eq!(
+            current_week(mon),
+            NaiveDate::from_ymd_opt(2026, 6, 8).unwrap()
+        );
     }
 
     #[test]
     fn day_boundary_is_utc_date() {
         let t = Utc.with_ymd_and_hms(2026, 6, 13, 23, 59, 0).unwrap();
-        assert_eq!(current_day(t), NaiveDate::from_ymd_opt(2026, 6, 13).unwrap());
+        assert_eq!(
+            current_day(t),
+            NaiveDate::from_ymd_opt(2026, 6, 13).unwrap()
+        );
     }
 }

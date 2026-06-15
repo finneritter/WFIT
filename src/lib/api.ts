@@ -3,6 +3,7 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  ArcaneBreakdown,
   ArcaneDashboard,
   BackupInfo,
   BuyRow,
@@ -17,6 +18,7 @@ import type {
   ListingRow,
   NotificationPrefs,
   PricingProgress,
+  RecommendationRow,
   RepriceApply,
   RepriceRow,
   SaleRow,
@@ -52,6 +54,8 @@ export const wipeApp = () => invoke<void>("wipe_app");
 export const setsRefresh = () => invoke<number>("sets_refresh");
 export const getCatalog = (category?: string) =>
   invoke<CatalogRow[]>("get_catalog", { category: category ?? null });
+export const getCatalogItem = (slug: string) =>
+  invoke<CatalogRow | null>("get_catalog_item", { slug });
 export const searchCatalog = (q: string, limit?: number) =>
   invoke<CatalogRow[]>("search_catalog", { q, limit: limit ?? null });
 
@@ -115,8 +119,12 @@ export const sendTestNotification = () => invoke<void>("send_test_notification")
 export const getSets = () => invoke<SetRow[]>("get_sets");
 export const getDucats = () => invoke<DucatRow[]>("get_ducats");
 export const getArcaneDashboard = () => invoke<ArcaneDashboard>("get_arcane_dashboard");
+export const getCollectionBreakdown = (key: string) =>
+  invoke<ArcaneBreakdown[]>("get_collection_breakdown", { key });
 export const getTrends = (timeframe?: string, excludeOutliers = true) =>
   invoke<TrendsData>("get_trends", { timeframe: timeframe ?? null, excludeOutliers });
+export const getListingRecommendations = () =>
+  invoke<RecommendationRow[]>("get_listing_recommendations");
 
 // prices / detail
 export const pricesRefresh = (slugs?: string[], force?: boolean) =>

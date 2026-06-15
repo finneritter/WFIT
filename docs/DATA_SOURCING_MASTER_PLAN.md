@@ -44,7 +44,7 @@ in the app — it is all read from warframe.market and cached.
 ## 1. The three endpoints (and only these three)
 
 All requests send headers: `User-Agent: primely-desktop/0.1`, `Language: en`, `Platform: pc`,
-`Accept: application/json`. No auth. Throttle to **~3 req/s (350 ms min-gap)**, global across the whole client.
+`Accept: application/json`. No auth. Throttle to **~2.5 req/s (400 ms min-gap)**, global across the whole client.
 
 | # | Endpoint | Purpose | Cost |
 |---|---|---|---|
@@ -179,7 +179,7 @@ Add to the PRD §4 schema to support warframe.market-native sets + real history:
 
 ## 7. Caching, freshness, rate limits (hard rules)
 
-- **Throttle:** global 350 ms min-gap (~3 req/s) across ALL warframe.market calls. Never burst.
+- **Throttle:** global 400 ms min-gap (~2.5 req/s) across ALL warframe.market calls. Never burst.
 - **Price TTL:** 6 h. On launch, refresh only stale/missing prices; cap per run + background drain.
 - **Detail TTL:** long (weekly-ish) — set data changes rarely; don't re-fetch details often.
 - **Always surface `last_synced`** in the UI; never present a cached price as live.

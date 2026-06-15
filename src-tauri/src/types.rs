@@ -184,6 +184,28 @@ pub struct DucatRow {
     pub thumbnail_url: Option<String>,
 }
 
+/// One owned item the user should consider listing for plat: liquid (moves
+/// 10+/day), not better ducated, outlier-cleaned, and not already listed.
+/// Powers the Listings screen's "Recommended" tab.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecommendationRow {
+    pub slug: String,
+    pub display_name: String,
+    pub part_type: String,
+    pub category: String,
+    pub thumbnail_url: Option<String>,
+    /// The mod/arcane rank this row prices & lists at; `None` for non-ranked goods.
+    /// Each owned rank of a ranked item is a separate row (different good, price).
+    pub rank: Option<i64>,
+    pub owned_qty: i64,
+    pub avg_daily_volume: f64,
+    pub suggested_price: i64,
+    pub median_plat: Option<i64>,
+    pub est_value: i64, // suggested_price * owned_qty
+    pub ducats_per_plat: Option<f64>,
+    pub trend: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Arcanes / Vosfor dissolution.
 // ---------------------------------------------------------------------------
@@ -207,6 +229,22 @@ pub struct ArcaneContribution {
     pub display_name: String,
     pub prob: f64, // chance a single draw is this arcane
     pub plat: Option<i64>,
+}
+
+/// One arcane within a collection — the per-row breakdown behind a collection's EV.
+/// Built by the same helper that feeds `CollectionEv`, so the list and the headline
+/// can't disagree. Sorted by `ev_contribution` (the value driver).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArcaneBreakdown {
+    pub slug: String,
+    pub display_name: String,
+    pub rarity: String,       // common | uncommon | rare | legendary
+    pub plat: Option<i64>,    // rank-0 (unranked) market price
+    pub realizable: i64,      // what one unranked copy actually fetches (drives EV)
+    pub vosfor: i64,          // dissolution value per unranked copy
+    pub prob: f64,            // chance a single draw is this arcane
+    pub ev_contribution: f64, // ARCANES_PER_PULL * prob * realizable
+    pub thumbnail_url: Option<String>,
 }
 
 /// One owned arcane with its sell-vs-dissolve recommendation, computed over the

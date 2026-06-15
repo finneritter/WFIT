@@ -32,6 +32,7 @@ export const keys = {
   sets: ["sets"] as const,
   ducats: ["ducats"] as const,
   arcanes: ["arcanes"] as const,
+  collectionBreakdown: (key: string) => ["collectionBreakdown", key] as const,
   catalog: (cat?: string) => ["catalog", cat ?? "all"] as const,
   trends: (tf: string, excludeOutliers: boolean) => ["trends", tf, excludeOutliers] as const,
   itemDetail: (slug: string) => ["itemDetail", slug] as const,
@@ -44,6 +45,7 @@ export const keys = {
   pricingProgress: ["pricingProgress"] as const,
   wfmAccount: ["wfmAccount"] as const,
   listings: ["listings"] as const,
+  recommendations: ["recommendations"] as const,
   gameScan: ["gameScan"] as const,
   backups: ["backups"] as const,
 };
@@ -86,8 +88,20 @@ export const useSets = () => useQuery({ queryKey: keys.sets, queryFn: api.getSet
 export const useDucats = () => useQuery({ queryKey: keys.ducats, queryFn: api.getDucats });
 export const useArcaneDashboard = () =>
   useQuery({ queryKey: keys.arcanes, queryFn: api.getArcaneDashboard });
+export const useCollectionBreakdown = (key: string | null) =>
+  useQuery({
+    queryKey: keys.collectionBreakdown(key ?? ""),
+    queryFn: () => api.getCollectionBreakdown(key as string),
+    enabled: !!key,
+  });
 export const useCatalog = (cat?: string) =>
   useQuery({ queryKey: keys.catalog(cat), queryFn: () => api.getCatalog(cat) });
+export const useCatalogItem = (slug: string | null) =>
+  useQuery({
+    queryKey: ["catalogItem", slug ?? ""],
+    queryFn: () => api.getCatalogItem(slug as string),
+    enabled: !!slug,
+  });
 export const useSearchCatalog = (q: string, limit = 40) =>
   useQuery({
     queryKey: keys.searchCatalog(q, limit),
@@ -151,6 +165,12 @@ export const usePricingProgress = () =>
 export const useWfmAccount = () =>
   useQuery({ queryKey: keys.wfmAccount, queryFn: api.getWfmAccount });
 export const useListings = () => useQuery({ queryKey: keys.listings, queryFn: api.wfmGetListings });
+export const useListingRecommendations = (enabled = true) =>
+  useQuery({
+    queryKey: keys.recommendations,
+    queryFn: api.getListingRecommendations,
+    enabled,
+  });
 // Slugs with an active warframe.market sell order → drives the "LISTED" tag on
 // every item-bearing screen. Empty (and cheap) when no account is connected.
 export const useListedSlugs = () => {
@@ -363,6 +383,7 @@ export function useLivePriceEvents() {
     const un = listen("prices-updated", () => {
       invalidateInventoryDerived(qc);
       qc.invalidateQueries({ queryKey: keys.listings });
+      qc.invalidateQueries({ queryKey: keys.recommendations });
       qc.invalidateQueries({ queryKey: keys.pricingProgress });
       // Market-screen order books and the drawer's recommended price come from
       // the same caches the heartbeat just refreshed. Only refetch what's on
@@ -370,6 +391,7 @@ export function useLivePriceEvents() {
       qc.invalidateQueries({ queryKey: ["itemOrders"], refetchType: "active" });
       qc.invalidateQueries({ queryKey: ["itemSellers"], refetchType: "active" });
       qc.invalidateQueries({ queryKey: ["recommendedPrice"], refetchType: "active" });
+      qc.invalidateQueries({ queryKey: ["collectionBreakdown"], refetchType: "active" });
     });
     return () => {
       un.then((f) => f());
@@ -475,6 +497,8 @@ export function useWfmCreateOrder() {
     mutationFn: api.wfmCreateOrder,
     onSuccess: (_n, vars) => {
       qc.invalidateQueries({ queryKey: keys.listings });
+      // The item is now listed → it should drop out of the recommendations.
+      qc.invalidateQueries({ queryKey: keys.recommendations });
       qc.invalidateQueries({ queryKey: keys.itemDetail(vars.slug) });
       qc.invalidateQueries({ queryKey: keys.itemOrders(vars.slug) });
     },
@@ -493,7 +517,11 @@ export function useWfmDeleteOrder() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (orderId: string) => api.wfmDeleteOrder(orderId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.listings }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.listings });
+      // No longer listed → it may become recommendable again.
+      qc.invalidateQueries({ queryKey: keys.recommendations });
+    },
   });
 }
 

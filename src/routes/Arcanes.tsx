@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ItemTags } from "../components/ItemTags";
-import { Chip, ItemName, SortTh, StatBox, TableStatus, rowAction } from "../components/ui";
-import { useArcaneDashboard, useListedSlugs } from "../hooks/queries";
+import { Chip, ItemName, Scrim, SortTh, StatBox, TableStatus, rowAction } from "../components/ui";
+import { useArcaneDashboard, useCollectionBreakdown, useListedSlugs } from "../hooks/queries";
+import { useEscape } from "../hooks/useEscape";
 import { useColumnSort, usePaged } from "../hooks/useTable";
 import { clsx, fmt } from "../lib/format";
 import { usePersisted } from "../lib/persist";
@@ -47,6 +48,7 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
   const owned = data?.owned ?? [];
 
   const search = usePageSearch();
+  const [openCol, setOpenCol] = useState<CollectionEv | null>(null);
   const [sellOnly, setSellOnly] = usePersisted<"1" | "0">("wfit-arc-sell", "0");
   const [dissolveOnly, setDissolveOnly] = usePersisted<"1" | "0">("wfit-arc-dissolve", "0");
   const [noCommon, setNoCommon] = usePersisted<"1" | "0">("wfit-arc-nocommon", "0");
@@ -106,7 +108,10 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
       <div className="tpanel">
         <div className="tpanel-h">
           <h3>Best collection to spend Vosfor on</h3>
-          <span className="meta">realizable platinum per 200 Vosfor pull (liquidity-adjusted)</span>
+          <span className="meta">
+            realizable platinum per 200 Vosfor pull (liquidity-adjusted) · click a row for the
+            breakdown
+          </span>
         </div>
         <table className="dtable">
           <thead>
@@ -154,7 +159,7 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
               />
             ) : (
               sortedColls.map((c) => (
-                <tr key={c.key}>
+                <tr key={c.key} {...rowAction(() => setOpenCol(c))} title="View arcane breakdown">
                   <td>
                     <span className="nm">{c.name}</span>
                   </td>
@@ -273,6 +278,110 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
           </span>
         ))}
       </div>
+
+      {openCol ? (
+        <CollectionBreakdownModal
+          collection={openCol}
+          onOpen={onOpen}
+          onClose={() => setOpenCol(null)}
+        />
+      ) : null}
     </>
+  );
+}
+
+/// What's driving a collection's value: a scrollable list of every arcane in it with
+/// its plat price and Vosfor, sorted by EV contribution. Styled like the listing form.
+function CollectionBreakdownModal({
+  collection: c,
+  onOpen,
+  onClose,
+}: {
+  collection: CollectionEv;
+  onOpen: (slug: string) => void;
+  onClose: () => void;
+}) {
+  useEscape(onClose);
+  const { data: rows = [], isLoading, isError } = useCollectionBreakdown(c.key);
+
+  return (
+    <Scrim onClose={onClose}>
+      <div className="modal lf-modal">
+        <div className="modal-h">
+          <h2>{c.name}</h2>
+          <span style={{ flex: 1 }} />
+          <button type="button" className="x" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        {/* Collection headline (reuses the row data — no refetch). */}
+        <div className="dgrid lf-grid">
+          <div className="cell">
+            <div className="k">Plat / 200 vf</div>
+            <div className="v">{c.ev_plat_per_pull.toFixed(1)}p</div>
+          </div>
+          <div className="cell">
+            <div className="k">Plat / vf</div>
+            <div className="v">{c.plat_per_vosfor.toFixed(2)}</div>
+          </div>
+          <div className="cell">
+            <div className="k">Legendary</div>
+            <div className="v">{c.legendary_pct > 0 ? `${c.legendary_pct}%` : "—"}</div>
+          </div>
+          <div className="cell">
+            <div className="k">Priced</div>
+            <div className="v">{Math.round(c.coverage * 100)}%</div>
+          </div>
+          <div className="cell">
+            <div className="k">Pool</div>
+            <div className="v">{fmt(c.pool_size)}</div>
+          </div>
+        </div>
+
+        <div className="np-list">
+          <table className="dtable">
+            <thead>
+              <tr>
+                <th>Arcane</th>
+                <th className="r">Plat</th>
+                <th className="r">Vosfor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading || isError || rows.length === 0 ? (
+                <TableStatus
+                  span={3}
+                  loading={isLoading}
+                  error={isError}
+                  emptyText="No arcanes in this collection."
+                />
+              ) : (
+                rows.map((r) => (
+                  <tr
+                    key={r.slug}
+                    {...rowAction(() => {
+                      onClose();
+                      onOpen(r.slug);
+                    })}
+                  >
+                    <td>
+                      <ItemName
+                        name={r.display_name}
+                        plat={r.plat}
+                        thumb={r.thumbnail_url}
+                        sub={`${r.rarity} · ${(r.prob * 100).toFixed(1)}% / draw`}
+                      />
+                    </td>
+                    <td className="r">{r.plat == null ? "—" : `${fmt(r.plat)}p`}</td>
+                    <td className="r num">{fmt(r.vosfor)} vf</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Scrim>
   );
 }

@@ -332,6 +332,27 @@ pub fn realizable_default(
     (rz, phi)
 }
 
+/// Realizable value + φ for an owned stack, applying the app-wide "no haircut for
+/// liquid/fungible holdings" rule: a prime part (warframe/weapon/set) OR a SINGLE
+/// copy (`qty <= 1`) liquidates fully — it only takes one buyer to clear one item —
+/// so it's worth full market value (φ = 1.0). Only multi-copy mod/arcane stacks get
+/// the liquidation haircut, where `qty × price` overstates what the market absorbs.
+/// This is the SINGLE source of truth used by both the inventory grid and the drawer.
+pub fn realizable_for(
+    category: &str,
+    per_unit: i64,
+    qty: i64,
+    market: i64,
+    volume_7d: Option<i64>,
+    bids: &[(i64, i64)],
+) -> (i64, f64) {
+    if qty <= 1 || matches!(category, "warframe" | "weapon" | "set") {
+        (market, 1.0)
+    } else {
+        realizable_default(per_unit, qty, market, volume_7d, bids)
+    }
+}
+
 /// Split a stack of `qty` identical units between selling and dissolving, given the
 /// per-unit `dissolve_unit` floor (the plat-equivalent of dissolving one). Walks the
 /// SAME demand curve as `realizable_value` (live bids best-first, then a volume-capped
@@ -585,13 +606,57 @@ fn memberships(
     Ok(out)
 }
 
+/// The user's value-exclusion settings (excluded mod rarities + global floor +
+/// per-category cheap-item floor), loaded once. `is_excluded` is the SINGLE source
+/// of truth for "this item is worth too little to count" — used by the portfolio
+/// valuation here AND by listing recommendations, so the two can never disagree on
+/// what's been excluded.
+pub struct ExclusionRules {
+    rarities: Vec<String>,
+    min_plat: i64,
+    min_by_cat: HashMap<String, i64>,
+}
+
+impl ExclusionRules {
+    pub fn load(c: &rusqlite::Connection) -> AppResult<Self> {
+        Ok(Self {
+            rarities: settings::excluded_rarities_conn(c)?,
+            min_plat: settings::excluded_min_plat_conn(c)?,
+            min_by_cat: settings::excluded_min_plat_by_cat_conn(c)?,
+        })
+    }
+
+    /// True when this item's value should be excluded: its mod rarity is on the
+    /// exclusion list and it doesn't clear the global floor, OR its unit price is at
+    /// or below the per-category floor (only when priced — an unpriced item isn't
+    /// confirmed cheap).
+    pub fn is_excluded(
+        &self,
+        category: &str,
+        mod_rarity: Option<&str>,
+        median_plat: Option<i64>,
+    ) -> bool {
+        if let Some(rarity) = mod_rarity {
+            // Keep a mod of an excluded rarity when its unit price clears the floor.
+            let kept_by_value = self.min_plat > 0 && median_plat.unwrap_or(0) >= self.min_plat;
+            if self.rarities.iter().any(|e| e == rarity) && !kept_by_value {
+                return true;
+            }
+        }
+        if let (Some(&floor), Some(price)) = (self.min_by_cat.get(category), median_plat) {
+            if price <= floor {
+                return true;
+            }
+        }
+        false
+    }
+}
+
 fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
     // The whole valuation — exclusion settings included — runs on a single
     // pooled read connection, so it never queues behind the writer mutex.
     db.read(|c| {
-        let excluded = settings::excluded_rarities_conn(c)?;
-        let min_plat = settings::excluded_min_plat_conn(c)?;
-        let min_by_cat = settings::excluded_min_plat_by_cat_conn(c)?;
+        let rules = ExclusionRules::load(c)?;
 
         let owned = fetch_owned(c)?;
         let templates = set_templates(c)?;
@@ -658,23 +723,14 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
         for row in &mut out {
             let market = row_value(row);
             let bids = bid_map.get(&row.slug).unwrap_or(&no_bids);
-            // Full market value (no liquidation haircut) when either:
-            //  - it's a prime part (warframe/weapon/set) — liquid + fungible, or
-            //  - it's a single copy — selling one is as easy as selling any one item.
-            // The haircut is for HOARDS: multi-copy mod/arcane stacks, where qty × price
-            // overvalues what the market can actually absorb.
-            let (realizable, phi) =
-                if row.qty <= 1 || matches!(row.category.as_str(), "warframe" | "weapon" | "set") {
-                    (market, 1.0)
-                } else {
-                    realizable_default(
-                        row.median_plat.unwrap_or(0),
-                        row.qty,
-                        market,
-                        row.volume_7d,
-                        bids,
-                    )
-                };
+            let (realizable, phi) = realizable_for(
+                &row.category,
+                row.median_plat.unwrap_or(0),
+                row.qty,
+                market,
+                row.volume_7d,
+                bids,
+            );
             row.realizable_plat = Some(realizable);
             row.liquidity = Some(phi);
             row.daily_volume = row.volume_7d.map(|v| (v.max(0) as f64) / 7.0);
@@ -691,29 +747,15 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
             .map(String::from);
             // Display-only sparkline for the List view (sets + parts), independent of pricing.
             row.spark = spark_map.get(&row.slug).cloned().unwrap_or_default();
-            // Exclude this row's value from the portfolio total when its mod rarity
-            // is on the user's exclusion list. Zeroing value/realizable makes the
-            // totals (and summary/trends, which sum these) drop it automatically; the
-            // row still appears in inventory, flagged + with its price still in the drawer.
-            if let Some(rarity) = &row.mod_rarity {
-                // Keep a mod of an excluded rarity when its unit price clears the floor
-                // (min_plat > 0); otherwise drop it from the portfolio value.
-                let kept_by_value = min_plat > 0 && row.median_plat.unwrap_or(0) >= min_plat;
-                if excluded.iter().any(|e| e == rarity) && !kept_by_value {
-                    row.excluded = true;
-                    row.value_plat = Some(0);
-                    row.realizable_plat = Some(0);
-                }
-            }
-            // Per-category cheap-item floor: drop items whose unit price is at or below
-            // the category's threshold (only when priced — an unpriced item isn't
-            // confirmed cheap). Same mechanism as the rarity exclusion.
-            if let (Some(&floor), Some(price)) = (min_by_cat.get(&row.category), row.median_plat) {
-                if price <= floor {
-                    row.excluded = true;
-                    row.value_plat = Some(0);
-                    row.realizable_plat = Some(0);
-                }
+            // Exclude this row's value from the portfolio total when the user's
+            // exclusion rules (rarity list / per-category cheap-item floor) drop it.
+            // Zeroing value/realizable makes the totals (and summary/trends, which sum
+            // these) drop it automatically; the row still appears in inventory, flagged
+            // + with its price still in the drawer.
+            if rules.is_excluded(&row.category, row.mod_rarity.as_deref(), row.median_plat) {
+                row.excluded = true;
+                row.value_plat = Some(0);
+                row.realizable_plat = Some(0);
             }
         }
         Ok(out)
@@ -736,7 +778,8 @@ pub fn owned_slugs(db: &Db) -> AppResult<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        realizable_default, realizable_value, split_sell_dissolve, split_sell_dissolve_default,
+        realizable_default, realizable_for, realizable_value, split_sell_dissolve,
+        split_sell_dissolve_default,
     };
 
     const W: f64 = 30.0;
@@ -863,6 +906,25 @@ mod tests {
         let (rz2, phi2) = realizable_default(5, 3, 15, Some(0), &[(99, 10)]);
         assert_eq!(rz2, 15);
         assert_eq!(phi2, 1.0);
+    }
+
+    #[test]
+    fn single_copy_and_primes_liquidate_fully() {
+        // One copy of an illiquid mod (would be heavily haircut as a stack) is still
+        // worth full market value — it only takes one buyer to clear one item.
+        let (rz, phi) = realizable_for("mod", 100, 1, 100, Some(0), &[]);
+        assert_eq!(rz, 100);
+        assert_eq!(phi, 1.0);
+        // A prime part stack liquidates fully regardless of qty (liquid + fungible).
+        let (rz2, phi2) = realizable_for("set", 50, 10, 500, Some(0), &[]);
+        assert_eq!(rz2, 500);
+        assert_eq!(phi2, 1.0);
+        // A multi-copy mod stack still takes the haircut (matches realizable_default).
+        let market = 1180;
+        assert_eq!(
+            realizable_for("mod", 5, 236, market, Some(9), &[]),
+            realizable_default(5, 236, market, Some(9), &[]),
+        );
     }
 
     // Order-independent fingerprint of the whole valuation over a real DB copy.

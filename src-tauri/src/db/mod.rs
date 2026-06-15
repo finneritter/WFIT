@@ -16,6 +16,7 @@ pub mod gamescan;
 pub mod inventory;
 pub mod meta;
 pub mod prices;
+pub mod recommend;
 pub mod sales;
 pub mod sets;
 pub mod settings;

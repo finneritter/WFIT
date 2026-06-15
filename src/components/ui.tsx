@@ -1,6 +1,10 @@
 // Small shared presentational primitives used across screens.
-import { memo } from "react";
+import { memo, useEffect } from "react";
 import { clsx, glyph, tier } from "../lib/format";
+
+// Ref-counted background-scroll lock: while any Scrim is mounted, the page's
+// scroll container is frozen so the wheel scrolls the modal, not the page behind.
+let scrimLocks = 0;
 
 /** The tier-edged item chip: the real warframe.market icon when available,
  *  falling back to a 2-letter monogram. */
@@ -157,6 +161,19 @@ export function Scrim({
   className?: string;
   children: React.ReactNode;
 }) {
+  // Freeze the background scroll for as long as this modal is open.
+  useEffect(() => {
+    scrimLocks += 1;
+    document.body.classList.add("modal-open");
+    return () => {
+      scrimLocks -= 1;
+      if (scrimLocks <= 0) {
+        scrimLocks = 0;
+        document.body.classList.remove("modal-open");
+      }
+    };
+  }, []);
+
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: Escape (useEscape) is the keyboard equivalent
     <div

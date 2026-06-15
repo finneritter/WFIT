@@ -19,7 +19,7 @@ favor of **one binary + one local SQLite file**. No auth, no hosting, no deploy.
 
 | Source | What it feeds | Notes |
 |---|---|---|
-| **warframe.market v2/v1 API** | catalog, prices, ducats, sets, order books, your listings | The sole source for item/price data. Global **350 ms throttle** (~3 req/s) across every call. |
+| **warframe.market v2/v1 API** | catalog, prices, ducats, sets, order books, your listings | The sole source for item/price data. Global **400 ms throttle** (~2.5 req/s) across every call. |
 | **DE raw worldstate** (`api.warframe.com/cdn/worldState.php`) | fissures (authoritative), Cetus cycle anchor | Minimally parsed; decoded via bundled WFCD node/mission maps. |
 | **Locally derived clocks** (`worldstate/cycles.rs`) | Cetus / Vallis / Cambion / Duviri cycles | Deterministic math — see [World cycles](#world-cycles) below. |
 | **api.warframestat.us** | sortie, archon hunt, Steel Path, Baro, Varzia; fissure/cycle fallback | Its origin can lag hours; WFIT only warns when that actually matters. |

@@ -38,12 +38,15 @@ export function Drawer({
   slug,
   onClose,
   onGoListings,
+  onGoMarket,
 }: {
   slug: string;
   onClose: () => void;
   // Navigate to the Listings screen (and close the drawer) so the user can
   // connect a session — drives the "Connect to list" CTA when none exists yet.
   onGoListings?: () => void;
+  // Navigate to the Market screen with this item preselected (its live sellers).
+  onGoMarket?: (slug: string) => void;
 }) {
   const { data: item, isError } = useItemDetail(slug);
   const { data: orders } = useItemOrders(slug);
@@ -397,6 +400,16 @@ export function Drawer({
           >
             {item.on_watchlist ? "On watchlist" : "Add to watchlist"}
           </button>
+          {onGoMarket ? (
+            <button
+              type="button"
+              className="btn"
+              title="See this item's live warframe.market sellers in the Market screen"
+              onClick={() => onGoMarket(item.slug)}
+            >
+              Market
+            </button>
+          ) : null}
           <button
             type="button"
             className="btn"

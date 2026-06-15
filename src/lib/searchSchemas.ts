@@ -10,6 +10,7 @@ import type {
   InventoryRow,
   ListingRow,
   OwnedArcane,
+  RecommendationRow,
   SaleRow,
   SetRow,
   TrendRow,
@@ -265,6 +266,29 @@ export const listingsSchema: SearchSchema<ListingRow> = {
     },
   },
 };
+
+// The Listings "Recommended" tab. Mirrors the listings/inventory grammar so the
+// topbar query (and the tab's own filters) can narrow what to sell.
+export const recommendationsSchema: SearchSchema<RecommendationRow> = (() => {
+  const cat = catField<RecommendationRow>((r) => r.category);
+  return {
+    text: (r) => `${r.display_name} ${r.part_type} ${r.category}`,
+    is: {
+      hot: { test: (r) => r.trend === "up", hint: "trending up" },
+    },
+    fields: {
+      cat,
+      category: cat,
+      type: { kind: "text", get: (r) => r.part_type, hint: "part type" },
+      trend: trendField((r) => r.trend),
+      volume: { kind: "number", get: (r) => r.avg_daily_volume, hint: "avg daily volume" },
+      plat: { kind: "number", get: (r) => r.median_plat, hint: "unit price (plat)" },
+      suggested: { kind: "number", get: (r) => r.suggested_price, hint: "suggested sell price" },
+      qty: { kind: "number", get: (r) => r.owned_qty, hint: "owned quantity" },
+      value: { kind: "number", get: (r) => r.est_value, hint: "estimated value (plat)" },
+    },
+  };
+})();
 
 export const trendsSchema: SearchSchema<TrendRow> = (() => {
   const cat = catField<TrendRow>((r) => r.category);

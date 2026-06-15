@@ -1,14 +1,17 @@
 import { useMemo, useState } from "react";
+import { Dropdown, type DropdownOption } from "../components/Dropdown";
 import { ItemTags } from "../components/ItemTags";
 import { ListingForm } from "../components/ListingForm";
-import { Glyph, ItemName, Scrim, StatBox, TableStatus, rowAction } from "../components/ui";
+import { Chip, Glyph, ItemName, Scrim, StatBox, TableStatus, rowAction } from "../components/ui";
 import {
   useInventory,
+  useListingRecommendations,
   useListings,
   useSearchCatalog,
   useWfmAccount,
   useWfmApplyImport,
   useWfmConnect,
+  useWfmCreateOrder,
   useWfmDeleteOrder,
   useWfmMarkSold,
   useWfmRepriceApply,
@@ -23,8 +26,18 @@ import { wfmFetchListings, wfmRepricePreview } from "../lib/api";
 import { CATEGORY_LABELS, clsx, fmt } from "../lib/format";
 import { usePageSearch } from "../lib/searchContext";
 import { compileQuery } from "../lib/searchQuery";
-import { listingsSchema } from "../lib/searchSchemas";
+import { listingsSchema, recommendationsSchema } from "../lib/searchSchemas";
 import type { ImportRow, InventoryRow, ListingRow, RepriceRow } from "../lib/types";
+
+// Sort axes for the Recommended tab.
+const REC_SORTS: readonly DropdownOption[] = [
+  ["value", "Est. value"],
+  ["volume", "Volume"],
+  ["price", "Price"],
+];
+
+// Category chips for the Recommended tab — same order/labels as the Market screener.
+const REC_CATEGORIES = ["all", "warframe", "weapon", "set", "mod", "arcane"] as const;
 
 // UI status segment → warframe.market API status; "Offline" = invisible.
 const STATUS_OPTS = [
@@ -435,7 +448,212 @@ function RepricePanel({ rows, onClose }: { rows: RepriceRow[]; onClose: () => vo
   );
 }
 
-export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
+/// The "Recommended" tab: owned items worth listing for plat (liquid, not better
+/// ducated, outlier-cleaned, not already up). Each row opens the prefilled
+/// ListingForm; "List all" walks them sequentially at the suggested prices.
+function RecommendedTable({
+  active,
+  session,
+  writeHint,
+  onList,
+  onOpen,
+}: {
+  active: boolean;
+  session: boolean;
+  writeHint?: string;
+  onList: (slug: string, rank?: number) => void;
+  onOpen: (slug: string) => void;
+}) {
+  const { data: rows = [], isLoading, isError } = useListingRecommendations(active);
+  const create = useWfmCreateOrder();
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkErr, setBulkErr] = useState<string | null>(null);
+  const [cat, setCat] = useState("all");
+  const [sort, setSort] = useState<"value" | "volume" | "price">("value");
+
+  // Topbar query filters the recommendations (same grammar as the rest of the app).
+  const search = usePageSearch();
+  const { test } = useMemo(() => compileQuery(search, recommendationsSchema), [search]);
+
+  // Per-category counts for the chip row (computed off the unfiltered set).
+  const counts = useMemo(() => {
+    const m: Record<string, number> = { all: rows.length };
+    for (const r of rows) m[r.category] = (m[r.category] ?? 0) + 1;
+    return m;
+  }, [rows]);
+
+  // Category + search filter, then sort by the chosen axis.
+  const view = useMemo(() => {
+    const f = rows.filter((r) => (cat === "all" || r.category === cat) && test(r));
+    return f.sort((a, b) =>
+      sort === "volume"
+        ? b.avg_daily_volume - a.avg_daily_volume
+        : sort === "price"
+          ? b.suggested_price - a.suggested_price
+          : b.est_value - a.est_value,
+    );
+  }, [rows, test, cat, sort]);
+
+  const totalEst = view.reduce((s, r) => s + r.est_value, 0);
+
+  async function listAll() {
+    setBulkRunning(true);
+    setBulkErr(null);
+    // Snapshot the visible set — invalidations during the loop refetch & shrink it.
+    const snapshot = view.slice();
+    try {
+      for (const r of snapshot) {
+        await create.mutateAsync({
+          slug: r.slug,
+          platinum: r.suggested_price,
+          quantity: r.owned_qty,
+          rank: r.rank,
+          visible: true,
+        });
+      }
+      setConfirmAll(false);
+    } catch (e) {
+      setBulkErr((e as Error).message ?? String(e));
+    } finally {
+      setBulkRunning(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="mkt-filters" style={{ marginBottom: 12 }}>
+        {REC_CATEGORIES.map((c) => (
+          <Chip key={c} active={cat === c} count={counts[c] ?? 0} onClick={() => setCat(c)}>
+            {c === "all" ? "All" : CATEGORY_LABELS[c]}
+          </Chip>
+        ))}
+        <span className="sp" style={{ flex: 1 }} />
+        <span className="sortlbl">sort</span>
+        <Dropdown
+          icon="sort"
+          value={sort}
+          options={REC_SORTS}
+          onChange={(v) => setSort(v as "value" | "volume" | "price")}
+          align="right"
+          title="Sort recommendations"
+        />
+      </div>
+      <div className="tpanel">
+        <div className="tpanel-h">
+          <h3>
+            Recommended to list
+            {view.length ? ` · ${view.length} · ~${fmt(totalEst)}p` : ""}
+          </h3>
+          <span style={{ flex: 1 }} />
+          {confirmAll ? (
+            <span className="lf-actions">
+              <span className="muted" style={{ marginRight: 8 }}>
+                List all {view.length} (~{fmt(totalEst)}p)?
+              </span>
+              <button type="button" className="btn pri sm" disabled={bulkRunning} onClick={listAll}>
+                {bulkRunning ? "Listing…" : "Confirm"}
+              </button>
+              <button
+                type="button"
+                className="btn sm"
+                disabled={bulkRunning}
+                onClick={() => setConfirmAll(false)}
+              >
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="btn pri sm"
+              disabled={!session || view.length === 0}
+              title={writeHint}
+              onClick={() => setConfirmAll(true)}
+            >
+              List all recommended
+            </button>
+          )}
+        </div>
+        {bulkErr ? (
+          <div className="conn-note neg" style={{ margin: "0 0 8px" }}>
+            Couldn't list everything: {bulkErr}
+          </div>
+        ) : null}
+        <table className="dtable">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th className="r">Avg/day</th>
+              <th className="r">Suggested</th>
+              <th className="r">Qty</th>
+              <th className="r">Est. value</th>
+              <th className="r">List</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading || isError || view.length === 0 ? (
+              <TableStatus
+                span={6}
+                loading={isLoading}
+                error={isError}
+                emptyText={
+                  rows.length === 0
+                    ? "Nothing to recommend right now. Items show up here once they're owned, liquid (10+/day), worth more as plat than ducats, and not already listed."
+                    : "No recommendations match the current filters."
+                }
+              />
+            ) : (
+              view.map((r) => (
+                <tr key={`${r.slug}-${r.rank ?? "x"}`} {...rowAction(() => onOpen(r.slug))}>
+                  <td>
+                    <ItemName
+                      name={r.rank != null ? `${r.display_name} (rank ${r.rank})` : r.display_name}
+                      plat={r.suggested_price}
+                      thumb={r.thumbnail_url}
+                      sub={r.part_type}
+                      tags={<ItemTags trend={r.trend} vaulted={false} />}
+                    />
+                  </td>
+                  <td className="r num">{r.avg_daily_volume.toFixed(1)}</td>
+                  <td className="r num">{fmt(r.suggested_price)}p</td>
+                  <td className="r num">{r.owned_qty}</td>
+                  <td className="r num">{fmt(r.est_value)}p</td>
+                  <td
+                    className="r"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    {!session ? (
+                      <span className="muted">—</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn sm pri"
+                        title="Review and post a sell order at the suggested price"
+                        onClick={() => onList(r.slug, r.rank ?? undefined)}
+                      >
+                        List
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+export function Listings({
+  onOpen,
+  initialTab = "mine",
+}: {
+  onOpen: (slug: string) => void;
+  initialTab?: "mine" | "recommended";
+}) {
   const { data: account } = useWfmAccount();
   const { data: listings = [], isLoading, isError } = useListings();
   const sync = useWfmSync();
@@ -447,11 +665,14 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
   const [importRows, setImportRows] = useState<ImportRow[] | null>(null);
   const [repriceRows, setRepriceRows] = useState<RepriceRow[] | null>(null);
   const [repricing, setRepricing] = useState(false);
-  const [creating, setCreating] = useState<string | null>(null); // slug being created
+  // The item being created — slug, plus an optional rank when opened from a per-rank
+  // recommendation so the form preselects that level.
+  const [creating, setCreating] = useState<{ slug: string; rank?: number } | null>(null);
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState<ListingRow | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [sessionDismissed, setSessionDismissed] = useState(false);
+  const [tab, setTab] = useState<"mine" | "recommended">(initialTab);
 
   // Topbar query filters the table only; the stat band reflects all listings.
   const search = usePageSearch();
@@ -595,159 +816,200 @@ export function Listings({ onOpen }: { onOpen: (slug: string) => void }) {
         <SessionCard onSkip={() => setSessionDismissed(true)} />
       ) : null}
 
-      <div className="statband">
-        <StatBox k="Active listings" v={fmt(active)} />
-        <StatBox k="Listed value" v={fmt(listedValue)} unit="p" />
-        <StatBox k="At best price" v={fmt(atBest)} dcls="pos" />
-        <StatBox k="Undercut" v={fmt(undercut)} dcls="neg" />
+      <div className="seg" style={{ marginBottom: 12 }}>
+        <button
+          type="button"
+          className="segb"
+          aria-pressed={tab === "mine"}
+          onClick={() => setTab("mine")}
+        >
+          My listings
+        </button>
+        <button
+          type="button"
+          className="segb"
+          aria-pressed={tab === "recommended"}
+          onClick={() => setTab("recommended")}
+        >
+          Recommended
+        </button>
       </div>
 
-      <div className="tpanel">
-        <table className="dtable">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th className="r">Your price</th>
-              <th className="r">Qty</th>
-              <th className="r">Value</th>
-              <th className="r">Market low</th>
-              <th>vs market</th>
-              <th className="r">Manage</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading || isError || view.length === 0 ? (
-              <TableStatus
-                span={7}
-                loading={isLoading}
-                error={isError}
-                emptyText={
-                  <>
-                    No sell orders found. Hit <b>Sync</b> to refresh from warframe.market
-                    {session ? (
+      {tab === "recommended" ? (
+        <RecommendedTable
+          active={tab === "recommended"}
+          session={session}
+          writeHint={writeHint}
+          onList={(slug, rank) => setCreating({ slug, rank })}
+          onOpen={onOpen}
+        />
+      ) : (
+        <>
+          <div className="statband">
+            <StatBox k="Active listings" v={fmt(active)} />
+            <StatBox k="Listed value" v={fmt(listedValue)} unit="p" />
+            <StatBox k="At best price" v={fmt(atBest)} dcls="pos" />
+            <StatBox k="Undercut" v={fmt(undercut)} dcls="neg" />
+          </div>
+
+          <div className="tpanel">
+            <table className="dtable">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th className="r">Your price</th>
+                  <th className="r">Qty</th>
+                  <th className="r">Value</th>
+                  <th className="r">Market low</th>
+                  <th>vs market</th>
+                  <th className="r">Manage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading || isError || view.length === 0 ? (
+                  <TableStatus
+                    span={7}
+                    loading={isLoading}
+                    error={isError}
+                    emptyText={
                       <>
-                        , or <b>+ New listing</b> to post one.
+                        No sell orders found. Hit <b>Sync</b> to refresh from warframe.market
+                        {session ? (
+                          <>
+                            , or <b>+ New listing</b> to post one.
+                          </>
+                        ) : (
+                          "."
+                        )}
                       </>
-                    ) : (
-                      "."
-                    )}
-                  </>
-                }
-              />
-            ) : (
-              view.map((l) => {
-                const yp = l.your_price ?? 0;
-                const best = l.market_low != null && yp <= l.market_low;
-                const over = l.market_low != null && yp > l.market_low ? yp - l.market_low : 0;
-                const confirming = confirmId === l.order_id;
-                return (
-                  <tr
-                    key={l.order_id}
-                    {...rowAction(() => onOpen(l.slug))}
-                    className={l.visible ? undefined : "row-hidden"}
-                  >
-                    <td>
-                      <ItemName
-                        name={l.display_name}
-                        plat={l.your_price}
-                        thumb={l.thumbnail_url}
-                        sub={l.part_type}
-                        tags={<ItemTags trend={l.trend} vaulted={l.is_vaulted} />}
-                      />
-                    </td>
-                    <td className="r num">{fmt(l.your_price)}p</td>
-                    <td className="r num">{l.qty}</td>
-                    <td className="r num">{fmt(yp * l.qty)}p</td>
-                    <td className="r num">{fmt(l.market_low)}p</td>
-                    <td>
-                      {!l.visible ? (
-                        <span className="badge">hidden</span>
-                      ) : l.market_low == null ? (
-                        <span className="muted">—</span>
-                      ) : best ? (
-                        <span className="badge at">best</span>
-                      ) : (
-                        <span className="badge above">+{fmt(over)}p over</span>
-                      )}
-                    </td>
-                    <td
-                      className="r"
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    >
-                      {!session ? (
-                        <span className="muted">—</span>
-                      ) : confirming ? (
-                        <span className="lf-actions">
-                          <button
-                            type="button"
-                            className="btn sm warn"
-                            disabled={del.isPending}
-                            onClick={() =>
-                              del.mutate(l.order_id, { onSuccess: () => setConfirmId(null) })
-                            }
-                          >
-                            {del.isPending ? "…" : "Confirm"}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn sm"
-                            onClick={() => setConfirmId(null)}
-                          >
-                            Cancel
-                          </button>
-                        </span>
-                      ) : (
-                        <span className="lf-actions">
-                          <button
-                            type="button"
-                            className="btn sm pos"
-                            disabled={markSold.isPending}
-                            title="Sold one — drops qty by 1 on warframe.market and logs the sale"
-                            onClick={() => markSold.mutate(l.order_id)}
-                          >
-                            {markSold.isPending ? "…" : "Sold"}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn sm"
-                            disabled={update.isPending}
-                            title={l.visible ? "Hide from buyers" : "Show to buyers"}
-                            onClick={() => toggleVisible(l)}
-                          >
-                            {l.visible ? "Hide" : "Show"}
-                          </button>
-                          <button type="button" className="btn sm" onClick={() => setEditing(l)}>
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="btn sm warn"
-                            onClick={() => setConfirmId(l.order_id)}
-                          >
-                            Delete
-                          </button>
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                    }
+                  />
+                ) : (
+                  view.map((l) => {
+                    const yp = l.your_price ?? 0;
+                    const best = l.market_low != null && yp <= l.market_low;
+                    const over = l.market_low != null && yp > l.market_low ? yp - l.market_low : 0;
+                    const confirming = confirmId === l.order_id;
+                    return (
+                      <tr
+                        key={l.order_id}
+                        {...rowAction(() => onOpen(l.slug))}
+                        className={l.visible ? undefined : "row-hidden"}
+                      >
+                        <td>
+                          <ItemName
+                            name={l.display_name}
+                            plat={l.your_price}
+                            thumb={l.thumbnail_url}
+                            sub={l.part_type}
+                            tags={<ItemTags trend={l.trend} vaulted={l.is_vaulted} />}
+                          />
+                        </td>
+                        <td className="r num">{fmt(l.your_price)}p</td>
+                        <td className="r num">{l.qty}</td>
+                        <td className="r num">{fmt(yp * l.qty)}p</td>
+                        <td className="r num">{fmt(l.market_low)}p</td>
+                        <td>
+                          {!l.visible ? (
+                            <span className="badge">hidden</span>
+                          ) : l.market_low == null ? (
+                            <span className="muted">—</span>
+                          ) : best ? (
+                            <span className="badge at">best</span>
+                          ) : (
+                            <span className="badge above">+{fmt(over)}p over</span>
+                          )}
+                        </td>
+                        <td
+                          className="r"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          {!session ? (
+                            <span className="muted">—</span>
+                          ) : confirming ? (
+                            <span className="lf-actions">
+                              <button
+                                type="button"
+                                className="btn sm warn"
+                                disabled={del.isPending}
+                                onClick={() =>
+                                  del.mutate(l.order_id, { onSuccess: () => setConfirmId(null) })
+                                }
+                              >
+                                {del.isPending ? "…" : "Confirm"}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn sm"
+                                onClick={() => setConfirmId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
+                            <span className="lf-actions">
+                              <button
+                                type="button"
+                                className="btn sm pos"
+                                disabled={markSold.isPending}
+                                title="Sold one — drops qty by 1 on warframe.market and logs the sale"
+                                onClick={() => markSold.mutate(l.order_id)}
+                              >
+                                {markSold.isPending ? "…" : "Sold"}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn sm"
+                                disabled={update.isPending}
+                                title={l.visible ? "Hide from buyers" : "Show to buyers"}
+                                onClick={() => toggleVisible(l)}
+                              >
+                                {l.visible ? "Hide" : "Show"}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn sm"
+                                onClick={() => setEditing(l)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="btn sm warn"
+                                onClick={() => setConfirmId(l.order_id)}
+                              >
+                                Delete
+                              </button>
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {picking ? (
         <NewListingModal
           onClose={() => setPicking(false)}
           onPick={(slug) => {
             setPicking(false);
-            setCreating(slug);
+            setCreating({ slug });
           }}
         />
       ) : null}
-      {creating ? <ListingForm slug={creating} onClose={() => setCreating(null)} /> : null}
+      {creating ? (
+        <ListingForm
+          slug={creating.slug}
+          initialRank={creating.rank}
+          onClose={() => setCreating(null)}
+        />
+      ) : null}
       {editing ? (
         <ListingForm
           slug={editing.slug}

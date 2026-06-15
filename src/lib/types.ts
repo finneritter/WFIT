@@ -152,6 +152,17 @@ export interface CollectionEv {
   pool_size: number;
   top: ArcaneContribution[];
 }
+export interface ArcaneBreakdown {
+  slug: string;
+  display_name: string;
+  rarity: string;
+  plat: number | null;
+  realizable: number;
+  vosfor: number;
+  prob: number;
+  ev_contribution: number;
+  thumbnail_url: string | null;
+}
 export interface OwnedArcane {
   slug: string;
   display_name: string;
@@ -337,6 +348,22 @@ export interface ImportRow {
   listed_qty: number;
   your_price: number | null;
   current_qty: number;
+}
+
+export interface RecommendationRow {
+  slug: string;
+  display_name: string;
+  part_type: string;
+  category: string;
+  thumbnail_url: string | null;
+  rank: number | null;
+  owned_qty: number;
+  avg_daily_volume: number;
+  suggested_price: number;
+  median_plat: number | null;
+  est_value: number;
+  ducats_per_plat: number | null;
+  trend: Trend | null;
 }
 
 export interface RepriceRow {

@@ -1,4 +1,5 @@
 use crate::db::inventory;
+use crate::db::prices;
 use crate::db::Db;
 use crate::error::AppResult;
 use crate::types::{HeatRow, TrendRow, TrendsData};
@@ -23,9 +24,9 @@ struct Item {
     display_name: String,
     part_type: String,
     category: String,
-    median_plat: i64,
     owned_qty: i64,
     on_watchlist: bool,
+    mod_rarity: Option<String>,
     thumbnail_url: Option<String>,
     medians: Vec<i64>, // daily median series, oldest-first
     volumes: Vec<i64>, // daily volume series, oldest-first (parallel to medians)
@@ -56,7 +57,7 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
         };
         let mut stmt = c.prepare(
             "SELECT pc.slug, ci.display_name, ci.part_type, ci.category,
-                    pc.median_plat, COALESCE(ii.qty, 0), ci.thumbnail_url
+                    COALESCE(ii.qty, 0), ci.mod_rarity, ci.thumbnail_url
              FROM price_cache pc
              JOIN catalog_items ci ON ci.slug = pc.slug
              LEFT JOIN inventory_items ii ON ii.slug = pc.slug",
@@ -69,8 +70,8 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
                 display_name: r.get(1)?,
                 part_type: r.get(2)?,
                 category: r.get(3)?,
-                median_plat: r.get(4)?,
-                owned_qty: r.get(5)?,
+                owned_qty: r.get(4)?,
+                mod_rarity: r.get(5)?,
                 thumbnail_url: r.get(6)?,
                 medians: Vec::new(),
                 volumes: Vec::new(),
@@ -155,14 +156,66 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
     let index_spark = build_index_spark(&items, (days + 1).max(2) as usize);
     let index_change = spark_change(&index_spark);
 
+    // Rank-aware unit price for owned items — the SAME number the inventory grid /
+    // drawer / recommendations show. The daily history series is rank-agnostic, so
+    // a ranked mod you own at rank 7 would otherwise display its rank-0 price here.
+    let owned_unit: HashMap<String, i64> = db.read(|c| {
+        let maps = prices::load_owned_price_maps(c)?;
+        let mut breakdowns: HashMap<String, Vec<(i64, i64)>> = HashMap::new();
+        {
+            let mut stmt = c.prepare(
+                "SELECT ir.slug, ir.rank, ir.qty FROM inventory_ranks ir
+                 JOIN inventory_items ii ON ii.slug = ir.slug WHERE ii.qty > 0",
+            )?;
+            let rows = stmt.query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            })?;
+            for row in rows {
+                let (s, rk, q) = row?;
+                breakdowns.entry(s).or_default().push((rk, q));
+            }
+        }
+        let mut stmt = c.prepare("SELECT slug, qty FROM inventory_items WHERE qty > 0")?;
+        let owned = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
+        let mut out = HashMap::new();
+        for row in owned {
+            let (slug, qty) = row?;
+            if qty <= 0 {
+                continue;
+            }
+            // Ranked → blended per-unit (Σ per-rank value / qty); else the live price.
+            let unit = match breakdowns.get(&slug) {
+                Some(b) => prices::rank_aware_value_from(&maps, &slug, b).map(|v| v / qty),
+                None => prices::effective_price_from(&maps, &slug, None),
+            };
+            if let Some(u) = unit {
+                out.insert(slug, u);
+            }
+        }
+        Ok(out)
+    })?;
+    // The displayed/owned-value price for a row: rank-aware for owned items, else the
+    // cleaned daily median.
+    let unit_price = |it: &Item, m: &Metrics| -> i64 {
+        if it.owned_qty > 0 {
+            owned_unit.get(&it.slug).copied().unwrap_or(m.current)
+        } else {
+            m.current
+        }
+    };
+
     let make_row = |it: &Item, m: &Metrics| TrendRow {
         slug: it.slug.clone(),
         display_name: it.display_name.clone(),
         part_type: it.part_type.clone(),
         category: it.category.clone(),
-        // cleaned current (winsorized when outliers are excluded) so a spiked
-        // print never shows as the price in any panel
-        median_plat: m.current,
+        // Rank-aware for owned items (matches inventory/drawer); otherwise the cleaned
+        // current (winsorized when outliers are excluded) so a spiked print never shows.
+        median_plat: unit_price(it, m),
         delta: m.delta,
         z: m.z,
         range_pos: m.range_pos,
@@ -177,13 +230,25 @@ pub fn get(db: &Db, timeframe: &str, exclude_outliers: bool) -> AppResult<Trends
 
     // Sell signals: liquid items you OWN that are elevated — high in their range
     // or a strong positive volatility-adjusted move. Ranked by plat at stake.
+    // Honor the user's value exclusions so a cheap mod they've excluded never gets
+    // suggested as something to sell (same rule the inventory valuation uses).
+    let rules = db.read(inventory::ExclusionRules::load)?;
     let mut sell: Vec<(f64, TrendRow)> = items
         .iter()
         .filter(|it| it.owned_qty > 0 && liquid(it))
         .filter_map(|it| metrics.get(&it.slug).map(|m| (it, m)))
+        .filter(|(it, m)| {
+            // Rank-aware price for the exclusion check too, so a maxed mod isn't judged
+            // by its cheap rank-0 headline.
+            !rules.is_excluded(
+                &it.category,
+                it.mod_rarity.as_deref(),
+                Some(unit_price(it, m)),
+            )
+        })
         .filter(|(_, m)| m.range_pos >= 0.7 || m.z >= 1.0)
         .map(|(it, m)| {
-            let stake = it.owned_qty as f64 * it.median_plat as f64;
+            let stake = it.owned_qty as f64 * unit_price(it, m) as f64;
             // weight by how elevated and how much plat is on the table
             let score = stake * (0.5 + m.range_pos);
             (score, make_row(it, m))
