@@ -13,6 +13,7 @@ export type ScreenId =
   | "listings"
   | "ducats"
   | "arcanes"
+  | "relics"
   | "rotation"
   | "sold"
   | "settings";
@@ -33,6 +34,7 @@ const GROUPS: { label: string | null; items: NavDef[] }[] = [
       { id: "inventory", label: "Inventory", icon: "inventory" },
       { id: "sets", label: "Sets", icon: "sets" },
       { id: "arcanes", label: "Arcanes", icon: "arcane" },
+      { id: "relics", label: "Relics", icon: "box" },
       { id: "ducats", label: "Ducats", icon: "coin" },
     ],
   },

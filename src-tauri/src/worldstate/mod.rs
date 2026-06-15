@@ -15,7 +15,7 @@ mod extra;
 mod raw;
 
 pub use arbys::ArbitrationBlock;
-pub use extra::{Invasion, Nightwave, Sortie, SteelPath, Trader};
+pub use extra::{Invasion, Nightwave, Sortie, SteelPath, Trader, VendorItem};
 
 use crate::error::AppResult;
 use chrono::Utc;

@@ -1,7 +1,7 @@
 use crate::db::wfm::{ImportApply, ListingMirror};
 use crate::db::{
-    buylist, catalog, gamescan as gamescan_db, inventory, meta, prices, recommend, sales, sets,
-    settings, trends, watchlist, wfm,
+    buylist, catalog, gamescan as gamescan_db, inventory, meta, prices, recommend, relics, sales,
+    sets, settings, trends, vendor, wanted, watchlist, wfm,
 };
 use crate::error::{AppError, AppResult};
 use crate::gamescan;
@@ -885,6 +885,171 @@ pub async fn force_worldstate_refresh(
     state.worldstate.force_refresh().await
 }
 
+/// Baro + Varzia stock cross-referenced against the catalog: market value, owned
+/// qty, cost-per-plat, and a "worth grabbing" flag. Reads the (cached) worldstate,
+/// then enriches via `db::vendor` — the worldstate module stays DB-free.
+#[tauri::command]
+pub async fn get_vendor_intel(state: State<'_, Arc<AppState>>) -> AppResult<VendorIntel> {
+    let ws = state.worldstate.get().await?;
+    let baro = match &ws.baro {
+        Some(t) => vendor::enrich(&state.db, &t.inventory)?,
+        None => Vec::new(),
+    };
+    let varzia = match &ws.varzia {
+        Some(t) => vendor::enrich(&state.db, &t.inventory)?,
+        None => Vec::new(),
+    };
+    Ok(VendorIntel { baro, varzia })
+}
+
+/// Pre-normalized wanted item, kept hot across many reward comparisons.
+struct WantedNorm {
+    slug: String,
+    name: String,
+    name_norm: String,
+}
+
+/// Match one reward string against every wanted item, pushing a row for each hit
+/// (deduped per slug+source via `seen`).
+fn match_reward(
+    reward: &str,
+    label: &str,
+    eta: &Option<String>,
+    wanted: &[WantedNorm],
+    seen: &mut std::collections::HashSet<String>,
+    out: &mut Vec<WantedNowRow>,
+) {
+    let reward_norm = catalog::normalize_name(reward);
+    for w in wanted {
+        if crate::domain::reward_match::reward_matches(&reward_norm, &w.name_norm)
+            && seen.insert(format!("{}|{label}", w.slug))
+        {
+            out.push(WantedNowRow {
+                slug: w.slug.clone(),
+                display_name: w.name.clone(),
+                source_label: label.to_string(),
+                eta: eta.clone(),
+            });
+        }
+    }
+}
+
+/// Wanted items (watchlist + missing set parts) that a live reward source —
+/// invasions or the current Steel Path rotation — is handing out right now. Empty
+/// when nothing you want is currently farmable. Free-text reward matching is
+/// deliberately conservative (see `domain::reward_match`).
+#[tauri::command]
+pub async fn get_wanted_now(state: State<'_, Arc<AppState>>) -> AppResult<Vec<WantedNowRow>> {
+    let wanted_raw = wanted::wanted_items(&state.db)?;
+    if wanted_raw.is_empty() {
+        return Ok(Vec::new());
+    }
+    let wanted: Vec<WantedNorm> = wanted_raw
+        .into_iter()
+        .map(|(slug, name)| {
+            let name_norm = catalog::normalize_name(&name);
+            WantedNorm {
+                slug,
+                name,
+                name_norm,
+            }
+        })
+        .collect();
+
+    let ws = state.worldstate.get().await?;
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+
+    for inv in &ws.invasions {
+        let label = format!("Invasion · {}", inv.node);
+        if let Some(r) = &inv.attacker_reward {
+            match_reward(r, &label, &inv.eta, &wanted, &mut seen, &mut out);
+        }
+        if let Some(r) = &inv.defender_reward {
+            match_reward(r, &label, &inv.eta, &wanted, &mut seen, &mut out);
+        }
+    }
+    if let Some(sp) = &ws.steel_path {
+        if let Some(cur) = &sp.current_reward {
+            match_reward(
+                &cur.name,
+                "Steel Path · Teshin",
+                &sp.expiry,
+                &wanted,
+                &mut seen,
+                &mut out,
+            );
+        }
+    }
+    Ok(out)
+}
+
+// ===========================================================================
+// Relics (owned void relics — drop-EV valued, crack-now against live fissures)
+// ===========================================================================
+
+#[tauri::command]
+pub fn get_relics(state: State<'_, Arc<AppState>>) -> AppResult<Vec<RelicRow>> {
+    relics::owned_relics(&state.db)
+}
+
+/// Every known relic (tier + name), for the manual-add picker. Static reference data.
+#[tauri::command]
+pub fn list_relic_choices() -> Vec<RelicChoice> {
+    relics::list_choices()
+}
+
+#[tauri::command]
+pub fn add_relic(
+    state: State<'_, Arc<AppState>>,
+    tier: String,
+    name: String,
+    refinement: Option<String>,
+    qty: Option<i64>,
+) -> AppResult<()> {
+    relics::add(
+        &state.db,
+        &tier,
+        &name,
+        refinement.as_deref(),
+        qty.unwrap_or(1),
+    )
+}
+
+#[tauri::command]
+pub fn set_relic_qty(
+    state: State<'_, Arc<AppState>>,
+    tier: String,
+    name: String,
+    refinement: Option<String>,
+    qty: i64,
+) -> AppResult<()> {
+    relics::set_qty(&state.db, &tier, &name, refinement.as_deref(), qty)
+}
+
+#[tauri::command]
+pub fn remove_relic(
+    state: State<'_, Arc<AppState>>,
+    tier: String,
+    name: String,
+    refinement: Option<String>,
+) -> AppResult<()> {
+    relics::remove(&state.db, &tier, &name, refinement.as_deref())
+}
+
+/// Owned relics crackable in a live void fissure right now, wanted-set drops flagged.
+#[tauri::command]
+pub async fn get_crack_now(state: State<'_, Arc<AppState>>) -> AppResult<Vec<CrackNowRow>> {
+    let ws = state.worldstate.get().await?;
+    let live_tiers: std::collections::HashSet<String> =
+        ws.fissures.iter().map(|f| f.tier.clone()).collect();
+    let wanted: std::collections::HashSet<String> = wanted::wanted_items(&state.db)?
+        .into_iter()
+        .map(|(slug, _)| slug)
+        .collect();
+    relics::crack_now(&state.db, &live_tiers, &wanted)
+}
+
 // ===========================================================================
 // warframe.market account (Listings) — read-only in v1
 // ===========================================================================
@@ -1404,6 +1569,43 @@ pub fn game_scan_apply(state: State<'_, Arc<AppState>>, rows: Vec<ScanApply>) ->
         ));
     }
     gamescan_db::merge_from_scan(&state.db, &rows)
+}
+
+/// Scan the running game for owned void relics and import them (source='de_scan').
+/// Consent-gated like the item scan; relics are additive (no slug diff), so this
+/// imports directly rather than through the item preview/apply split. Returns count.
+#[tauri::command]
+pub async fn import_scanned_relics(state: State<'_, Arc<AppState>>) -> AppResult<usize> {
+    if !gamescan::is_supported() {
+        return Err(AppError::Invalid(
+            "game inventory scan is Linux-only".into(),
+        ));
+    }
+    if !gamescan_db::is_consented(&state.db)? {
+        return Err(AppError::Invalid(
+            "game inventory scan requires consent first".into(),
+        ));
+    }
+    if !gamescan::warframe_running() {
+        return Err(AppError::NotConnected(
+            "Warframe does not appear to be running".into(),
+        ));
+    }
+    let raw = gamescan::scan().await?;
+    let found = gamescan::map::resolve_relics(&raw.items);
+    gamescan_db::record_scan(&state.db, raw.account_id.as_deref())?;
+    let tuples: Vec<(&str, &str, &str, i64)> = found
+        .iter()
+        .map(|r| {
+            (
+                r.tier.as_str(),
+                r.name.as_str(),
+                r.refinement.as_str(),
+                r.qty,
+            )
+        })
+        .collect();
+    relics::apply_scan(&state.db, &tuples)
 }
 
 // ===========================================================================

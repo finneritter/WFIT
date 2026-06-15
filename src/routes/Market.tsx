@@ -16,10 +16,10 @@ import {
 } from "../hooks/queries";
 import { copyText } from "../lib/clipboard";
 import { CATEGORY_LABELS, clsx, fmt, pct } from "../lib/format";
-import { openMarketExternal } from "../lib/wiki";
 import { compileQuery } from "../lib/searchQuery";
 import { marketSchema } from "../lib/searchSchemas";
 import type { BuyOrder, CatalogRow, Category, SellerOrder } from "../lib/types";
+import { openMarketExternal } from "../lib/wiki";
 
 // ---------------------------------------------------------------------------
 // Persisted screener + seller-view controls (own localStorage key — NOT the

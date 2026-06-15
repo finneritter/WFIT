@@ -17,18 +17,21 @@ pub mod inventory;
 pub mod meta;
 pub mod prices;
 pub mod recommend;
+pub mod relics;
 pub mod sales;
 pub mod sets;
 pub mod settings;
 pub mod trends;
 pub mod vault;
+pub mod vendor;
+pub mod wanted;
 pub mod watchlist;
 pub mod wfm;
 
 /// The schema version the MIGRATIONS list produces (`PRAGMA user_version` after
 /// `to_latest`). Bump in lockstep when appending a migration — the pre-migration
 /// backup gate and its test both pin it.
-pub const SCHEMA_VERSION: i64 = 10;
+pub const SCHEMA_VERSION: i64 = 11;
 
 // Append future migrations here; never edit a shipped one.
 static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
@@ -43,6 +46,7 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         M::up(include_str!("../../migrations/0008_vault_status.sql")),
         M::up(include_str!("../../migrations/0009_perf_indexes.sql")),
         M::up(include_str!("../../migrations/0010_order_fetch_meta.sql")),
+        M::up(include_str!("../../migrations/0011_owned_relics.sql")),
     ])
 });
 

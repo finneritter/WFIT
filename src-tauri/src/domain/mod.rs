@@ -6,3 +6,5 @@ pub mod arcane;
 pub mod classify;
 pub mod mod_rarity;
 pub mod partname;
+pub mod relic;
+pub mod reward_match;

@@ -70,6 +70,16 @@ pub struct ScanItem {
     pub qty: i64,
 }
 
+/// A resolved owned VOID RELIC line (relics aren't catalog items, so they resolve to
+/// a relic identity, not a slug). `refinement` is Intact for an uncracked relic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelicScanItem {
+    pub tier: String,
+    pub name: String,
+    pub refinement: String,
+    pub qty: i64,
+}
+
 /// Whether the platform can support memory-scanning at all. Linux + Windows;
 /// macOS is unsupported (SIP/hardened runtime block reading another process).
 pub const fn is_supported() -> bool {

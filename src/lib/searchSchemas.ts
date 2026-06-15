@@ -11,6 +11,7 @@ import type {
   ListingRow,
   OwnedArcane,
   RecommendationRow,
+  RelicRow,
   SaleRow,
   SetRow,
   TrendRow,
@@ -20,6 +21,11 @@ import type {
 const CATEGORIES = ["warframe", "weapon", "set", "mod", "arcane"] as const;
 const TRENDS = ["up", "down", "flat"] as const;
 const RARITIES = ["common", "uncommon", "rare", "legendary"] as const;
+const SOURCES = ["manual", "wfm_import", "de_scan"] as const;
+
+// Whole days since an RFC3339 timestamp; null for collapsed-set rows (no date).
+const daysSince = (iso: string): number | null =>
+  iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000) : null;
 
 // `cat:`/`category:` alias share one FieldDef object — the autocomplete dedupes
 // by object identity so only `cat:` is suggested.
@@ -38,12 +44,20 @@ export const inventorySchema: SearchSchema<InventoryRow> = (() => {
       vaulted: { test: (r) => r.is_vaulted, hint: "no longer farmable" },
       hot: { test: (r) => r.trend === "up", hint: "trending up" },
       excluded: { test: (r) => r.excluded, hint: "excluded from portfolio value" },
+      scanned: { test: (r) => r.source === "de_scan", hint: "imported from the game" },
     },
     fields: {
       cat,
       category: cat,
       type: { kind: "text", get: (r) => r.part_type, hint: "part type" },
       trend: trendField((r) => r.trend),
+      source: {
+        kind: "enum",
+        get: (r) => r.source || null,
+        values: SOURCES,
+        hint: "how it was added",
+      },
+      held: { kind: "number", get: (r) => daysSince(r.first_added_at), hint: "days held" },
       rarity: { kind: "enum", get: (r) => r.mod_rarity, values: RARITIES, hint: "mod rarity" },
       confidence: {
         kind: "enum",
@@ -214,6 +228,28 @@ export const arcanesSchema: SearchSchema<OwnedArcane> = {
   },
 };
 
+const RELIC_TIERS = ["lith", "meso", "neo", "axi", "requiem"] as const;
+const REFINEMENTS = ["intact", "exceptional", "flawless", "radiant"] as const;
+
+export const relicsSchema: SearchSchema<RelicRow> = {
+  text: (r) => `${r.display_name} ${r.tier} ${r.refinement} ${r.best_reward ?? ""}`,
+  is: {
+    scanned: { test: (r) => r.source === "de_scan", hint: "imported from the game" },
+  },
+  fields: {
+    tier: { kind: "enum", get: (r) => r.tier, values: RELIC_TIERS, hint: "relic tier" },
+    refinement: {
+      kind: "enum",
+      get: (r) => r.refinement,
+      values: REFINEMENTS,
+      hint: "refinement level",
+    },
+    qty: { kind: "number", get: (r) => r.qty, hint: "owned count" },
+    ev: { kind: "number", get: (r) => r.ev_plat, hint: "expected plat per relic" },
+    value: { kind: "number", get: (r) => r.ev_plat * r.qty, hint: "total expected plat" },
+  },
+};
+
 export const soldSchema: SearchSchema<SaleRow> = (() => {
   const cat = catField<SaleRow>((r) => r.category);
   return {
@@ -321,18 +357,20 @@ export const PAGE_SCHEMAS: Partial<Record<ScreenId, AnySearchSchema>> = {
   sets: setsSchema,
   ducats: ducatsSchema,
   arcanes: arcanesSchema,
+  relics: relicsSchema,
   sold: soldSchema,
   listings: listingsSchema,
   trends: trendsSchema,
 };
 
 export const PAGE_PLACEHOLDER: Partial<Record<ScreenId, string>> = {
-  inventory: "Search inventory…  try is:vaulted plat>20 · all: for everything",
+  inventory: "Search inventory…  try is:scanned source:manual held<7 · all: for everything",
   watchlist: "Search watchlist…  try is:attarget target<30",
   buy: "Search buy list…  try plat>10 trend:down",
   sets: "Search sets…  try is:complete missing=1",
   ducats: "Search parts…  try verdict:ducat dp>=10",
   arcanes: "Search arcanes…  try rarity:legendary verdict:sell",
+  relics: "Search relics…  try tier:axi ev>30 is:scanned",
   sold: "Search sales…  try days<7 unit>20",
   listings: "Search listings…  try is:undercut",
   trends: "Search trends…  try delta>10 is:owned",

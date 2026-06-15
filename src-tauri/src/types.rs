@@ -42,6 +42,11 @@ pub struct InventoryRow {
     pub volume_7d: Option<i64>,
     pub thumbnail_url: Option<String>,
     pub last_modified_at: String,
+    /// Provenance: 'manual' | 'wfm_import' | 'de_scan'. Empty for collapsed set rows
+    /// (a complete set is a derived aggregate with no single origin).
+    pub source: String,
+    /// When WFIT first recorded this holding (RFC3339). Empty for collapsed set rows.
+    pub first_added_at: String,
     /// Rank-aware total value of this row (Σ qty_r × per-rank price). Some only for
     /// owned mods/arcanes with a rank breakdown; None means use median_plat × qty.
     pub value_plat: Option<i64>,
@@ -66,6 +71,81 @@ pub struct InventoryRow {
     /// is on the user's exclusion list). It still shows in inventory, but value_plat
     /// and realizable_plat are zeroed so totals/summary/trends drop it.
     pub excluded: bool,
+}
+
+/// One vendor (Baro/Varzia) stock line enriched against the catalog: market value,
+/// whether you already own it, and a buy-it signal. Powers the Rotation Vendors tab.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VendorIntelRow {
+    pub item: String,                  // vendor's display name (as listed)
+    pub slug: Option<String>,          // catalog slug if the name resolved (click-to-open)
+    pub thumbnail_url: Option<String>, // catalog thumbnail when resolved
+    pub median_plat: Option<i64>,      // market value, None if untracked on warframe.market
+    pub owned_qty: i64,                // how many you already own (0 = don't have it)
+    pub cost: Option<i64>,             // ducats (Baro) or aya (Varzia) — mirrors VendorItem.ducats
+    pub credits: Option<i64>,
+    /// cost / median_plat — currency spent per plat of resale value (lower = better deal).
+    pub cost_per_plat: Option<f64>,
+    /// Worth grabbing: a meaningfully valuable item you don't already own.
+    pub good_deal: bool,
+}
+
+/// Enriched Baro + Varzia stock for the Rotation Vendors tab.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VendorIntel {
+    pub baro: Vec<VendorIntelRow>,
+    pub varzia: Vec<VendorIntelRow>,
+}
+
+/// A wanted item (watchlist or missing set part) available from a live worldstate
+/// reward source right now. Powers the Rotation Overview "Wanted now" panel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WantedNowRow {
+    pub slug: String,
+    pub display_name: String,
+    pub source_label: String, // e.g. "Invasion · Sechura (Pluto)" or "Steel Path · Teshin"
+    pub eta: Option<String>,  // ISO expiry/eta of the source, when known
+}
+
+/// One owned void relic, valued by the expected plat of its drops (relics aren't
+/// traded on warframe.market, so worth is inferred from the bundled drop tables).
+/// Powers the Relics screen.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelicRow {
+    pub tier: String,
+    pub relic_name: String,   // "A1"
+    pub refinement: String,   // Intact | Exceptional | Flawless | Radiant
+    pub display_name: String, // "Lith A1"
+    pub qty: i64,
+    pub ev_plat: f64,                  // expected plat per relic at this refinement
+    pub best_reward: Option<String>,   // highest-value drop's display name
+    pub best_reward_plat: Option<i64>, // and its market price
+    pub priced_drops: i64,             // how many of its drops have a market price
+    pub total_drops: i64,              // total drops in the table
+    pub source: String,                // manual | de_scan
+    pub first_added_at: String,
+}
+
+/// A known relic offered in the manual-add picker (no ownership yet).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelicChoice {
+    pub tier: String,
+    pub relic_name: String,
+    pub display_name: String, // "Lith A1"
+}
+
+/// An owned relic that a live void fissure of its tier can crack right now, with any
+/// of its drops that are on your wanted list called out. Powers the Rotation
+/// "Crack now" panel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrackNowRow {
+    pub tier: String,
+    pub relic_name: String,
+    pub refinement: String,
+    pub display_name: String,
+    pub qty: i64,
+    pub ev_plat: f64,
+    pub wanted_drops: Vec<String>, // wanted-set drop display names this relic can yield
 }
 
 /// Progress of the throttled owned-item price refresh — drives the "pricing…"

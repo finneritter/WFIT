@@ -231,6 +231,16 @@ pub fn run() {
             // worldstate
             commands::get_worldstate,
             commands::force_worldstate_refresh,
+            commands::get_vendor_intel,
+            commands::get_wanted_now,
+            // relics
+            commands::get_relics,
+            commands::list_relic_choices,
+            commands::add_relic,
+            commands::set_relic_qty,
+            commands::remove_relic,
+            commands::get_crack_now,
+            commands::import_scanned_relics,
             // wfm account
             commands::get_wfm_account,
             commands::wfm_connect,

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Countdown, TierBadge } from "../components/Countdown";
-import { useWorldstate } from "../hooks/queries";
+import { rowAction } from "../components/ui";
+import { useCrackNow, useVendorIntel, useWantedNow, useWorldstate } from "../hooks/queries";
 import { clsx, dayTime, fmt, glyph, hhmm, msUntil, nextUtc, tzLabel } from "../lib/format";
 import type {
   ArbitrationBlock,
@@ -9,7 +10,7 @@ import type {
   Nightwave,
   Sortie,
   Trader,
-  VendorItem,
+  VendorIntelRow,
   Worldstate,
 } from "../lib/types";
 
@@ -274,7 +275,66 @@ function InvasionsPanel({ invasions }: { invasions: Invasion[] }) {
   );
 }
 
-function OverviewTab({ ws }: { ws: Worldstate }) {
+// Wanted items (watchlist + missing set parts) farmable from a live reward source
+// right now. Hidden entirely when nothing you want is currently available.
+function WantedNowPanel({ onOpen }: { onOpen: (slug: string) => void }) {
+  const { data: rows = [] } = useWantedNow();
+  if (rows.length === 0) return null;
+  return (
+    <div className="tpanel wn-panel">
+      <div className="tpanel-h">
+        <h3>Wanted now</h3>
+        <span className="meta">{rows.length} farmable</span>
+      </div>
+      <div className="wn-list">
+        {rows.map((r, i) => (
+          <div
+            className="wn-row click"
+            key={`${r.slug}-${r.source_label}-${i}`}
+            {...rowAction(() => onOpen(r.slug))}
+          >
+            <span className="vgl">{glyph(r.display_name)}</span>
+            <span className="wn-nm">{r.display_name}</span>
+            <span className="wn-src">{r.source_label}</span>
+            <span className="wn-eta num">{r.eta ? <Countdown iso={r.eta} /> : "—"}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Owned relics a live void fissure can crack right now, wanted-set drops flagged.
+// Hidden when nothing you own matches a live fissure.
+function CrackNowPanel() {
+  const { data: rows = [] } = useCrackNow();
+  if (rows.length === 0) return null;
+  return (
+    <div className="tpanel wn-panel">
+      <div className="tpanel-h">
+        <h3>Crack now</h3>
+        <span className="meta">{rows.length} owned relics match a live fissure</span>
+      </div>
+      <div className="wn-list">
+        {rows.map((r) => (
+          <div className="wn-row" key={`${r.tier}-${r.relic_name}-${r.refinement}`}>
+            <span className="vgl">{glyph(r.display_name)}</span>
+            <span className="wn-nm">
+              {r.display_name} <span className="muted">×{r.qty}</span>
+              {r.wanted_drops.length > 0 ? (
+                <span className="wn-want"> wants: {r.wanted_drops.join(", ")}</span>
+              ) : null}
+            </span>
+            <span className="wn-src">{r.refinement}</span>
+            <span className="wn-eta num">~{fmt(Math.round(r.ev_plat))}p</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OverviewTab({ ws, onOpen }: { ws: Worldstate; onOpen: (slug: string) => void }) {
   // The right-side reset strip: fixed UTC game resets + the data-driven ends.
   const resets: Array<[string, string | null]> = [
     ["Daily reset", nextUtc(0)],
@@ -312,6 +372,8 @@ function OverviewTab({ ws }: { ws: Worldstate }) {
           </div>
         ))}
       </div>
+      <WantedNowPanel onOpen={onOpen} />
+      <CrackNowPanel />
       <div className="rot-grid v2">
         <div className="rot-col">
           <ArbitrationPanel block={ws.arbitration} />
@@ -371,38 +433,73 @@ function BaroHero({ baro }: { baro: Trader | null }) {
 }
 
 /** §7.13 stock table — glyph tile · name · currency (colored) · credits. */
-function VendorTable({ items, currency }: { items: VendorItem[]; currency: "ducats" | "aya" }) {
+function VendorTable({
+  rows,
+  currency,
+  onOpen,
+}: {
+  rows: VendorIntelRow[];
+  currency: "ducats" | "aya";
+  onOpen: (slug: string) => void;
+}) {
   const aya = currency === "aya";
   const costCls = aya ? "v-aya" : "v-ducat";
-  const totalCost = items.reduce((s, it) => s + (it.ducats ?? 0), 0);
-  const totalCred = items.reduce((s, it) => s + (it.credits ?? 0), 0);
+  const totalCost = rows.reduce((s, r) => s + (r.cost ?? 0), 0);
+  const totalValue = rows.reduce((s, r) => s + (r.median_plat ?? 0), 0);
   return (
     <div className={clsx("vt", aya && "aya")}>
       <div className="vt-head">
         <span />
         <span>Item</span>
+        <span className="r">Value</span>
         <span className="r">{aya ? "Aya" : "Ducats"}</span>
-        <span className="r">Credits</span>
       </div>
-      {items.map((it, i) => (
-        <div className="vrow" key={`${it.item}-${i}`}>
-          <span className="vgl">{glyph(it.item)}</span>
-          <span className="vn">{it.item}</span>
-          <span className={costCls}>{it.ducats ?? "—"}</span>
-          <span className="v-cred">{it.credits != null ? fmt(it.credits) : "—"}</span>
-        </div>
-      ))}
+      {rows.map((r, i) => {
+        const clickable = r.slug != null;
+        return (
+          <div
+            className={clsx("vrow", r.good_deal && "deal", clickable && "click")}
+            key={`${r.item}-${i}`}
+            title={
+              r.cost_per_plat != null
+                ? `${r.cost_per_plat.toFixed(1)} ${aya ? "aya" : "ducats"} per plat of value`
+                : undefined
+            }
+            {...(clickable ? rowAction(() => onOpen(r.slug as string)) : {})}
+          >
+            <span className="vgl">
+              {r.thumbnail_url ? (
+                <img src={r.thumbnail_url} alt="" loading="lazy" />
+              ) : (
+                glyph(r.item)
+              )}
+            </span>
+            <span className="vn">
+              {r.item}
+              {r.good_deal ? <span className="deal-tag">DEAL</span> : null}
+              {r.owned_qty > 0 ? <span className="owned-tag">OWNED ×{r.owned_qty}</span> : null}
+            </span>
+            <span className="v-plat">{r.median_plat != null ? `${fmt(r.median_plat)}p` : "—"}</span>
+            <span className={costCls}>{r.cost ?? "—"}</span>
+          </div>
+        );
+      })}
       <div className="vt-foot">
         <span />
         <span className="tk">Total</span>
+        <span className="v-plat">{totalValue > 0 ? `${fmt(totalValue)}p` : "—"}</span>
         <span className={costCls}>{fmt(totalCost)}</span>
-        <span className="v-cred">{totalCred > 0 ? fmt(totalCred) : "—"}</span>
       </div>
     </div>
   );
 }
 
-function VendorsTab({ ws }: { ws: Worldstate }) {
+function VendorsTab({ ws, onOpen }: { ws: Worldstate; onOpen: (slug: string) => void }) {
+  // Enriched stock (market value + ownership). The intel command reads the same
+  // cached worldstate, so its rows mirror ws.baro/ws.varzia 1:1 (same order).
+  const { data: intel } = useVendorIntel();
+  const baroRows = intel?.baro ?? [];
+  const varziaRows = intel?.varzia ?? [];
   return (
     <>
       <BaroHero baro={ws.baro} />
@@ -410,12 +507,10 @@ function VendorsTab({ ws }: { ws: Worldstate }) {
         <div className="tpanel">
           <div className="tpanel-h">
             <h3>Baro · Stock</h3>
-            {ws.baro && ws.baro.inventory.length > 0 ? (
-              <span className="meta">{ws.baro.inventory.length} items</span>
-            ) : null}
+            {baroRows.length > 0 ? <span className="meta">{baroRows.length} items</span> : null}
           </div>
-          {ws.baro && ws.baro.inventory.length > 0 ? (
-            <VendorTable items={ws.baro.inventory} currency="ducats" />
+          {baroRows.length > 0 ? (
+            <VendorTable rows={baroRows} currency="ducats" onOpen={onOpen} />
           ) : (
             <div className="baro-note">
               Baro's stock is only known once he arrives — the worldstate doesn't expose it before
@@ -432,8 +527,8 @@ function VendorsTab({ ws }: { ws: Worldstate }) {
               </span>
             ) : null}
           </div>
-          {ws.varzia && ws.varzia.inventory.length > 0 ? (
-            <VendorTable items={ws.varzia.inventory} currency="aya" />
+          {varziaRows.length > 0 ? (
+            <VendorTable rows={varziaRows} currency="aya" onOpen={onOpen} />
           ) : (
             <div className="baro-note">No resurgence rotation listed right now.</div>
           )}
@@ -611,7 +706,7 @@ function FissuresTab({ ws, deVerified }: { ws: Worldstate; deVerified: boolean }
 // Screen
 // ---------------------------------------------------------------------------
 
-export function Rotation() {
+export function Rotation({ onOpen }: { onOpen: (slug: string) => void }) {
   const { data: ws, isLoading, isError } = useWorldstate();
   const [tab, setTab] = useState<TabId>("overview");
 
@@ -672,9 +767,9 @@ export function Rotation() {
         ))}
       </div>
 
-      {tab === "overview" && <OverviewTab ws={ws} />}
+      {tab === "overview" && <OverviewTab ws={ws} onOpen={onOpen} />}
       {tab === "fissures" && <FissuresTab ws={ws} deVerified={deVerified} />}
-      {tab === "vendors" && <VendorsTab ws={ws} />}
+      {tab === "vendors" && <VendorsTab ws={ws} onOpen={onOpen} />}
     </>
   );
 }

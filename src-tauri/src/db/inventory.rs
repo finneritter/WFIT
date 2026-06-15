@@ -480,7 +480,8 @@ fn fetch_owned(c: &rusqlite::Connection) -> AppResult<Vec<InventoryRow>> {
             ci.slug, ci.display_name, ci.part_type, ci.category, ci.set_slug,
             ii.qty, ci.ducats, ci.is_vaulted,
             pc.median_plat, pc.trend, pc.delta_7d, pc.volume_7d,
-            ci.thumbnail_url, ii.last_modified_at, ci.mod_rarity
+            ci.thumbnail_url, ii.last_modified_at, ci.mod_rarity,
+            ii.source, ii.first_added_at
          FROM inventory_items ii
          JOIN catalog_items ci ON ci.slug = ii.slug
          LEFT JOIN price_cache pc ON pc.slug = ii.slug
@@ -502,6 +503,8 @@ fn fetch_owned(c: &rusqlite::Connection) -> AppResult<Vec<InventoryRow>> {
             volume_7d: r.get(11)?,
             thumbnail_url: r.get(12)?,
             last_modified_at: r.get(13)?,
+            source: r.get(15)?,
+            first_added_at: r.get(16)?,
             value_plat: None,
             realizable_plat: None,
             daily_volume: None,
@@ -560,6 +563,8 @@ fn set_templates(c: &rusqlite::Connection) -> AppResult<HashMap<String, Inventor
                 volume_7d: r.get(8)?,
                 thumbnail_url: r.get(9)?,
                 last_modified_at: String::new(),
+                source: String::new(),
+                first_added_at: String::new(),
                 value_plat: None,
                 realizable_plat: None,
                 daily_volume: None,

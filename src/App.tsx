@@ -31,6 +31,7 @@ import { Ducats } from "./routes/Ducats";
 import { Inventory } from "./routes/Inventory";
 import { Listings } from "./routes/Listings";
 import { Market } from "./routes/Market";
+import { Relics } from "./routes/Relics";
 import { Rotation } from "./routes/Rotation";
 import { Sets } from "./routes/Sets";
 import { Settings } from "./routes/Settings";
@@ -52,6 +53,7 @@ const TITLES: Record<ScreenId, string> = {
   listings: "Listings",
   ducats: "Ducats",
   arcanes: "Arcanes",
+  relics: "Relics",
   rotation: "Rotation",
   sold: "Sold History",
   settings: "Settings",
@@ -235,7 +237,8 @@ export default function App() {
                 {screen === "listings" && <Listings onOpen={open} initialTab={listingsTab} />}
                 {screen === "ducats" && <Ducats onOpen={open} />}
                 {screen === "arcanes" && <Arcanes onOpen={open} />}
-                {screen === "rotation" && <Rotation />}
+                {screen === "relics" && <Relics />}
+                {screen === "rotation" && <Rotation onOpen={open} />}
                 {screen === "sold" && <SoldHistory onOpen={open} />}
                 {screen === "settings" && <Settings onNavigate={navigate} />}
               </ErrorBoundary>

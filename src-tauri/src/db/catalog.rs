@@ -186,6 +186,41 @@ pub fn id_slug_map(db: &Db) -> AppResult<HashMap<String, String>> {
     })
 }
 
+/// Canonical key for matching a free-text item name (vendor stock, worldstate
+/// reward strings) against catalog `display_name`s: lowercase, drop everything but
+/// alphanumerics and single spaces. "Ash Prime Blade" / "ash  prime  blade!" → "ash prime blade".
+/// Shared by vendor intel (F2), wanted-now reward matching (F3), and relics (F1).
+pub fn normalize_name(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut prev_space = false;
+    for ch in s.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.extend(ch.to_lowercase());
+            prev_space = false;
+        } else if !prev_space && !out.is_empty() {
+            out.push(' ');
+            prev_space = true;
+        }
+    }
+    out.trim_end().to_string()
+}
+
+/// normalized display_name → slug, for resolving free-text names to catalog items.
+/// On a name collision the first slug seen wins (rare; e.g. a part and set sharing a
+/// name). Built once per caller.
+pub fn name_slug_map(db: &Db) -> AppResult<HashMap<String, String>> {
+    db.read(|c| {
+        let mut stmt = c.prepare("SELECT display_name, slug FROM catalog_items")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        let mut map = HashMap::new();
+        for r in rows {
+            let (name, slug) = r?;
+            map.entry(normalize_name(&name)).or_insert(slug);
+        }
+        Ok(map)
+    })
+}
+
 const CATALOG_SELECT: &str = "SELECT
         ci.slug, ci.display_name, ci.part_type, ci.category, ci.set_slug,
         ci.ducats, ci.is_vaulted, pc.median_plat, pc.trend, pc.delta_7d,

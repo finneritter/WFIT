@@ -5,7 +5,17 @@ import { Icon } from "../components/Icon";
 import { Spark } from "../components/charts";
 import { Glyph, SortTh, StatBox, rowAction } from "../components/ui";
 import { useInventory, useListings, usePricingProgress, useSummary } from "../hooks/queries";
-import { CATEGORY_LABELS, clsx, fmt, fmtK, glyph, pct, tier, trendOf } from "../lib/format";
+import {
+  CATEGORY_LABELS,
+  clsx,
+  fmt,
+  fmtK,
+  glyph,
+  pct,
+  relativeDay,
+  tier,
+  trendOf,
+} from "../lib/format";
 import { usePersisted } from "../lib/persist";
 import { usePageSearch } from "../lib/searchContext";
 import { compileQuery } from "../lib/searchQuery";
@@ -27,6 +37,14 @@ const VIEWS: readonly DropdownOption[] = [
   ["chips", "Chips", "chips"],
   ["list", "List", "rows"],
 ];
+const SOURCE_OPTS: readonly DropdownOption[] = [
+  ["all", "Any source"],
+  ["de_scan", "Game scan"],
+  ["wfm_import", "WFM import"],
+  ["manual", "Added by hand"],
+];
+// Short provenance tag for non-default sources (manual is the norm → no tag).
+const SRC_TAG: Record<string, string> = { de_scan: "SCAN", wfm_import: "WFM" };
 
 // Full market value of a row (the optimistic "ceiling"): rank-aware value_plat for
 // mods/arcanes, else median × qty.
@@ -225,8 +243,16 @@ const InvTable = memo(function InvTable({
                       {row.excluded ? <span className="excl-tag">EXCL</span> : null}
                       {row.is_vaulted ? <span className="vault">VAULT</span> : null}
                       {listed.has(row.slug) ? <span className="listed-tag">LISTED</span> : null}
+                      {SRC_TAG[row.source] ? (
+                        <span className="src-tag" title={`added via ${row.source}`}>
+                          {SRC_TAG[row.source]}
+                        </span>
+                      ) : null}
                     </span>
-                    <span className="sub">{row.part_type}</span>
+                    <span className="sub">
+                      {row.part_type}
+                      {row.first_added_at ? ` · added ${relativeDay(row.first_added_at)}` : ""}
+                    </span>
                   </span>
                 </div>
               </td>
@@ -427,6 +453,7 @@ export function Inventory({ onOpen }: { onOpen: (slug: string) => void }) {
     qc.invalidateQueries({ queryKey: ["inventory"] });
   }, [priced, active, qc]);
   const [cat, setCat] = useState<string>("all");
+  const [src, setSrc] = useState<string>("all");
   const [hot, setHot] = useState(false);
   const [vaulted, setVaulted] = useState(false);
   const [sort, setSort] = usePersisted<SortKey>("wfit-inv-sort", "value-desc");
@@ -470,6 +497,7 @@ export function Inventory({ onOpen }: { onOpen: (slug: string) => void }) {
       if (!test(r)) return false;
       if (hot && r.trend !== "up") return false;
       if (vaulted && !r.is_vaulted) return false;
+      if (src !== "all" && r.source !== src) return false;
       return true;
     });
     const sorted = [...rows];
@@ -490,7 +518,7 @@ export function Inventory({ onOpen }: { onOpen: (slug: string) => void }) {
       }
     });
     return sorted;
-  }, [inv, test, hot, vaulted, sort, colSort, hideExcl]);
+  }, [inv, test, hot, vaulted, src, sort, colSort, hideExcl]);
 
   const byCat = useMemo(() => {
     const map = new Map<string, InventoryRow[]>();
@@ -517,7 +545,7 @@ export function Inventory({ onOpen }: { onOpen: (slug: string) => void }) {
 
   // Section visibility (spec §3.5): hide non-selected categories; hide an emptied
   // section unless a specific category is selected with no hot/query filter.
-  const filtering = hot || vaulted || query !== "";
+  const filtering = hot || vaulted || src !== "all" || query !== "";
   const visible = CATS.filter((c) => {
     if (cat !== "all" && cat !== c) return false;
     const rows = byCat.get(c) ?? [];
@@ -587,6 +615,14 @@ export function Inventory({ onOpen }: { onOpen: (slug: string) => void }) {
           onChange={setCat}
           align="left"
           title="Filter by category"
+        />
+        <Dropdown
+          icon="filter"
+          value={src}
+          options={SOURCE_OPTS}
+          onChange={setSrc}
+          align="left"
+          title="Filter by how the item was added"
         />
         <span className="sp" />
         <span className="sortlbl">sort</span>

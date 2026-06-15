@@ -8,6 +8,7 @@ import type {
   BackupInfo,
   BuyRow,
   CatalogRow,
+  CrackNowRow,
   DucatRow,
   GameScanStatus,
   ImportRow,
@@ -19,6 +20,8 @@ import type {
   NotificationPrefs,
   PricingProgress,
   RecommendationRow,
+  RelicChoice,
+  RelicRow,
   RepriceApply,
   RepriceRow,
   SaleRow,
@@ -28,6 +31,8 @@ import type {
   StartupStatus,
   Summary,
   TrendsData,
+  VendorIntel,
+  WantedNowRow,
   WatchRow,
   WfmAccount,
   Worldstate,
@@ -137,6 +142,22 @@ export const getItemSellers = (slug: string) => invoke<ItemSellers>("get_item_se
 export const getWorldstate = () => invoke<Worldstate>("get_worldstate");
 // Hard reset: discard the backend's worldstate + arbitration caches and re-fetch.
 export const forceWorldstateRefresh = () => invoke<Worldstate>("force_worldstate_refresh");
+// Baro/Varzia stock cross-referenced with the catalog (market value, owned, deals).
+export const getVendorIntel = () => invoke<VendorIntel>("get_vendor_intel");
+// Wanted items (watchlist + missing set parts) farmable from a live reward source.
+export const getWantedNow = () => invoke<WantedNowRow[]>("get_wanted_now");
+
+// relics (owned void relics — drop-EV valued)
+export const getRelics = () => invoke<RelicRow[]>("get_relics");
+export const listRelicChoices = () => invoke<RelicChoice[]>("list_relic_choices");
+export const addRelic = (tier: string, name: string, refinement?: string, qty?: number) =>
+  invoke<void>("add_relic", { tier, name, refinement: refinement ?? null, qty: qty ?? null });
+export const setRelicQty = (tier: string, name: string, refinement: string | null, qty: number) =>
+  invoke<void>("set_relic_qty", { tier, name, refinement, qty });
+export const removeRelic = (tier: string, name: string, refinement: string | null) =>
+  invoke<void>("remove_relic", { tier, name, refinement });
+export const getCrackNow = () => invoke<CrackNowRow[]>("get_crack_now");
+export const importScannedRelics = () => invoke<number>("import_scanned_relics");
 
 // wfm account
 export const getWfmAccount = () => invoke<WfmAccount>("get_wfm_account");

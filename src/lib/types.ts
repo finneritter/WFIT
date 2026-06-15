@@ -37,6 +37,8 @@ export interface InventoryRow {
   volume_7d: number | null;
   thumbnail_url: string | null;
   last_modified_at: string;
+  source: string; // 'manual' | 'wfm_import' | 'de_scan'; "" for collapsed set rows
+  first_added_at: string; // RFC3339 when WFIT first recorded it; "" for collapsed sets
   value_plat: number | null; // rank-aware total value (mods/arcanes); else use median×qty
   realizable_plat: number | null; // liquidation-adjusted value (≤ market value)
   daily_volume: number | null;
@@ -444,6 +446,59 @@ export interface Trader {
   location: string | null;
   character: string | null;
   inventory: VendorItem[];
+}
+// Vendor stock enriched against the catalog (Rotation Vendors tab).
+export interface VendorIntelRow {
+  item: string;
+  slug: string | null;
+  thumbnail_url: string | null;
+  median_plat: number | null;
+  owned_qty: number;
+  cost: number | null; // ducats (Baro) or aya (Varzia)
+  credits: number | null;
+  cost_per_plat: number | null; // cost / median_plat (lower = better)
+  good_deal: boolean;
+}
+export interface VendorIntel {
+  baro: VendorIntelRow[];
+  varzia: VendorIntelRow[];
+}
+// A wanted item available from a live reward source now (Rotation Overview).
+export interface WantedNowRow {
+  slug: string;
+  display_name: string;
+  source_label: string;
+  eta: string | null;
+}
+// Owned void relic, valued by expected drop plat (Relics screen).
+export interface RelicRow {
+  tier: string;
+  relic_name: string;
+  refinement: string;
+  display_name: string;
+  qty: number;
+  ev_plat: number;
+  best_reward: string | null;
+  best_reward_plat: number | null;
+  priced_drops: number;
+  total_drops: number;
+  source: string;
+  first_added_at: string;
+}
+export interface RelicChoice {
+  tier: string;
+  relic_name: string;
+  display_name: string;
+}
+// An owned relic crackable in a live fissure now (Rotation "Crack now").
+export interface CrackNowRow {
+  tier: string;
+  relic_name: string;
+  refinement: string;
+  display_name: string;
+  qty: number;
+  ev_plat: number;
+  wanted_drops: string[];
 }
 export interface SortieMission {
   node: string;

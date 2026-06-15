@@ -3,7 +3,8 @@
 //! through `game_ref` and dropping the misses *is* the prime-part/tradeable filter
 //! — anything that doesn't resolve to a catalog slug is ignored.
 
-use super::{RawInventory, RawItem, ScanItem};
+use super::{RawInventory, RawItem, RelicScanItem, ScanItem};
+use crate::domain::relic;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -17,7 +18,10 @@ use std::collections::HashMap;
 ///   the single ranked instance in `Upgrades` (or to 0).
 /// - `Upgrades`    — individual RANKED mod/arcane instances (no `ItemCount`, so each
 ///   counts as 1 via the default); summed per slug they add the ranked copies.
-const INVENTORY_ARRAYS: &[&str] = &["MiscItems", "Recipes", "RawUpgrades", "Upgrades"];
+/// - `Relics`      — void relic projections (have `ItemCount`). These never resolve to
+///   a catalog slug (relics aren't traded), so `resolve` drops them; `resolve_relics`
+///   picks them up instead. Listed here in case DE keys them separately from MiscItems.
+const INVENTORY_ARRAYS: &[&str] = &["MiscItems", "Recipes", "RawUpgrades", "Upgrades", "Relics"];
 
 /// Resolve raw `uniqueName` lines to catalog slugs, aggregating by (slug, rank)
 /// and dropping anything not in the catalog. The result is the owned, tracked
@@ -35,6 +39,41 @@ pub fn resolve(items: &[RawItem], gref_to_slug: &HashMap<String, String>) -> Vec
         .map(|((slug, rank), qty)| ScanItem { slug, rank, qty })
         .collect();
     out.sort_by(|a, b| a.slug.cmp(&b.slug).then(a.rank.cmp(&b.rank)));
+    out
+}
+
+/// Resolve raw `uniqueName` lines that are VOID RELIC projections to relic identities
+/// (tier + name + refinement), aggregating quantity. Runs over the same `RawItem`s as
+/// `resolve` — relics live in `MiscItems`/`Relics` and are dropped by the catalog
+/// resolve, so this is the relic-specific second pass. Non-relic lines are ignored.
+pub fn resolve_relics(items: &[RawItem]) -> Vec<RelicScanItem> {
+    let mut by: HashMap<(String, String, String), i64> = HashMap::new();
+    for it in items {
+        if let Some(id) = relic::ident_for(&it.unique_name) {
+            *by.entry((
+                id.tier.to_string(),
+                id.name.to_string(),
+                id.refinement.to_string(),
+            ))
+            .or_insert(0) += it.count.max(0);
+        }
+    }
+    let mut out: Vec<RelicScanItem> = by
+        .into_iter()
+        .filter(|(_, qty)| *qty > 0)
+        .map(|((tier, name, refinement), qty)| RelicScanItem {
+            tier,
+            name,
+            refinement,
+            qty,
+        })
+        .collect();
+    out.sort_by(|a, b| {
+        a.tier
+            .cmp(&b.tier)
+            .then(a.name.cmp(&b.name))
+            .then(a.refinement.cmp(&b.refinement))
+    });
     out
 }
 
@@ -167,6 +206,38 @@ mod tests {
         let r5 = out.iter().find(|i| i.rank == Some(5)).unwrap();
         assert_eq!(r0.qty, 3);
         assert_eq!(r5.qty, 1);
+    }
+
+    #[test]
+    fn resolve_relics_maps_projections_and_sums() {
+        // Two Axi A1 Intact projections + an unrelated item; sums to qty 5, drops the rest.
+        let items = vec![
+            RawItem {
+                unique_name: "/Lotus/Types/Game/Projections/T4VoidProjectionEBronze".into(),
+                count: 3,
+                rank: None,
+            },
+            RawItem {
+                unique_name: "/Lotus/Types/Game/Projections/T4VoidProjectionEBronze".into(),
+                count: 2,
+                rank: None,
+            },
+            RawItem {
+                unique_name: "/Lotus/Types/Recipes/Weapons/SomaPrimeBarrel".into(),
+                count: 1,
+                rank: None,
+            },
+        ];
+        let out = resolve_relics(&items);
+        assert_eq!(
+            out,
+            vec![RelicScanItem {
+                tier: "Axi".into(),
+                name: "A1".into(),
+                refinement: "Intact".into(),
+                qty: 5,
+            }]
+        );
     }
 
     #[test]

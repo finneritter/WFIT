@@ -42,6 +42,11 @@ export const keys = {
   recommendedPrice: (slug: string, rank: number | null) =>
     ["recommendedPrice", slug, rank] as const,
   worldstate: ["worldstate"] as const,
+  vendorIntel: ["vendorIntel"] as const,
+  wantedNow: ["wantedNow"] as const,
+  relics: ["relics"] as const,
+  relicChoices: ["relicChoices"] as const,
+  crackNow: ["crackNow"] as const,
   pricingProgress: ["pricingProgress"] as const,
   wfmAccount: ["wfmAccount"] as const,
   listings: ["listings"] as const,
@@ -155,6 +160,76 @@ export const useWorldstateHardReset = () => {
     onSuccess: (ws) => qc.setQueryData(keys.worldstate, ws),
   });
 };
+// Baro/Varzia stock enriched with market value + ownership. Cheap (reads cached
+// worldstate); refetch on the same cadence as the worldstate so deals stay current.
+export const useVendorIntel = () =>
+  useQuery({
+    queryKey: keys.vendorIntel,
+    queryFn: api.getVendorIntel,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
+  });
+// Wanted items farmable from a live reward source right now. Depends on the
+// worldstate + watchlist/inventory; refetch on the worldstate cadence.
+export const useWantedNow = () =>
+  useQuery({
+    queryKey: keys.wantedNow,
+    queryFn: api.getWantedNow,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
+  });
+
+// ---- relics ----
+export const useRelics = () => useQuery({ queryKey: keys.relics, queryFn: api.getRelics });
+// Static reference list (all known relics) — cached long for the add picker.
+export const useRelicChoices = () =>
+  useQuery({
+    queryKey: keys.relicChoices,
+    queryFn: api.listRelicChoices,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+export const useCrackNow = () =>
+  useQuery({
+    queryKey: keys.crackNow,
+    queryFn: api.getCrackNow,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
+  });
+function invalidateRelics(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: keys.relics });
+  qc.invalidateQueries({ queryKey: keys.crackNow });
+}
+export function useAddRelic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: { tier: string; name: string; refinement?: string; qty?: number }) =>
+      api.addRelic(a.tier, a.name, a.refinement, a.qty),
+    onSuccess: () => invalidateRelics(qc),
+  });
+}
+export function useSetRelicQty() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: { tier: string; name: string; refinement: string | null; qty: number }) =>
+      api.setRelicQty(a.tier, a.name, a.refinement, a.qty),
+    onSuccess: () => invalidateRelics(qc),
+  });
+}
+export function useRemoveRelic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: { tier: string; name: string; refinement: string | null }) =>
+      api.removeRelic(a.tier, a.name, a.refinement),
+    onSuccess: () => invalidateRelics(qc),
+  });
+}
+export function useImportScannedRelics() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.importScannedRelics,
+    onSuccess: () => invalidateRelics(qc),
+  });
+}
 // Poll fast while a refresh is in flight, slow otherwise (to notice it starting).
 export const usePricingProgress = () =>
   useQuery({
