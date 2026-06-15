@@ -4,6 +4,7 @@ import { Drawer } from "./components/Drawer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Icon } from "./components/Icon";
 import { LiveBadge } from "./components/LiveBadge";
+import { ResizeGrips } from "./components/ResizeGrips";
 import { type ScreenId, Sidebar } from "./components/Sidebar";
 import { SyncNow } from "./components/SyncNow";
 import { TitleBar } from "./components/TitleBar";
@@ -148,6 +149,7 @@ export default function App() {
 
   return (
     <div className="win">
+      <ResizeGrips />
       <TitleBar />
       <div className={clsx("shell", navCollapsed && "nav-collapsed")}>
         <Sidebar

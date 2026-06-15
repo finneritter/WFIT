@@ -223,6 +223,70 @@ body.flat-deltas .neg {
   height: 100vh;
   overflow: hidden;
 }
+
+/* Drag-to-resize grips for the frameless window (see ResizeGrips.tsx). Thin
+   invisible zones at the window edges/corners; above modals so resize works even
+   with one open. Corners sit above the edges so they win at the overlap. */
+.rgrip {
+  position: fixed;
+  z-index: 200;
+}
+.rg-n {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  cursor: ns-resize;
+}
+.rg-s {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  cursor: ns-resize;
+}
+.rg-w {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 5px;
+  cursor: ew-resize;
+}
+.rg-e {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 5px;
+  cursor: ew-resize;
+}
+.rg-nw,
+.rg-ne,
+.rg-sw,
+.rg-se {
+  width: 11px;
+  height: 11px;
+  z-index: 201;
+}
+.rg-nw {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+.rg-ne {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+.rg-sw {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+}
+.rg-se {
+  bottom: 0;
+  right: 0;
+  cursor: nwse-resize;
+}
 .titlebar {
   flex: none;
   display: flex;
@@ -1221,7 +1285,8 @@ body.flat-deltas .neg {
   align-items: start;
 }
 .rot-grid.v2 {
-  grid-template-columns: repeat(2, 1fr);
+  /* Fluid: 1 column when narrow, 2-3 when there's room — no fixed-2 deadspace. */
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 .rot-grid.vend {
   grid-template-columns: 1.5fr 1fr;
@@ -3049,7 +3114,7 @@ code {
 
 /* ---------------- settings ---------------- */
 .settings {
-  max-width: 720px;
+  max-width: min(960px, 100%);
 }
 .settings .tpanel {
   margin-bottom: 12px;
@@ -4518,7 +4583,7 @@ button.fgroup-h:hover .fg-go {
 /* reset timers — a full-width row of four boxes of their own */
 .rsetbar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
   margin-bottom: 10px;
 }
