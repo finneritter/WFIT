@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# WFIT pre-commit: auto-format staged files so `cargo fmt --check` and
+# `biome ci` (the two gates that have tripped CI) can never go red.
+# Enabled via:  git config core.hooksPath .githooks
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+# Files staged for this commit (Added/Copied/Modified/Renamed), NUL-safe.
+mapfile -d '' -t staged < <(git diff --cached --name-only --diff-filter=ACMR -z)
+[ ${#staged[@]} -eq 0 ] && exit 0
+
+restage=()
+
+# --- Rust: cargo fmt over the crate if any .rs is staged -------------------
+if printf '%s\n' "${staged[@]}" | grep -q '\.rs$'; then
+  if command -v cargo >/dev/null 2>&1; then
+    echo "pre-commit: cargo fmt"
+    ( cd src-tauri && cargo fmt )
+    for f in "${staged[@]}"; do [[ $f == *.rs ]] && restage+=("$f"); done
+  else
+    echo "pre-commit: cargo not found, skipping Rust format" >&2
+  fi
+fi
+
+# --- Frontend: biome check --write on staged web files --------------------
+web=()
+for f in "${staged[@]}"; do
+  case "$f" in
+    *.ts|*.tsx|*.js|*.jsx|*.json|*.css) [ -f "$f" ] && web+=("$f");;
+  esac
+done
+if [ ${#web[@]} -gt 0 ]; then
+  echo "pre-commit: biome check --write"
+  npx --no-install biome check --write "${web[@]}" || \
+    npx biome check --write "${web[@]}"
+  restage+=("${web[@]}")
+fi
+
+# Re-stage only the files this commit already touched (don't sweep in
+# unrelated working-tree changes).
+if [ ${#restage[@]} -gt 0 ]; then
+  git add -- "${restage[@]}"
+fi
+
+exit 0

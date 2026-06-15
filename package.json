@@ -12,7 +12,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "lint": "biome check .",
-    "format": "biome check --write ."
+    "format": "biome check --write .",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.0",
