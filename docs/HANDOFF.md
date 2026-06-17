@@ -88,6 +88,17 @@ scripts/install.sh                  # build optimized release + install as a lau
   test `collection_pool_counts_match_wiki_checksums`). In-memory like `mod_rarity` — no DB table.
 - Backend: `db/arcanes.rs` (`dashboard()` = `get_arcane_dashboard` command). Frontend:
   `routes/Arcanes.tsx`.
+- **Screen layout (`routes/Arcanes.tsx`):** two column-sortable tables (`useColumnSort` +
+  `SortTh`, persisted sort keys).
+  1. **"Best collection to spend Vosfor on"** — the 9 Loid collections ranked by plat-EV per 200
+     Vosfor (`CollectionEv`); a row opens the **collection breakdown modal**
+     (`CollectionBreakdownModal` / `useCollectionBreakdown`) showing the per-arcane drop odds and
+     prices behind that EV.
+  2. **"Your arcanes — sell or dissolve"** — owned unranked arcanes with the per-copy verdict, the
+     `sell` vs `dissolve` plat-equivalents, and Vosfor totals (`OwnedArcane`,
+     `ownedValue = sell_plat + dissolve_plat_equiv`). Filter chips: **sell-only**, **dissolve-only**,
+     **hide commons**; rows are also narrowed by the topbar search (`usePageSearch` → schema).
+  Header stat card shows total **Vosfor (dissolve)** across your unranked spares.
 
 ### 4. Valuation rule: prime parts + single copies use FULL value
 `db/inventory.rs::owned_holdings` — realizable value now equals `qty × price` (no liquidation haircut)
