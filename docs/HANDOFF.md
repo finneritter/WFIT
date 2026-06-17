@@ -146,8 +146,16 @@ The Rotation screen is now tabbed (`routes/Rotation.tsx`, `TABS`): **Overview ·
 Vendors**. Beyond the world-state clocks it answers "what should I go get right now?":
 - **Wanted Now** (`WantedNowPanel`, Overview): items on your watch/buy list whose acquisition is
   live this rotation — surfaced against the active world-state so you don't miss a window.
-- **Vendors** (`VendorsTab`): Baro / Varzia / other rotating-stock intel, with your wanted items
-  flagged when a vendor is offering them.
+- **Vendors** (`VendorsTab` + `VendorIntel { baro, varzia }`, `get_vendor_intel`): the rotating
+  stock of **Baro Ki'Teer** (priced in **ducats**) and **Varzia** (priced in **aya**), enriched
+  against your catalog so each line shows its **market value**, whether you **already own it**, and
+  **cost-per-plat** efficiency (`ducats|aya ÷ median plat`). A line is tagged a **DEAL** when you
+  don't own it and its market value clears `DEAL_MIN_PLAT = 40` (`db/vendor.rs::enrich`,
+  `VendorIntelRow.good_deal`). The enrichment is a pure DB-side cross-join — names normalize via
+  `catalog::normalize_name`; items that don't resolve to a tracked slug pass through priceless
+  (they're simply not on warframe.market). Lives in `db/vendor.rs` rather than `worldstate/` so the
+  world-state module keeps its DB-free isolation contract; the raw stock comes pre-parsed from
+  `worldstate`.
 - **Crack tab** (`CrackTab` + `CrackRow`): owned relics whose drops include a **wanted** item —
   watch/buy-list entries plus the missing parts of any set you're within **2 parts** of finishing
   (`db::wanted::crack_targets`, `SET_CLOSE_THRESHOLD = 2`). Rows split into **Crackable now** (a
