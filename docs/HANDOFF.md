@@ -141,6 +141,21 @@ the rarity exclusion** (affects value, not the raw owned-count). Applied in `own
   dims after 5min without updates (offline). Verified live: `last_price_sync` advanced every ~60s for
   13 consecutive minutes post-drain.
 
+### 8. Rotation acquisition planning — tabs, wanted-now, vendors, Crack
+The Rotation screen is now tabbed (`routes/Rotation.tsx`, `TABS`): **Overview · Fissures · Crack ·
+Vendors**. Beyond the world-state clocks it answers "what should I go get right now?":
+- **Wanted Now** (`WantedNowPanel`, Overview): items on your watch/buy list whose acquisition is
+  live this rotation — surfaced against the active world-state so you don't miss a window.
+- **Vendors** (`VendorsTab`): Baro / Varzia / other rotating-stock intel, with your wanted items
+  flagged when a vendor is offering them.
+- **Crack tab** (`CrackTab` + `CrackRow`): owned relics whose drops include a **wanted** item —
+  watch/buy-list entries plus the missing parts of any set you're within **2 parts** of finishing
+  (`db::wanted::crack_targets`, `SET_CLOSE_THRESHOLD = 2`). Rows split into **Crackable now** (a
+  live fissure of the relic's tier is up — `CrackNowRow::crackable_now`) and **Waiting on a
+  fissure** (kept for planning); sorted crackable-first, then by wanted-drop count, then EV
+  (`db::relics::crack_now`). Replaced the old Overview "Crack now" panel, which only showed relics
+  matching a live fissure and hid otherwise — the tab now always lists what's worth holding.
+
 ---
 
 ## Architecture pointers
