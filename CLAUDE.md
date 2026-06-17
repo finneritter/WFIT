@@ -37,7 +37,9 @@ cheap-item exclusion. The app now has **11 screens** (Arcanes added beyond the 9
   Path — fetch the canonical `/pc/` with a cache-buster; its origin has been seen hours stale).
   **World cycles are derived locally** (`worldstate/cycles.rs`: DE bounty-window anchor + deterministic
   clocks), not taken from warframestat. A 3-min backend refresher keeps it fresh even while
-  the webview throttles. Fissures are grouped Normal / Steel Path / Void Storm.
+  the webview throttles. Fissures are grouped Normal / Steel Path / Void Storm. The screen is tabbed
+  (Overview · Fissures · Crack · Vendors): the **Crack** tab lists owned relics that drop a wanted
+  item (watch/buy list + sets within 2 parts of done), split crackable-now vs waiting-on-a-fissure.
 - **`docs/ARCANE_DISSOLUTION.md`** — the Arcanes screen's domain reference (Loid Vosfor collections,
   drop tables, per-arcane Vosfor, the collection-EV + keep/dissolve methodology). Bundled dataset.
 - **`docs/PERF_OPTIMIZATION.md`** — the backend perf pass (read pool, batched valuation, pragmas).
