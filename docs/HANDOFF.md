@@ -155,8 +155,20 @@ the rarity exclusion** (affects value, not the raw owned-count). Applied in `own
 ### 8. Rotation acquisition planning — tabs, wanted-now, vendors, Crack
 The Rotation screen is now tabbed (`routes/Rotation.tsx`, `TABS`): **Overview · Fissures · Crack ·
 Vendors**. Beyond the world-state clocks it answers "what should I go get right now?":
-- **Wanted Now** (`WantedNowPanel`, Overview): items on your watch/buy list whose acquisition is
-  live this rotation — surfaced against the active world-state so you don't miss a window.
+- **Wanted Now** (`WantedNowPanel`, Overview; `get_wanted_now` → `WantedNowRow`): wanted items a
+  **live reward source is handing out right now**, so you don't miss a window. "Wanted" =
+  `wanted::wanted_items` (watchlist items **plus** the missing parts of any set you've already
+  started owning — distinct from the Crack tab's `crack_targets`, which also pulls the buy list and
+  caps sets at 2 missing parts). Sources scanned each refresh: **invasions** (both attacker and
+  defender rewards, per node) and the **current Steel Path rotation** reward (Teshin). Each hit
+  carries a `source_label` and the source's `eta`, rendered as a live `Countdown`; rows are
+  click-to-open the item drawer; deduped per slug+source.
+  - **Matching** (`domain/reward_match.rs::reward_matches`): reward strings are free text
+    ("2 Wraith Twin Vipers Blueprint"), so it's pure token-containment — every word of the item
+    name must appear in the normalized reward, and the name must be **≥2 words** so single-word
+    noise ("blueprint", "forma", "kuva") can't match half the catalog. Deliberately
+    lower-fidelity but kept safe by only ever running against the user's small wanted set, so a
+    loose match can at worst surface something they already care about. Unit-tested.
 - **Vendors** (`VendorsTab` + `VendorIntel { baro, varzia }`, `get_vendor_intel`): the rotating
   stock of **Baro Ki'Teer** (priced in **ducats**) and **Varzia** (priced in **aya**), enriched
   against your catalog so each line shows its **market value**, whether you **already own it**, and
