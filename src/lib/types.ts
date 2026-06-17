@@ -529,11 +529,18 @@ export interface CrackDrop {
   chance: number;
   plat: number | null;
   wanted: boolean; // on the watch/buy list
-  set: boolean; // a missing part of a near-complete set
+  set: boolean; // a missing part of a one-away set
+  reward_slug: string | null; // catalog slug → item Drawer
+  set_slug: string | null; // the set this part completes → Sets page
 }
-// A prioritized "what to crack next" row for the Relics "To crack" tab. `score` ranks
-// relics: completes a near-set → the relic is vaulted (unfarmable) → drops a watch/buy
-// item → crackable now → EV. `drops` is the full reward table for the row's expansion.
+// A set this relic helps finish (one part away) — a backlink target on the Sets screen.
+export interface CrackSet {
+  slug: string;
+  name: string;
+}
+// A prioritized "what to crack next" row for the Relics "To crack" tab. A relic appears
+// only if it completes a one-away set, drops a watch/buy item, or returns ≥15p/crack.
+// `relic_vaulted` is an informational tag only. `sets` are the one-away set backlinks.
 export interface CrackPlanRow {
   tier: string;
   relic_name: string;
@@ -544,6 +551,7 @@ export interface CrackPlanRow {
   relic_vaulted: boolean;
   crackable_now: boolean;
   drops: CrackDrop[];
+  sets: CrackSet[];
   score: number;
 }
 export interface SortieMission {

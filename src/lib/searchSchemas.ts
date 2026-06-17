@@ -259,7 +259,7 @@ export const crackPlanSchema: SearchSchema<CrackPlanRow> = {
     `${r.display_name} ${r.tier} ${r.refinement} ${r.drops.map((d) => d.reward_name).join(" ")}`,
   is: {
     now: { test: (r) => r.crackable_now, hint: "a live fissure can crack it now" },
-    set: { test: (r) => r.drops.some((d) => d.set), hint: "completes a near-complete set" },
+    set: { test: (r) => r.sets.length > 0, hint: "completes a one-away set" },
     wanted: { test: (r) => r.drops.some((d) => d.wanted), hint: "drops a watch/buy-list item" },
     vaulted: { test: (r) => r.relic_vaulted, hint: "a vaulted (unfarmable) relic" },
   },

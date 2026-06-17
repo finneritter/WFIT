@@ -982,6 +982,19 @@ body.flat-deltas .neg {
 .setrow:hover {
   background: var(--hover);
 }
+/* Flash a set when arrived-at via a "To crack" backlink. */
+.setrow.flash {
+  animation: setrow-flash 1.6s ease-out;
+}
+@keyframes setrow-flash {
+  0%,
+  30% {
+    background: var(--accent);
+  }
+  100% {
+    background: transparent;
+  }
+}
 .set-main {
   min-width: 0;
 }
@@ -1261,8 +1274,15 @@ body.flat-deltas .neg {
 /* rotation: sub-tabs — plain filter chips, same as every other screen */
 .rot-tabs {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 10px;
+}
+/* On the Relics screen the tab bar sits directly above a filter row; keep one
+   consistent gap between tabs → filters → table instead of stacked margins. */
+.rot-tabs + .tpanel {
+  margin-top: 0;
 }
 
 /* overview: 3 weighted column stacks so panel bottoms land near the same line */
@@ -4705,6 +4725,18 @@ button.fgroup-h:hover .fg-go {
   color: var(--c-warm, #c9a35a);
   border-color: var(--c-warm, #c9a35a);
 }
+.crk-badge.value {
+  color: var(--pos);
+  border-color: var(--line-2);
+}
+/* Informational VAULT tag on a crack row (never a listing reason). */
+.crk-name .vault {
+  font-size: 9px;
+  color: var(--c-warm, #c9a35a);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+  letter-spacing: .04em;
+}
 
 /* "To crack" tab — expandable rows. Collapsed row stays one clean line; clicking
    reveals the why-crack reasons + the relic's full drop table. */
@@ -4763,55 +4795,67 @@ button.fgroup-h:hover .fg-go {
   color: var(--ink);
   font-weight: 600;
 }
-.crk-drops {
-  flex: 1 1 280px;
-  min-width: 0;
+/* Inline backlink button (reward → Drawer, set → Sets page). Looks like a link. */
+.crk-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--plat);
+  cursor: pointer;
+  text-align: left;
 }
-.crk-drops-h {
+.crk-link:hover {
+  text-decoration: underline;
+}
+.crk-setlink {
+  background: none;
+  border: none;
+  padding: 0 0 0 6px;
+  font-size: 10px;
+  color: var(--faint);
+  cursor: pointer;
+}
+.crk-setlink:hover {
+  color: var(--plat);
+  text-decoration: underline;
+}
+/* The relic's drop table (replaces the old text list). */
+.crk-dtbl {
+  flex: 1 1 300px;
+  min-width: 0;
+  border-collapse: collapse;
+  font-size: 12px;
+  align-self: flex-start;
+}
+.crk-dtbl th {
   font-size: 10px;
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--faint);
-  margin-bottom: 4px;
+  text-align: left;
+  font-weight: 500;
+  padding: 0 8px 4px;
+  border-bottom: 1px solid var(--line);
 }
-.crk-drop {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 0;
-  font-size: 12px;
+.crk-dtbl td {
+  padding: 3px 8px;
   border-top: 1px solid var(--line);
+  color: var(--soft);
 }
-.crk-drop:first-of-type {
+.crk-dtbl tr:first-child td {
   border-top: none;
 }
-.crk-drop.hot .cd-nm {
+.crk-dtbl tr.hot .crk-link,
+.crk-dtbl tr.hot .cd-nm {
   color: var(--ink);
+  font-weight: 600;
 }
 .cd-mark {
-  flex: none;
-  width: 10px;
+  display: inline-block;
+  width: 12px;
   color: var(--plat);
   font-size: 10px;
-}
-.cd-nm {
-  flex: 1;
-  min-width: 0;
-  color: var(--soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.cd-ch {
-  flex: none;
-  width: 52px;
-  text-align: right;
-  color: var(--faint);
-}
-.cd-pl {
-  flex: none;
-  width: 56px;
-  text-align: right;
 }
 
 /* overview "void traders" status rows — circle dot = live status */

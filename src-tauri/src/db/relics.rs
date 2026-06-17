@@ -8,7 +8,7 @@ use crate::db::wanted::CrackSignals;
 use crate::db::{catalog, prices, Db};
 use crate::domain::relic;
 use crate::error::{AppError, AppResult};
-use crate::types::{CrackDrop, CrackNowRow, CrackPlanRow, RelicChoice, RelicRow};
+use crate::types::{CrackDrop, CrackNowRow, CrackPlanRow, CrackSet, RelicChoice, RelicRow};
 use chrono::Utc;
 use rusqlite::{params, Connection};
 use std::collections::{HashMap, HashSet};
@@ -215,19 +215,21 @@ pub fn crack_now(
 
 /// Combined-priority weights for the "To crack" planner. Each tier dwarfs the next so
 /// the categorical signals strictly order relics and EV only breaks ties: completes a
-/// near-set → the relic is vaulted (unfarmable) → drops a watch/buy-list item →
-/// crackable now → expected value. Tunable.
-const W_SET: f64 = 1_000_000.0; // × count of set parts dropped
-const W_VAULTED: f64 = 500_000.0;
+/// one-away set → drops a watch/buy-list item → crackable now → expected value. Vaulted
+/// is NOT a factor (it's a display tag only). Tunable.
+const W_SET: f64 = 1_000_000.0; // × count of one-away set parts dropped
 const W_WANTED: f64 = 100_000.0; // × min(count, 3)
 const W_NOW: f64 = 10_000.0;
+/// A relic with no set/wanted drop still earns a spot if it returns at least this much
+/// plat per crack (the "high value" inclusion bar).
+const MIN_EV_PLAT: f64 = 15.0;
 
-/// Owned relics worth cracking, ranked by a combined priority [`score`]. For each
-/// owned relic, every drop is priced and flagged `wanted` (`sig.watch_buy`) / `set`
-/// (`sig.near_set`); the relic is included if it drops a set/wanted part OR is itself
-/// vaulted (`relic::is_vaulted`). `live_tiers` flags whether a fissure can crack it
-/// right now. `drops` carries the full reward table for the UI's expandable detail.
-/// Powers the Relics screen "To crack" tab.
+/// Owned relics worth cracking, ranked by a combined priority [`score`]. A relic is
+/// included if it drops a part that completes a **one-away** set (`sig.one_away`), drops
+/// a watch/buy-list item (`sig.watch_buy`), or returns at least [`MIN_EV_PLAT`] per crack.
+/// `relic_vaulted` is carried as a display tag only — it never lists or ranks a relic.
+/// `live_tiers` flags whether a fissure can crack it now; `drops` is the full reward
+/// table and `sets` the one-away sets for the UI backlinks. Powers the "To crack" tab.
 ///
 /// [`score`]: crate::types::CrackPlanRow::score
 pub fn crack_plan(
@@ -253,6 +255,7 @@ pub fn crack_plan(
         let mut out = Vec::new();
         for (tier, relic_name, refinement, qty) in raw {
             let mut drops = Vec::new();
+            let mut sets: Vec<CrackSet> = Vec::new();
             let mut ev = 0.0;
             let (mut set_count, mut wanted_count) = (0i64, 0i64);
             for d in &relic::drops_for(&tier, &relic_name, &refinement).unwrap_or_default() {
@@ -265,12 +268,19 @@ pub fn crack_plan(
                     ev += (d.chance / 100.0) * p as f64;
                 }
                 let wanted = slug.is_some_and(|s| sig.watch_buy.contains(s));
-                let set = slug.is_some_and(|s| sig.near_set.contains(s));
+                let one_away = slug.and_then(|s| sig.one_away.get(s));
+                let set = one_away.is_some();
                 if wanted {
                     wanted_count += 1;
                 }
-                if set {
+                if let Some((set_slug, set_name)) = one_away {
                     set_count += 1;
+                    if !sets.iter().any(|s| &s.slug == set_slug) {
+                        sets.push(CrackSet {
+                            slug: set_slug.clone(),
+                            name: set_name.clone(),
+                        });
+                    }
                 }
                 drops.push(CrackDrop {
                     reward_name: d.reward_name.clone(),
@@ -278,21 +288,22 @@ pub fn crack_plan(
                     plat,
                     wanted,
                     set,
+                    reward_slug: slug.cloned(),
+                    set_slug: one_away.map(|(s, _)| s.clone()),
                 });
             }
-            let relic_vaulted = relic::is_vaulted(&tier, &relic_name);
-            if set_count == 0 && wanted_count == 0 && !relic_vaulted {
-                continue; // nothing worth prioritizing in here
-            }
             let ev_plat = (ev * 10.0).round() / 10.0;
+            if set_count == 0 && wanted_count == 0 && ev_plat < MIN_EV_PLAT {
+                continue; // not worth surfacing
+            }
+            let relic_vaulted = relic::is_vaulted(&tier, &relic_name);
             let crackable_now = live_tiers.contains(&tier);
             // Best-value drops first, so the expanded table leads with what matters.
             drops.sort_by_key(|d| std::cmp::Reverse(d.plat.unwrap_or(0)));
             let score = W_SET * set_count as f64
-                + W_VAULTED * (relic_vaulted as i64 as f64)
                 + W_WANTED * (wanted_count.min(3) as f64)
                 + W_NOW * (crackable_now as i64 as f64)
-                + ev_plat * qty as f64;
+                + ev_plat;
             out.push(CrackPlanRow {
                 display_name: display_name(&tier, &relic_name),
                 tier,
@@ -303,6 +314,7 @@ pub fn crack_plan(
                 relic_vaulted,
                 crackable_now,
                 drops,
+                sets,
                 score,
             });
         }

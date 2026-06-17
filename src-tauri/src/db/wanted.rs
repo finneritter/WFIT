@@ -74,19 +74,18 @@ pub fn crack_targets(db: &Db) -> AppResult<HashSet<String>> {
 /// relic dropping one of those missing parts would finish (or nearly finish) it.
 const SET_CLOSE_THRESHOLD: i64 = 2;
 
-/// The crack signals split by source, so the Relics "To crack" planner can flag and
-/// score each independently (a relic completing a near-set should outrank a
-/// watch-list-only one). `crack_targets` is the union of these two; this is the same
-/// data, kept separate. The vaulted signal is sourced elsewhere (catalog `is_vaulted`).
+/// Crack signals for the Relics "To crack" planner, split by source so each can be
+/// flagged/scored independently. The vaulted signal is sourced elsewhere (`relic::is_vaulted`).
 pub struct CrackSignals {
     /// Slugs on the watchlist or buy list.
     pub watch_buy: HashSet<String>,
-    /// Missing parts of sets you're within [`SET_CLOSE_THRESHOLD`] parts of completing.
-    pub near_set: HashSet<String>,
+    /// Missing part slug → (set slug, set display name) for sets you're **exactly one
+    /// part** away from completing — a relic dropping that part would finish the set.
+    pub one_away: std::collections::HashMap<String, (String, String)>,
 }
 
-/// Build [`CrackSignals`] — watch/buy list and near-complete-set missing parts as
-/// separate sets (reuses the same SQL shape as [`crack_targets`]).
+/// Build [`CrackSignals`] — the watch/buy list, and the missing part of every set you're
+/// exactly one part from completing (with the set's slug + name for a backlink).
 pub fn crack_signals(db: &Db) -> AppResult<CrackSignals> {
     db.read(|c| {
         let mut wb = c.prepare("SELECT slug FROM watchlist UNION SELECT slug FROM buy_list")?;
@@ -94,8 +93,9 @@ pub fn crack_signals(db: &Db) -> AppResult<CrackSignals> {
             .query_map([], |r| r.get::<_, String>(0))?
             .collect::<Result<HashSet<_>, _>>()?;
         let mut ns = c.prepare(
-            "SELECT ci.slug
+            "SELECT ci.slug, ci.set_slug, COALESCE(s.display_name, ci.set_slug)
                FROM catalog_items ci
+               LEFT JOIN catalog_items s ON s.slug = ci.set_slug AND s.category = 'set'
               WHERE ci.set_slug IS NOT NULL
                 AND COALESCE((SELECT qty FROM inventory_items ii WHERE ii.slug = ci.slug), 0) = 0
                 AND EXISTS (
@@ -108,14 +108,19 @@ pub fn crack_signals(db: &Db) -> AppResult<CrackSignals> {
                      WHERE m2.set_slug = ci.set_slug
                        AND COALESCE(
                              (SELECT qty FROM inventory_items mi2 WHERE mi2.slug = m2.slug), 0) = 0
-                ) <= ?1",
+                ) = 1",
         )?;
-        let near_set = ns
-            .query_map([SET_CLOSE_THRESHOLD], |r| r.get::<_, String>(0))?
-            .collect::<Result<HashSet<_>, _>>()?;
+        let one_away = ns
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    (r.get::<_, String>(1)?, r.get::<_, String>(2)?),
+                ))
+            })?
+            .collect::<Result<std::collections::HashMap<_, _>, _>>()?;
         Ok(CrackSignals {
             watch_buy,
-            near_set,
+            one_away,
         })
     })
 }

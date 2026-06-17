@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
+import type { ScreenId } from "../components/Sidebar";
 import { Chip, Scrim, SortTh, StatBox, TableStatus, rowAction } from "../components/ui";
 import {
   useAddRelic,
@@ -26,7 +27,10 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number][0];
 
-export function Relics() {
+type NavFn = (s: ScreenId, opts?: { focusSetSlug?: string }) => void;
+type OpenFn = (slug: string) => void;
+
+export function Relics({ onOpen, onNavigate }: { onOpen: OpenFn; onNavigate: NavFn }) {
   const { data: relics = [] } = useRelics();
   const [tab, setTab] = useState<TabId>("crack");
 
@@ -70,7 +74,7 @@ export function Relics() {
         ))}
       </div>
 
-      {tab === "crack" ? <CrackTab /> : <AllRelicsTab />}
+      {tab === "crack" ? <CrackTab onOpen={onOpen} onNavigate={onNavigate} /> : <AllRelicsTab />}
     </>
   );
 }
@@ -79,42 +83,54 @@ export function Relics() {
 // "To crack" — owned relics worth cracking next, ranked by combined priority.
 // ---------------------------------------------------------------------------
 
-type CrackFilter = "now" | "set" | "vaulted";
+const HIGH_VALUE = 15; // matches backend MIN_EV_PLAT
+type CrackFilter = "now" | "set" | "value";
 const FILTERS: [CrackFilter, string][] = [
-  ["now", "Crackable now"],
   ["set", "Completes a set"],
-  ["vaulted", "Vaulted"],
+  ["value", "High value"],
+  ["now", "Crackable now"],
 ];
 
 type Reason = { label: string; cls: string };
-// The why-crack reasons, highest priority first (mirrors the backend score order).
+// The why-crack reasons that put a relic on the list, highest priority first (mirrors
+// the backend score). Vaulted is NOT here — it's a separate informational tag.
 function reasonsOf(r: CrackPlanRow): Reason[] {
   const out: Reason[] = [];
-  if (r.drops.some((d) => d.set)) out.push({ label: "COMPLETES SET", cls: "set" });
-  if (r.relic_vaulted) out.push({ label: "VAULTED", cls: "vaulted" });
+  if (r.sets.length > 0) out.push({ label: "COMPLETES SET", cls: "set" });
   if (r.drops.some((d) => d.wanted)) out.push({ label: "WANTED", cls: "wanted" });
+  if (r.ev_plat >= HIGH_VALUE) out.push({ label: "HIGH VALUE", cls: "value" });
   if (r.crackable_now) out.push({ label: "CRACKABLE NOW", cls: "now" });
   return out;
 }
 
-// The expanded detail under a relic row: why it's worth cracking + its full drop table.
-function CrackDetail({ r }: { r: CrackPlanRow }) {
-  const setDrops = r.drops.filter((d) => d.set).map((d) => d.reward_name);
+// The expanded detail under a relic row: why it's worth cracking (with set backlinks) +
+// its full drop table (reward names link to the item Drawer, set parts to the Sets page).
+function CrackDetail({
+  r,
+  onOpen,
+  onNavigate,
+}: {
+  r: CrackPlanRow;
+  onOpen: OpenFn;
+  onNavigate: NavFn;
+}) {
   const wantedDrops = r.drops.filter((d) => d.wanted).map((d) => d.reward_name);
   return (
     <div className="crk-detail">
       <ul className="crk-why">
-        {setDrops.length > 0 ? (
-          <li>
-            <b>Completes a set</b> you're close to finishing — drops {setDrops.join(", ")}
+        {r.sets.map((s) => (
+          <li key={s.slug}>
+            Completes{" "}
+            <button
+              type="button"
+              className="crk-link"
+              onClick={() => onNavigate("sets", { focusSetSlug: s.slug })}
+            >
+              {s.name} →
+            </button>{" "}
+            <span className="muted">(one part away)</span>
           </li>
-        ) : null}
-        {r.relic_vaulted ? (
-          <li>
-            <b>Vaulted relic</b> — no longer drops from fissures, so cracking what you hold is the
-            only way to get these parts
-          </li>
-        ) : null}
+        ))}
         {wantedDrops.length > 0 ? (
           <li>
             <b>On your watch/buy list</b> — drops {wantedDrops.join(", ")}
@@ -125,23 +141,52 @@ function CrackDetail({ r }: { r: CrackPlanRow }) {
             <b>Crackable now</b> — a live fissure of this tier is up
           </li>
         ) : null}
+        {r.relic_vaulted ? (
+          <li className="muted">Vaulted relic — no longer drops from fissures</li>
+        ) : null}
       </ul>
-      <div className="crk-drops">
-        <div className="crk-drops-h">Drops · {r.refinement}</div>
-        {r.drops.map((d) => (
-          <div className={clsx("crk-drop", (d.wanted || d.set) && "hot")} key={d.reward_name}>
-            <span className="cd-mark">{d.set ? "◆" : d.wanted ? "★" : ""}</span>
-            <span className="cd-nm">{d.reward_name}</span>
-            <span className="cd-ch num">{d.chance.toFixed(1)}%</span>
-            <span className="cd-pl num">{d.plat != null ? `${fmt(d.plat)}p` : "—"}</span>
-          </div>
-        ))}
-      </div>
+      <table className="crk-dtbl">
+        <thead>
+          <tr>
+            <th>Drop · {r.refinement}</th>
+            <th className="r">Chance</th>
+            <th className="r">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {r.drops.map((d) => (
+            <tr className={clsx("crk-drop-row", (d.wanted || d.set) && "hot")} key={d.reward_name}>
+              <td>
+                <span className="cd-mark">{d.set ? "◆" : d.wanted ? "★" : ""}</span>
+                {d.reward_slug ? (
+                  <button type="button" className="crk-link" onClick={() => onOpen(d.reward_slug!)}>
+                    {d.reward_name}
+                  </button>
+                ) : (
+                  <span className="cd-nm">{d.reward_name}</span>
+                )}
+                {d.set && d.set_slug ? (
+                  <button
+                    type="button"
+                    className="crk-setlink"
+                    title="Go to this set"
+                    onClick={() => onNavigate("sets", { focusSetSlug: d.set_slug! })}
+                  >
+                    → set
+                  </button>
+                ) : null}
+              </td>
+              <td className="r num">{d.chance.toFixed(1)}%</td>
+              <td className="r num">{d.plat != null ? `${fmt(d.plat)}p` : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-function CrackTab() {
+function CrackTab({ onOpen, onNavigate }: { onOpen: OpenFn; onNavigate: NavFn }) {
   const { data: rows = [], isLoading, isError } = useCrackPlan();
   const search = usePageSearch();
   const [filters, setFilters] = useState<Set<CrackFilter>>(new Set());
@@ -154,8 +199,8 @@ function CrackTab() {
         (r) =>
           test(r) &&
           (!filters.has("now") || r.crackable_now) &&
-          (!filters.has("set") || r.drops.some((d) => d.set)) &&
-          (!filters.has("vaulted") || r.relic_vaulted),
+          (!filters.has("set") || r.sets.length > 0) &&
+          (!filters.has("value") || r.ev_plat >= HIGH_VALUE),
       ),
     [rows, test, filters],
   );
@@ -180,8 +225,8 @@ function CrackTab() {
       <div className="tpanel-h">
         <h3>Best relics to crack next</h3>
         <span className="meta">
-          ranked by what they unlock — finishing a set, a vaulted (unfarmable) relic, or an item you
-          want — then expected value. Click a relic for its drops.
+          relics that finish a set you're one part from, drop an item you want, or return ≥
+          {HIGH_VALUE}p a crack. Click a relic for its drops.
         </span>
       </div>
       <div className="mkt-filters" style={{ margin: "0 0 10px" }}>
@@ -209,7 +254,7 @@ function CrackTab() {
               error={isError}
               emptyText={
                 rows.length === 0
-                  ? "Nothing to prioritize yet. Add items to your watch or buy list, get within 2 parts of completing a set, or hold a vaulted relic — matching relics show up here."
+                  ? "Nothing to prioritize yet. Get one part away from a set, add items to your watch/buy list, or hold a high-value relic — matching relics show up here."
                   : "No relics match the current filters."
               }
             />
@@ -236,6 +281,11 @@ function CrackTab() {
                         {reasons.length > 1 ? (
                           <span className="crk-more">+{reasons.length - 1}</span>
                         ) : null}
+                        {r.relic_vaulted ? (
+                          <span className="vault" title="vaulted relic — no longer farmable">
+                            VAULT
+                          </span>
+                        ) : null}
                       </span>
                     </td>
                     <td className={clsx("relic-tier", r.tier.toLowerCase())}>{r.tier}</td>
@@ -246,7 +296,7 @@ function CrackTab() {
                   {isOpen ? (
                     <tr className="crk-detail-row">
                       <td colSpan={5}>
-                        <CrackDetail r={r} />
+                        <CrackDetail r={r} onOpen={onOpen} onNavigate={onNavigate} />
                       </td>
                     </tr>
                   ) : null}

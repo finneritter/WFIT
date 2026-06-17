@@ -178,18 +178,27 @@ pub struct GameDataUpdate {
 /// One reward row inside a [`CrackPlanRow`]'s drop table (for the expandable detail).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrackDrop {
-    pub reward_name: String, // catalog display name
-    pub chance: f64,         // drop chance for this refinement, percent
-    pub plat: Option<i64>,   // effective price, None if unpriceable (Forma/Kuva/etc.)
-    pub wanted: bool,        // on the watch/buy list
-    pub set: bool,           // a missing part of a near-complete set
+    pub reward_name: String,         // catalog display name
+    pub chance: f64,                 // drop chance for this refinement, percent
+    pub plat: Option<i64>,           // effective price, None if unpriceable (Forma/Kuva/etc.)
+    pub wanted: bool,                // on the watch/buy list
+    pub set: bool,                   // a missing part of a one-away set
+    pub reward_slug: Option<String>, // catalog slug, for deep-linking to the item Drawer
+    pub set_slug: Option<String>,    // the set this part completes (set-part drops only)
 }
 
-/// A prioritized "what to crack next" row for the Relics screen "To crack" tab. The
-/// `score` ranks relics: completes a near-complete set → the relic is vaulted (can't
-/// be farmed) → drops a watch/buy-list item → crackable now → expected value. A relic
-/// appears only if it has a set/wanted drop or is itself vaulted. `drops` is the full
-/// reward table, powering the row's expandable breakdown.
+/// A set a relic helps finish (one part away) — a backlink target on the Sets screen.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrackSet {
+    pub slug: String,
+    pub name: String,
+}
+
+/// A prioritized "what to crack next" row for the Relics screen "To crack" tab. A relic
+/// appears only if it completes a one-away set, drops a watch/buy-list item, or returns
+/// at least `MIN_EV_PLAT` per crack; `score` ranks completes-a-set → wanted → crackable
+/// now → EV. `relic_vaulted` is an informational tag only (never lists or ranks a relic).
+/// `drops` is the full reward table; `sets` are the one-away sets for the why-backlinks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrackPlanRow {
     pub tier: String,
@@ -198,9 +207,10 @@ pub struct CrackPlanRow {
     pub display_name: String,
     pub qty: i64,
     pub ev_plat: f64,
-    pub relic_vaulted: bool, // the relic itself is vaulted (no longer farmable)
+    pub relic_vaulted: bool, // the relic itself is vaulted (no longer farmable) — tag only
     pub crackable_now: bool, // a live fissure of this relic's tier is up right now
     pub drops: Vec<CrackDrop>, // full reward table (highest-value first)
+    pub sets: Vec<CrackSet>, // one-away sets this relic helps finish (why-summary backlinks)
     pub score: f64,          // combined priority (higher = crack sooner)
 }
 

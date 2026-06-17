@@ -69,6 +69,8 @@ export default function App() {
   // Item to preselect on the Market screen (set by cross-screen links like the
   // Drawer's "Market" button); cleared on any plain navigation.
   const [marketSlug, setMarketSlug] = useState<string | null>(null);
+  // Set the Sets screen should scroll to + flash (cross-screen link from Relics).
+  const [focusSetSlug, setFocusSetSlug] = useState<string | null>(null);
   // Input stays on `search`; screens filter on the deferred value so keystrokes
   // never block on a large grid re-render.
   const deferredSearch = useDeferredValue(search);
@@ -110,11 +112,15 @@ export default function App() {
   // which Listings tab to land on (defaults to "mine" so only explicit links go
   // to "recommended").
   const navigate = useCallback(
-    (s: ScreenId, opts?: { listingsTab?: "mine" | "recommended"; marketSlug?: string }) => {
+    (
+      s: ScreenId,
+      opts?: { listingsTab?: "mine" | "recommended"; marketSlug?: string; focusSetSlug?: string },
+    ) => {
       setScreen(s);
       setSearch("");
       setListingsTab(opts?.listingsTab ?? "mine");
       setMarketSlug(opts?.marketSlug ?? null);
+      setFocusSetSlug(opts?.focusSetSlug ?? null);
     },
     [],
   );
@@ -227,7 +233,9 @@ export default function App() {
                 in main.tsx instead). */}
               <ErrorBoundary key={screen}>
                 {screen === "home" && <Dashboard onOpen={open} onNavigate={navigate} />}
-                {screen === "sets" && <Sets onOpen={open} />}
+                {screen === "sets" && (
+                  <Sets onOpen={open} onNavigate={navigate} focusSetSlug={focusSetSlug} />
+                )}
                 {screen === "trends" && <Trends onOpen={open} />}
                 {screen === "watchlist" && <Watchlist onOpen={open} />}
                 {screen === "buy" && <BuyList onOpen={open} />}
@@ -237,7 +245,7 @@ export default function App() {
                 {screen === "listings" && <Listings onOpen={open} initialTab={listingsTab} />}
                 {screen === "ducats" && <Ducats onOpen={open} />}
                 {screen === "arcanes" && <Arcanes onOpen={open} />}
-                {screen === "relics" && <Relics />}
+                {screen === "relics" && <Relics onOpen={open} onNavigate={navigate} />}
                 {screen === "rotation" && <Rotation onOpen={open} />}
                 {screen === "sold" && <SoldHistory onOpen={open} />}
                 {screen === "settings" && <Settings onNavigate={navigate} />}
