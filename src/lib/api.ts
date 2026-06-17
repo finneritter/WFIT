@@ -9,7 +9,9 @@ import type {
   BuyRow,
   CatalogRow,
   CrackNowRow,
+  CrackPlanRow,
   DucatRow,
+  GameDataUpdate,
   GameScanStatus,
   ImportRow,
   InventoryRow,
@@ -54,6 +56,7 @@ export const openBackupsDir = () => invoke<void>("open_backups_dir");
 // catalog
 export const catalogCount = () => invoke<number>("catalog_count");
 export const catalogRefresh = () => invoke<number>("catalog_refresh");
+export const updateGameData = () => invoke<GameDataUpdate>("update_game_data");
 export const rebuildCache = () => invoke<number>("rebuild_cache");
 export const wipeApp = () => invoke<void>("wipe_app");
 export const setsRefresh = () => invoke<number>("sets_refresh");
@@ -157,6 +160,7 @@ export const setRelicQty = (tier: string, name: string, refinement: string | nul
 export const removeRelic = (tier: string, name: string, refinement: string | null) =>
   invoke<void>("remove_relic", { tier, name, refinement });
 export const getCrackNow = () => invoke<CrackNowRow[]>("get_crack_now");
+export const getCrackPlan = () => invoke<CrackPlanRow[]>("get_crack_plan");
 export const importScannedRelics = () => invoke<number>("import_scanned_relics");
 
 // wfm account

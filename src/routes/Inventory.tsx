@@ -244,7 +244,10 @@ const InvTable = memo(function InvTable({
                       {row.is_vaulted ? <span className="vault">VAULT</span> : null}
                       {listed.has(row.slug) ? <span className="listed-tag">LISTED</span> : null}
                       {SRC_TAG[row.source] ? (
-                        <span className="src-tag" title={`added via ${row.source}`}>
+                        <span
+                          className={clsx("src-tag", row.source === "de_scan" && "src-scan")}
+                          title={`added via ${row.source}`}
+                        >
                           {SRC_TAG[row.source]}
                         </span>
                       ) : null}

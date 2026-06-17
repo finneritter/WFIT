@@ -6,6 +6,7 @@ import type { AnySearchSchema, FieldDef, SearchSchema } from "./searchQuery";
 import type {
   BuyRow,
   CatalogRow,
+  CrackPlanRow,
   DucatRow,
   InventoryRow,
   ListingRow,
@@ -235,6 +236,7 @@ export const relicsSchema: SearchSchema<RelicRow> = {
   text: (r) => `${r.display_name} ${r.tier} ${r.refinement} ${r.best_reward ?? ""}`,
   is: {
     scanned: { test: (r) => r.source === "de_scan", hint: "imported from the game" },
+    vaulted: { test: (r) => r.relic_vaulted, hint: "a vaulted (unfarmable) relic" },
   },
   fields: {
     tier: { kind: "enum", get: (r) => r.tier, values: RELIC_TIERS, hint: "relic tier" },
@@ -247,6 +249,24 @@ export const relicsSchema: SearchSchema<RelicRow> = {
     qty: { kind: "number", get: (r) => r.qty, hint: "owned count" },
     ev: { kind: "number", get: (r) => r.ev_plat, hint: "expected plat per relic" },
     value: { kind: "number", get: (r) => r.ev_plat * r.qty, hint: "total expected plat" },
+  },
+};
+
+// The Relics "To crack" tab compiles this against the topbar query (the screen's
+// registered autocomplete schema stays `relicsSchema`, for the All-relics table).
+export const crackPlanSchema: SearchSchema<CrackPlanRow> = {
+  text: (r) =>
+    `${r.display_name} ${r.tier} ${r.refinement} ${r.drops.map((d) => d.reward_name).join(" ")}`,
+  is: {
+    now: { test: (r) => r.crackable_now, hint: "a live fissure can crack it now" },
+    set: { test: (r) => r.drops.some((d) => d.set), hint: "completes a near-complete set" },
+    wanted: { test: (r) => r.drops.some((d) => d.wanted), hint: "drops a watch/buy-list item" },
+    vaulted: { test: (r) => r.relic_vaulted, hint: "a vaulted (unfarmable) relic" },
+  },
+  fields: {
+    tier: { kind: "enum", get: (r) => r.tier, values: RELIC_TIERS, hint: "relic tier" },
+    qty: { kind: "number", get: (r) => r.qty, hint: "owned count" },
+    ev: { kind: "number", get: (r) => r.ev_plat, hint: "expected plat per relic" },
   },
 };
 

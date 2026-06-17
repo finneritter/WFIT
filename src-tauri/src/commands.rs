@@ -1,7 +1,7 @@
 use crate::db::wfm::{ImportApply, ListingMirror};
 use crate::db::{
-    buylist, catalog, gamescan as gamescan_db, inventory, meta, prices, recommend, relics, sales,
-    sets, settings, trends, vendor, wanted, watchlist, wfm,
+    buylist, catalog, gamescan as gamescan_db, inventory, meta, prices, recommend, relic_data,
+    relics, sales, sets, settings, trends, vault, vendor, wanted, watchlist, wfm,
 };
 use crate::error::{AppError, AppResult};
 use crate::gamescan;
@@ -38,6 +38,72 @@ pub async fn catalog_refresh(state: State<'_, Arc<AppState>>) -> AppResult<usize
         &Utc::now().to_rfc3339(),
     )?;
     Ok(n)
+}
+
+/// One-click "Update game data" for after a Warframe patch: force-refresh the catalog
+/// (new tradeable items + ducats), vault status (vault/unvault rotations), set
+/// composition, and relic data (new relics/drops from WFCD). Each step is best-effort —
+/// a single source being down still returns a partial summary rather than erroring.
+/// Prices for new items fill in via the background pricer.
+#[tauri::command]
+pub async fn update_game_data(
+    state: State<'_, Arc<AppState>>,
+    app: tauri::AppHandle,
+) -> AppResult<GameDataUpdate> {
+    use tauri::Emitter;
+    const STEPS: u32 = 4;
+    // Emit a progress tick on `game-data-progress` for the UI bar (best-effort).
+    let tick = |step: u32, label: &str, current: u32, total: u32| {
+        let _ = app.emit(
+            "game-data-progress",
+            GameDataProgress {
+                step,
+                steps: STEPS,
+                label: label.to_string(),
+                current,
+                total,
+            },
+        );
+    };
+
+    let catalog_before = catalog::count(&state.db)?;
+    let relics_before = relic_data::relic_count(&state.db)?;
+
+    // 1) Catalog — new items + ducats from warframe.market.
+    tick(1, "Refreshing item catalog…", 0, 0);
+    if let Ok(items) = state.market.fetch_catalog().await {
+        catalog::upsert_many(&state.db, &items)?;
+        meta::set(
+            &state.db,
+            meta::KEY_LAST_CATALOG_SYNC,
+            &Utc::now().to_rfc3339(),
+        )?;
+    }
+    // 2) Vault rotations (forced, ignores the 30-day TTL).
+    tick(2, "Checking vault status…", 0, 0);
+    let vault_refreshed = vault::refresh_force(&state.db).await.unwrap_or(false);
+    // 3) Set composition (new/changed sets) — the slow pass; report per-set progress.
+    tick(3, "Syncing set composition…", 0, 0);
+    let sets_synced = sets_refresh_inner(&state, |done, total| {
+        tick(3, "Syncing set composition…", done as u32, total as u32);
+    })
+    .await
+    .unwrap_or(0);
+    // 4) Relic data from WFCD (new relics/drop tables/vault), applied live.
+    tick(4, "Updating relic data…", 0, 0);
+    let relics_refreshed = relic_data::refresh(&state.db).await.unwrap_or(false);
+
+    let catalog_total = catalog::count(&state.db)?;
+    let relics_total = relic_data::relic_count(&state.db)?;
+    Ok(GameDataUpdate {
+        catalog_new: (catalog_total - catalog_before).max(0),
+        catalog_total,
+        vault_refreshed,
+        sets_synced: sets_synced as i64,
+        relics_new: (relics_total - relics_before).max(0),
+        relics_total,
+        relics_refreshed,
+    })
 }
 
 /// Wipe the rebuildable API caches (prices, history, set composition) and
@@ -1049,6 +1115,18 @@ pub async fn get_crack_now(state: State<'_, Arc<AppState>>) -> AppResult<Vec<Cra
     relics::crack_now(&state.db, &live_tiers, &wanted)
 }
 
+/// Owned relics worth cracking next, ranked by a combined priority (completes a
+/// near-complete set → drops a watch/buy-list item → drops a vaulted part →
+/// crackable now → EV). Powers the Relics screen "To crack" tab.
+#[tauri::command]
+pub async fn get_crack_plan(state: State<'_, Arc<AppState>>) -> AppResult<Vec<CrackPlanRow>> {
+    let ws = state.worldstate.get().await?;
+    let live_tiers: std::collections::HashSet<String> =
+        ws.fissures.iter().map(|f| f.tier.clone()).collect();
+    let signals = wanted::crack_signals(&state.db)?;
+    relics::crack_plan(&state.db, &live_tiers, &signals)
+}
+
 // ===========================================================================
 // warframe.market account (Listings) — read-only in v1
 // ===========================================================================
@@ -1458,6 +1536,15 @@ pub async fn wfm_reprice_apply(
 /// path (~157 calls): only the 'set' category. Throttled by the shared limiter.
 #[tauri::command]
 pub async fn sets_refresh(state: State<'_, Arc<AppState>>) -> AppResult<usize> {
+    sets_refresh_inner(&state, |_, _| {}).await
+}
+
+/// `on_progress(done, total)` is called after each set is processed, so a caller can
+/// surface progress (the set pass is the slow ~157-call step of "Update game data").
+async fn sets_refresh_inner(
+    state: &Arc<AppState>,
+    mut on_progress: impl FnMut(usize, usize),
+) -> AppResult<usize> {
     let set_slugs: Vec<String> = state.db.with(|c| {
         let mut stmt = c.prepare("SELECT slug FROM catalog_items WHERE category = 'set'")?;
         let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
@@ -1469,8 +1556,10 @@ pub async fn sets_refresh(state: State<'_, Arc<AppState>>) -> AppResult<usize> {
     })?;
     let id_map = catalog::id_slug_map(&state.db)?;
 
+    let total = set_slugs.len();
     let mut written = 0usize;
-    for set_slug in set_slugs {
+    for (i, set_slug) in set_slugs.into_iter().enumerate() {
+        on_progress(i, total);
         let Ok(Some(detail)) = state.market.fetch_detail(&set_slug).await else {
             continue;
         };
@@ -1493,6 +1582,7 @@ pub async fn sets_refresh(state: State<'_, Arc<AppState>>) -> AppResult<usize> {
             }
         }
     }
+    on_progress(total, total);
     Ok(written)
 }
 

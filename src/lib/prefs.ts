@@ -26,6 +26,9 @@ export interface Prefs {
   /** IANA zone for clock-time displays (Rotation schedules), or "auto" =
    *  follow the PC's zone. Countdowns are relative and unaffected. */
   timezone: string;
+  /** Show the "SCAN" provenance tag on inventory rows imported via the game
+   *  memory-scan. Off by default — it's visual clutter for most users. */
+  showScanTag: boolean;
 }
 
 const KEY = "wfit.prefs";
@@ -35,6 +38,7 @@ const DEFAULTS: Prefs = {
   flatDeltas: false,
   font: "system",
   timezone: "auto",
+  showScanTag: false,
 };
 
 /** The PC's current IANA zone (what "auto" resolves to). */
@@ -62,6 +66,7 @@ export function applyPrefs(p: Prefs): void {
   b.toggle("light", p.theme === "light");
   b.toggle("dense", p.dense);
   b.toggle("flat-deltas", p.flatDeltas);
+  b.toggle("hide-scan-tag", !p.showScanTag);
   if (p.font === "system") delete document.body.dataset.font;
   else document.body.dataset.font = p.font;
 }

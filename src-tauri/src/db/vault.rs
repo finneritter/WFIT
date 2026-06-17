@@ -99,6 +99,33 @@ pub fn apply(db: &Db) -> AppResult<()> {
     })
 }
 
+/// Force a vault refresh from warframe-items now, ignoring the TTL — for the manual
+/// "Update game data" action after a Prime vault/unvault rotation. Keeps the existing
+/// map (and still applies it) if the fetch fails. Returns whether the network fetch
+/// succeeded.
+pub async fn refresh_force(db: &Db) -> AppResult<bool> {
+    let refreshed = match fetch_remote().await {
+        Ok(map) if !map.is_empty() => {
+            store_map(db, &map)?;
+            meta::set(db, meta::KEY_LAST_VAULT_SYNC, &Utc::now().to_rfc3339())?;
+            tracing::info!(
+                n = map.len(),
+                "vault status force-refreshed from warframe-items"
+            );
+            true
+        }
+        result => {
+            tracing::warn!(
+                ok = result.is_ok(),
+                "vault force-refresh failed; keeping existing map"
+            );
+            false
+        }
+    };
+    apply(db)?;
+    Ok(refreshed)
+}
+
 /// Refresh `vault_status` from warframe-items when stale/empty (TTL-gated), falling
 /// back to the bundled snapshot only when the table is empty and the fetch fails.
 /// Always applies the result onto `catalog_items`.

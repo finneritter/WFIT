@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import { GameScanPanel } from "../components/GameScanPanel";
 import type { ScreenId } from "../components/Sidebar";
@@ -18,6 +19,7 @@ import {
   useSetNotificationPrefs,
   useSetsRefresh,
   useSummary,
+  useUpdateGameData,
   useWfmAccount,
 } from "../hooks/queries";
 
@@ -33,7 +35,7 @@ const CAT_FLOORS: [string, string][] = [
   ["arcane", "Arcane"],
 ];
 import { openBackupsDir, sendTestNotification, wipeApp } from "../lib/api";
-import { syncedAgo } from "../lib/format";
+import { clsx, syncedAgo } from "../lib/format";
 import {
   FONTS,
   type Font,
@@ -44,7 +46,7 @@ import {
   systemTimezone,
   timezoneOptions,
 } from "../lib/prefs";
-import type { NotificationPrefs } from "../lib/types";
+import type { GameDataProgress, NotificationPrefs } from "../lib/types";
 
 function Row({
   label,
@@ -255,6 +257,18 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
   const catalog = useCatalogRefresh();
   const sets = useSetsRefresh();
   const rebuild = useRebuildCache();
+  const updateAll = useUpdateGameData();
+  const [updProg, setUpdProg] = useState<GameDataProgress | null>(null);
+  // Mirror the backend's game-data-progress events into a live bar; clear when idle.
+  useEffect(() => {
+    const un = listen<GameDataProgress>("game-data-progress", (e) => setUpdProg(e.payload));
+    return () => {
+      un.then((f) => f());
+    };
+  }, []);
+  useEffect(() => {
+    if (!updateAll.isPending) setUpdProg(null);
+  }, [updateAll.isPending]);
   const { data: excluded = [] } = useExcludedRarities();
   const setExcluded = useSetExcludedRarities();
   const { data: excludedMinPlat = 0 } = useExcludedMinPlat();
@@ -308,7 +322,13 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
     savePrefs(next);
   };
 
-  const busy = prices.isPending || catalog.isPending || sets.isPending || rebuild.isPending;
+  const busy =
+    prices.isPending ||
+    catalog.isPending ||
+    sets.isPending ||
+    rebuild.isPending ||
+    updateAll.isPending;
+  const upd = updateAll.data;
 
   return (
     <div className="settings">
@@ -347,6 +367,16 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
               ["dense", "Dense"],
             ]}
             onChange={(v) => update({ dense: v === "dense" })}
+          />
+        </Row>
+        <Row
+          label="Scan tag"
+          hint="Show a small “SCAN” tag on inventory rows imported via the game memory-scan"
+        >
+          <Seg
+            value={prefs.showScanTag ? "on" : "off"}
+            options={OFF_ON}
+            onChange={(v) => update({ showScanTag: v === "on" })}
           />
         </Row>
         <Row label="Price deltas" hint="Color gains/losses green & red, or keep them flat mono">
@@ -471,6 +501,45 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
           <h3>Data &amp; cache</h3>
           <span className="meta">synced {syncedAgo(summary?.last_synced ?? null)}</span>
         </div>
+        <Row
+          label="Update game data"
+          hint="After a Warframe patch: pull new items, ducats, vault changes, set composition and relics in one go (~a minute). Prices for new items fill in shortly after."
+        >
+          <button type="button" className="btn" disabled={busy} onClick={() => updateAll.mutate()}>
+            {updateAll.isPending ? "Updating…" : "Update"}
+          </button>
+        </Row>
+        {updateAll.isPending ? (
+          <div className="upd-status">
+            <div className="upd-prog">
+              <div
+                className={clsx("upd-prog-fill", (updProg?.total ?? 0) === 0 && "indeterminate")}
+                style={
+                  updProg && updProg.total > 0
+                    ? { width: `${Math.round((updProg.current / updProg.total) * 100)}%` }
+                    : undefined
+                }
+              />
+            </div>
+            <span className="meta">
+              {updProg
+                ? `Step ${updProg.step}/${updProg.steps} · ${updProg.label}${
+                    updProg.total > 0 ? ` ${updProg.current}/${updProg.total}` : ""
+                  }`
+                : "Starting…"}
+            </span>
+          </div>
+        ) : null}
+        {upd && !updateAll.isPending ? (
+          <div className="meta" style={{ padding: "0 0 8px" }}>
+            {`+${upd.catalog_new} item${upd.catalog_new === 1 ? "" : "s"} (${upd.catalog_total} total) · `}
+            {upd.vault_refreshed ? "vault refreshed · " : "vault unchanged · "}
+            {`${upd.sets_synced} set parts · `}
+            {upd.relics_refreshed
+              ? `+${upd.relics_new} relic${upd.relics_new === 1 ? "" : "s"} (${upd.relics_total} total)`
+              : "relics unchanged"}
+          </div>
+        ) : null}
         <Row
           label="Refresh prices"
           hint="Re-pull owned + watchlist prices from warframe.market now"

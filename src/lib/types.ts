@@ -482,6 +482,7 @@ export interface RelicRow {
   best_reward_plat: number | null;
   priced_drops: number;
   total_drops: number;
+  relic_vaulted: boolean;
   source: string;
   first_added_at: string;
 }
@@ -502,6 +503,48 @@ export interface CrackNowRow {
   ev_plat: number;
   wanted_drops: string[];
   crackable_now: boolean;
+}
+// Live progress tick for "Update game data" (game-data-progress event). total 0 =
+// indeterminate (sweeping bar); otherwise current/total is a fraction.
+export interface GameDataProgress {
+  step: number;
+  steps: number;
+  label: string;
+  current: number;
+  total: number;
+}
+// Result summary of the "Update game data" action (Settings → Data & cache).
+export interface GameDataUpdate {
+  catalog_new: number;
+  catalog_total: number;
+  vault_refreshed: boolean;
+  sets_synced: number;
+  relics_new: number;
+  relics_total: number;
+  relics_refreshed: boolean;
+}
+// One reward in a relic's drop table (for the To-crack expandable detail).
+export interface CrackDrop {
+  reward_name: string;
+  chance: number;
+  plat: number | null;
+  wanted: boolean; // on the watch/buy list
+  set: boolean; // a missing part of a near-complete set
+}
+// A prioritized "what to crack next" row for the Relics "To crack" tab. `score` ranks
+// relics: completes a near-set → the relic is vaulted (unfarmable) → drops a watch/buy
+// item → crackable now → EV. `drops` is the full reward table for the row's expansion.
+export interface CrackPlanRow {
+  tier: string;
+  relic_name: string;
+  refinement: string;
+  display_name: string;
+  qty: number;
+  ev_plat: number;
+  relic_vaulted: boolean;
+  crackable_now: boolean;
+  drops: CrackDrop[];
+  score: number;
 }
 export interface SortieMission {
   node: string;

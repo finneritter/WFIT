@@ -122,6 +122,7 @@ pub struct RelicRow {
     pub best_reward_plat: Option<i64>, // and its market price
     pub priced_drops: i64,             // how many of its drops have a market price
     pub total_drops: i64,              // total drops in the table
+    pub relic_vaulted: bool,           // the relic itself is vaulted (no longer farmable)
     pub source: String,                // manual | de_scan
     pub first_added_at: String,
 }
@@ -148,6 +149,59 @@ pub struct CrackNowRow {
     pub ev_plat: f64,
     pub wanted_drops: Vec<String>, // wanted-set drop display names this relic can yield
     pub crackable_now: bool,       // a live fissure of this relic's tier is up right now
+}
+
+/// Progress tick for the "Update game data" action, emitted on the
+/// `game-data-progress` Tauri event so the UI can show a live bar. `total` 0 means
+/// indeterminate (show a sweeping bar); otherwise `current`/`total` is a fraction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameDataProgress {
+    pub step: u32,  // 1-based step index
+    pub steps: u32, // total steps
+    pub label: String,
+    pub current: u32, // within-step progress (e.g. sets done)
+    pub total: u32,   // within-step total (0 = indeterminate)
+}
+
+/// Result summary of the "Update game data" action (Settings → Data & cache).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameDataUpdate {
+    pub catalog_new: i64,       // tradeable items added this run
+    pub catalog_total: i64,     // total catalog items after
+    pub vault_refreshed: bool,  // vault status fetched from WFCD this run
+    pub sets_synced: i64,       // set-membership rows written
+    pub relics_new: i64,        // distinct relics added this run
+    pub relics_total: i64,      // total distinct relics after
+    pub relics_refreshed: bool, // relic data fetched from WFCD this run
+}
+
+/// One reward row inside a [`CrackPlanRow`]'s drop table (for the expandable detail).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrackDrop {
+    pub reward_name: String, // catalog display name
+    pub chance: f64,         // drop chance for this refinement, percent
+    pub plat: Option<i64>,   // effective price, None if unpriceable (Forma/Kuva/etc.)
+    pub wanted: bool,        // on the watch/buy list
+    pub set: bool,           // a missing part of a near-complete set
+}
+
+/// A prioritized "what to crack next" row for the Relics screen "To crack" tab. The
+/// `score` ranks relics: completes a near-complete set → the relic is vaulted (can't
+/// be farmed) → drops a watch/buy-list item → crackable now → expected value. A relic
+/// appears only if it has a set/wanted drop or is itself vaulted. `drops` is the full
+/// reward table, powering the row's expandable breakdown.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrackPlanRow {
+    pub tier: String,
+    pub relic_name: String,
+    pub refinement: String,
+    pub display_name: String,
+    pub qty: i64,
+    pub ev_plat: f64,
+    pub relic_vaulted: bool, // the relic itself is vaulted (no longer farmable)
+    pub crackable_now: bool, // a live fissure of this relic's tier is up right now
+    pub drops: Vec<CrackDrop>, // full reward table (highest-value first)
+    pub score: f64,          // combined priority (higher = crack sooner)
 }
 
 /// Progress of the throttled owned-item price refresh — drives the "pricing…"

@@ -73,3 +73,49 @@ pub fn crack_targets(db: &Db) -> AppResult<HashSet<String>> {
 /// A set is "close to completing" when it's missing at most this many parts — so a
 /// relic dropping one of those missing parts would finish (or nearly finish) it.
 const SET_CLOSE_THRESHOLD: i64 = 2;
+
+/// The crack signals split by source, so the Relics "To crack" planner can flag and
+/// score each independently (a relic completing a near-set should outrank a
+/// watch-list-only one). `crack_targets` is the union of these two; this is the same
+/// data, kept separate. The vaulted signal is sourced elsewhere (catalog `is_vaulted`).
+pub struct CrackSignals {
+    /// Slugs on the watchlist or buy list.
+    pub watch_buy: HashSet<String>,
+    /// Missing parts of sets you're within [`SET_CLOSE_THRESHOLD`] parts of completing.
+    pub near_set: HashSet<String>,
+}
+
+/// Build [`CrackSignals`] — watch/buy list and near-complete-set missing parts as
+/// separate sets (reuses the same SQL shape as [`crack_targets`]).
+pub fn crack_signals(db: &Db) -> AppResult<CrackSignals> {
+    db.read(|c| {
+        let mut wb = c.prepare("SELECT slug FROM watchlist UNION SELECT slug FROM buy_list")?;
+        let watch_buy = wb
+            .query_map([], |r| r.get::<_, String>(0))?
+            .collect::<Result<HashSet<_>, _>>()?;
+        let mut ns = c.prepare(
+            "SELECT ci.slug
+               FROM catalog_items ci
+              WHERE ci.set_slug IS NOT NULL
+                AND COALESCE((SELECT qty FROM inventory_items ii WHERE ii.slug = ci.slug), 0) = 0
+                AND EXISTS (
+                    SELECT 1 FROM catalog_items m
+                    JOIN inventory_items mi ON mi.slug = m.slug
+                    WHERE m.set_slug = ci.set_slug AND mi.qty > 0
+                )
+                AND (
+                    SELECT COUNT(*) FROM catalog_items m2
+                     WHERE m2.set_slug = ci.set_slug
+                       AND COALESCE(
+                             (SELECT qty FROM inventory_items mi2 WHERE mi2.slug = m2.slug), 0) = 0
+                ) <= ?1",
+        )?;
+        let near_set = ns
+            .query_map([SET_CLOSE_THRESHOLD], |r| r.get::<_, String>(0))?
+            .collect::<Result<HashSet<_>, _>>()?;
+        Ok(CrackSignals {
+            watch_buy,
+            near_set,
+        })
+    })
+}

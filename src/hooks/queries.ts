@@ -47,6 +47,7 @@ export const keys = {
   relics: ["relics"] as const,
   relicChoices: ["relicChoices"] as const,
   crackNow: ["crackNow"] as const,
+  crackPlan: ["crackPlan"] as const,
   pricingProgress: ["pricingProgress"] as const,
   wfmAccount: ["wfmAccount"] as const,
   listings: ["listings"] as const,
@@ -195,9 +196,19 @@ export const useCrackNow = () =>
     refetchInterval: 60_000,
     refetchIntervalInBackground: true,
   });
+// The Relics "To crack" ranking — refreshes on the same cadence as crack-now (live
+// fissures flip crackable_now), and on any relic mutation via invalidateRelics.
+export const useCrackPlan = () =>
+  useQuery({
+    queryKey: keys.crackPlan,
+    queryFn: api.getCrackPlan,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
+  });
 function invalidateRelics(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: keys.relics });
   qc.invalidateQueries({ queryKey: keys.crackNow });
+  qc.invalidateQueries({ queryKey: keys.crackPlan });
 }
 export function useAddRelic() {
   const qc = useQueryClient();
@@ -499,6 +510,16 @@ export function useSetsRefresh() {
   return useMutation({
     mutationFn: () => api.setsRefresh(),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.sets }),
+  });
+}
+
+// One-click post-patch update (catalog + vault + sets + relics). Touches everything
+// value/relic-bearing, so refetch broadly.
+export function useUpdateGameData() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.updateGameData(),
+    onSuccess: () => qc.invalidateQueries(),
   });
 }
 

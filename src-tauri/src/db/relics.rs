@@ -4,10 +4,11 @@
 //! resolving drop display names to catalog slugs via `catalog::name_slug_map`.
 //! Unpriceable drops (Forma, Kuva, Requiem mods) simply contribute nothing.
 
+use crate::db::wanted::CrackSignals;
 use crate::db::{catalog, prices, Db};
 use crate::domain::relic;
 use crate::error::{AppError, AppResult};
-use crate::types::{CrackNowRow, RelicChoice, RelicRow};
+use crate::types::{CrackDrop, CrackNowRow, CrackPlanRow, RelicChoice, RelicRow};
 use chrono::Utc;
 use rusqlite::{params, Connection};
 use std::collections::{HashMap, HashSet};
@@ -47,19 +48,19 @@ fn value_relic(
     name: &str,
     refinement: &str,
 ) -> AppResult<RelicValue> {
-    let drops = relic::drops_for(tier, name, refinement).unwrap_or(&[]);
+    let drops = relic::drops_for(tier, name, refinement).unwrap_or_default();
     let mut ev = 0.0;
     let mut priced = 0i64;
     let mut best: Option<(String, i64)> = None;
-    for d in drops {
-        let Some(slug) = name_to_slug.get(&catalog::normalize_name(d.reward_name)) else {
+    for d in &drops {
+        let Some(slug) = name_to_slug.get(&catalog::normalize_name(&d.reward_name)) else {
             continue; // Forma/Kuva/etc. — not a tradeable catalog item
         };
         if let Some(p) = price_of(c, price_cache, slug)? {
             ev += (d.chance / 100.0) * p as f64;
             priced += 1;
             if best.as_ref().map(|(_, bp)| p > *bp).unwrap_or(true) {
-                best = Some((d.reward_name.to_string(), p));
+                best = Some((d.reward_name.clone(), p));
             }
         }
     }
@@ -109,6 +110,7 @@ pub fn owned_relics(db: &Db) -> AppResult<Vec<RelicRow>> {
             )?;
             out.push(RelicRow {
                 display_name: display_name(&tier, &relic_name),
+                relic_vaulted: relic::is_vaulted(&tier, &relic_name),
                 tier,
                 relic_name,
                 refinement,
@@ -165,12 +167,12 @@ pub fn crack_now(
         let mut out = Vec::new();
         for (tier, relic_name, refinement, qty) in raw {
             // Wanted drops: reward names whose resolved slug is in the wanted set.
-            let drops = relic::drops_for(&tier, &relic_name, &refinement).unwrap_or(&[]);
+            let drops = relic::drops_for(&tier, &relic_name, &refinement).unwrap_or_default();
             let mut wanted_drops = Vec::new();
-            for d in drops {
-                if let Some(slug) = name_to_slug.get(&catalog::normalize_name(d.reward_name)) {
+            for d in &drops {
+                if let Some(slug) = name_to_slug.get(&catalog::normalize_name(&d.reward_name)) {
                     if wanted.contains(slug) {
-                        wanted_drops.push(d.reward_name.to_string());
+                        wanted_drops.push(d.reward_name.clone());
                     }
                 }
             }
@@ -211,14 +213,117 @@ pub fn crack_now(
     })
 }
 
+/// Combined-priority weights for the "To crack" planner. Each tier dwarfs the next so
+/// the categorical signals strictly order relics and EV only breaks ties: completes a
+/// near-set → the relic is vaulted (unfarmable) → drops a watch/buy-list item →
+/// crackable now → expected value. Tunable.
+const W_SET: f64 = 1_000_000.0; // × count of set parts dropped
+const W_VAULTED: f64 = 500_000.0;
+const W_WANTED: f64 = 100_000.0; // × min(count, 3)
+const W_NOW: f64 = 10_000.0;
+
+/// Owned relics worth cracking, ranked by a combined priority [`score`]. For each
+/// owned relic, every drop is priced and flagged `wanted` (`sig.watch_buy`) / `set`
+/// (`sig.near_set`); the relic is included if it drops a set/wanted part OR is itself
+/// vaulted (`relic::is_vaulted`). `live_tiers` flags whether a fissure can crack it
+/// right now. `drops` carries the full reward table for the UI's expandable detail.
+/// Powers the Relics screen "To crack" tab.
+///
+/// [`score`]: crate::types::CrackPlanRow::score
+pub fn crack_plan(
+    db: &Db,
+    live_tiers: &HashSet<String>,
+    sig: &CrackSignals,
+) -> AppResult<Vec<CrackPlanRow>> {
+    let name_to_slug = catalog::name_slug_map(db)?;
+    db.read(|c| {
+        let mut stmt =
+            c.prepare("SELECT tier, relic_name, refinement, qty FROM owned_relics WHERE qty > 0")?;
+        let raw = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, i64>(3)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut price_cache: HashMap<String, Option<i64>> = HashMap::new();
+        let mut out = Vec::new();
+        for (tier, relic_name, refinement, qty) in raw {
+            let mut drops = Vec::new();
+            let mut ev = 0.0;
+            let (mut set_count, mut wanted_count) = (0i64, 0i64);
+            for d in &relic::drops_for(&tier, &relic_name, &refinement).unwrap_or_default() {
+                let slug = name_to_slug.get(&catalog::normalize_name(&d.reward_name));
+                let plat = match slug {
+                    Some(s) => price_of(c, &mut price_cache, s)?,
+                    None => None,
+                };
+                if let Some(p) = plat {
+                    ev += (d.chance / 100.0) * p as f64;
+                }
+                let wanted = slug.is_some_and(|s| sig.watch_buy.contains(s));
+                let set = slug.is_some_and(|s| sig.near_set.contains(s));
+                if wanted {
+                    wanted_count += 1;
+                }
+                if set {
+                    set_count += 1;
+                }
+                drops.push(CrackDrop {
+                    reward_name: d.reward_name.clone(),
+                    chance: d.chance,
+                    plat,
+                    wanted,
+                    set,
+                });
+            }
+            let relic_vaulted = relic::is_vaulted(&tier, &relic_name);
+            if set_count == 0 && wanted_count == 0 && !relic_vaulted {
+                continue; // nothing worth prioritizing in here
+            }
+            let ev_plat = (ev * 10.0).round() / 10.0;
+            let crackable_now = live_tiers.contains(&tier);
+            // Best-value drops first, so the expanded table leads with what matters.
+            drops.sort_by_key(|d| std::cmp::Reverse(d.plat.unwrap_or(0)));
+            let score = W_SET * set_count as f64
+                + W_VAULTED * (relic_vaulted as i64 as f64)
+                + W_WANTED * (wanted_count.min(3) as f64)
+                + W_NOW * (crackable_now as i64 as f64)
+                + ev_plat * qty as f64;
+            out.push(CrackPlanRow {
+                display_name: display_name(&tier, &relic_name),
+                tier,
+                relic_name,
+                refinement,
+                qty,
+                ev_plat,
+                relic_vaulted,
+                crackable_now,
+                drops,
+                score,
+            });
+        }
+        out.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.display_name.cmp(&b.display_name))
+        });
+        Ok(out)
+    })
+}
+
 /// Every known relic, for the manual-add picker.
 pub fn list_choices() -> Vec<RelicChoice> {
     relic::all_relics()
         .into_iter()
         .map(|(tier, name)| RelicChoice {
-            display_name: display_name(tier, name),
-            tier: tier.to_string(),
-            relic_name: name.to_string(),
+            display_name: display_name(&tier, &name),
+            tier,
+            relic_name: name,
         })
         .collect()
 }

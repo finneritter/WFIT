@@ -169,6 +169,7 @@ pub fn run() {
             // catalog
             commands::catalog_count,
             commands::catalog_refresh,
+            commands::update_game_data,
             commands::get_catalog,
             commands::get_catalog_item,
             commands::search_catalog,
@@ -240,6 +241,7 @@ pub fn run() {
             commands::set_relic_qty,
             commands::remove_relic,
             commands::get_crack_now,
+            commands::get_crack_plan,
             commands::import_scanned_relics,
             // wfm account
             commands::get_wfm_account,
@@ -409,7 +411,7 @@ impl Drop for PricingGuard<'_> {
 /// then drain the rest in the background at the throttled rate. UI never blocks
 /// and the 350 ms global limit is never exceeded.
 async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
-    use db::{catalog, meta, prices, vault};
+    use db::{catalog, meta, prices, relic_data, vault};
 
     // Hold the "syncing…" flag for the entire warm-up (catalog → vault → owned →
     // drain) so the UI shows progress the whole time; the guard resets it on any exit.
@@ -474,6 +476,15 @@ async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
     // fallback). Runs after the catalog so the set→parts propagation has rows to mark.
     if let Err(e) = vault::refresh_if_stale(&state.db).await {
         tracing::warn!(error = %e, "vault status refresh failed");
+    }
+
+    // 1.6) Relic reference data: seed the DB tables from the bundled snapshot (or
+    // re-seed if a newer bundle shipped), then mirror the DB into the in-memory store.
+    // Live relic updates come via the "Update game data" action, not on launch.
+    if let Err(e) = relic_data::seed_if_empty_or_stale(&state.db)
+        .and_then(|()| relic_data::load_into_memory(&state.db))
+    {
+        tracing::warn!(error = %e, "relic data load failed; using bundled defaults");
     }
 
     // 2+3) Owned (then watchlist) pricing — the phase the inventory value depends on.
