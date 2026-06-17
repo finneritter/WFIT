@@ -5,6 +5,7 @@ import { useCrackNow, useVendorIntel, useWantedNow, useWorldstate } from "../hoo
 import { clsx, dayTime, fmt, glyph, hhmm, msUntil, nextUtc, tzLabel } from "../lib/format";
 import type {
   ArbitrationBlock,
+  CrackNowRow,
   Fissure,
   Invasion,
   Nightwave,
@@ -17,6 +18,7 @@ import type {
 const TABS = [
   ["overview", "Overview"],
   ["fissures", "Fissures"],
+  ["crack", "Crack"],
   ["vendors", "Vendors"],
 ] as const;
 type TabId = (typeof TABS)[number][0];
@@ -304,32 +306,72 @@ function WantedNowPanel({ onOpen }: { onOpen: (slug: string) => void }) {
   );
 }
 
-// Owned relics a live void fissure can crack right now, wanted-set drops flagged.
-// Hidden when nothing you own matches a live fissure.
-function CrackNowPanel() {
-  const { data: rows = [] } = useCrackNow();
-  if (rows.length === 0) return null;
+/** One crack-list row: glyph · name ×qty + the wanted drops it can yield ·
+ *  refinement · drop-EV. Used by both groups in the Crack tab. */
+function CrackRow({ r }: { r: CrackNowRow }) {
+  return (
+    <div className="wn-row" key={`${r.tier}-${r.relic_name}-${r.refinement}`}>
+      <span className="vgl">{glyph(r.display_name)}</span>
+      <span className="wn-nm">
+        {r.display_name} <span className="muted">×{r.qty}</span>
+        {r.wanted_drops.length > 0 ? (
+          <span className="wn-want"> wants: {r.wanted_drops.join(", ")}</span>
+        ) : null}
+      </span>
+      <span className="wn-src">{r.refinement}</span>
+      <span className="wn-eta num">~{fmt(Math.round(r.ev_plat))}p</span>
+    </div>
+  );
+}
+
+// Owned relics whose drops include something you want — a watch/buy-list item or the
+// missing part of a set you're 1–2 parts from completing. Split into the relics a
+// live fissure can crack right now and the rest (kept for planning).
+function CrackTab() {
+  const { data: rows = [], isLoading } = useCrackNow();
+  const now = rows.filter((r) => r.crackable_now);
+  const later = rows.filter((r) => !r.crackable_now);
   return (
     <div className="tpanel wn-panel">
       <div className="tpanel-h">
-        <h3>Crack now</h3>
-        <span className="meta">{rows.length} owned relics match a live fissure</span>
+        <h3>Crack</h3>
+        <span className="meta">
+          {rows.length} owned relic{rows.length === 1 ? "" : "s"} can drop something you want
+        </span>
       </div>
-      <div className="wn-list">
-        {rows.map((r) => (
-          <div className="wn-row" key={`${r.tier}-${r.relic_name}-${r.refinement}`}>
-            <span className="vgl">{glyph(r.display_name)}</span>
-            <span className="wn-nm">
-              {r.display_name} <span className="muted">×{r.qty}</span>
-              {r.wanted_drops.length > 0 ? (
-                <span className="wn-want"> wants: {r.wanted_drops.join(", ")}</span>
-              ) : null}
-            </span>
-            <span className="wn-src">{r.refinement}</span>
-            <span className="wn-eta num">~{fmt(Math.round(r.ev_plat))}p</span>
-          </div>
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="empty" style={{ padding: "10px 12px" }}>
+          Loading relics…
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="empty" style={{ padding: "10px 12px" }}>
+          None of your relics drop a wanted item yet. Add items to your watch or buy list, or get
+          closer (within 2 parts) to completing a set, and matching relics show up here.
+        </div>
+      ) : (
+        <>
+          {now.length > 0 ? (
+            <>
+              <div className="fgroup-h">Crackable now · {now.length}</div>
+              <div className="wn-list">
+                {now.map((r) => (
+                  <CrackRow r={r} key={`${r.tier}-${r.relic_name}-${r.refinement}`} />
+                ))}
+              </div>
+            </>
+          ) : null}
+          {later.length > 0 ? (
+            <>
+              <div className="fgroup-h">Waiting on a fissure · {later.length}</div>
+              <div className="wn-list">
+                {later.map((r) => (
+                  <CrackRow r={r} key={`${r.tier}-${r.relic_name}-${r.refinement}`} />
+                ))}
+              </div>
+            </>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
@@ -373,7 +415,6 @@ function OverviewTab({ ws, onOpen }: { ws: Worldstate; onOpen: (slug: string) =>
         ))}
       </div>
       <WantedNowPanel onOpen={onOpen} />
-      <CrackNowPanel />
       <div className="rot-grid v2">
         <div className="rot-col">
           <ArbitrationPanel block={ws.arbitration} />
@@ -769,6 +810,7 @@ export function Rotation({ onOpen }: { onOpen: (slug: string) => void }) {
 
       {tab === "overview" && <OverviewTab ws={ws} onOpen={onOpen} />}
       {tab === "fissures" && <FissuresTab ws={ws} deVerified={deVerified} />}
+      {tab === "crack" && <CrackTab />}
       {tab === "vendors" && <VendorsTab ws={ws} onOpen={onOpen} />}
     </>
   );

@@ -490,7 +490,9 @@ export interface RelicChoice {
   relic_name: string;
   display_name: string;
 }
-// An owned relic crackable in a live fissure now (Rotation "Crack now").
+// An owned relic that can drop a wanted item — a watch/buy-list item or the missing
+// part of a near-complete set (Rotation "Crack" tab). crackable_now flags whether a
+// live fissure of its tier is up right now.
 export interface CrackNowRow {
   tier: string;
   relic_name: string;
@@ -499,6 +501,7 @@ export interface CrackNowRow {
   qty: number;
   ev_plat: number;
   wanted_drops: string[];
+  crackable_now: boolean;
 }
 export interface SortieMission {
   node: string;

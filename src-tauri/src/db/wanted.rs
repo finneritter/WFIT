@@ -4,6 +4,7 @@
 
 use crate::db::Db;
 use crate::error::AppResult;
+use std::collections::HashSet;
 
 /// (slug, display_name) for every wanted item. A slug on the watchlist that is also
 /// a missing set part appears once (the UNION dedupes identical rows).
@@ -31,3 +32,44 @@ pub fn wanted_items(db: &Db) -> AppResult<Vec<(String, String)>> {
         Ok(out)
     })
 }
+
+/// Slugs the Rotation "Crack" tab treats as wanted: everything on the **watchlist**
+/// or **buy list**, plus the missing parts of any set you're **close to completing**
+/// (own ≥1 part and the whole set is missing ≤ [`SET_CLOSE_THRESHOLD`] parts). Stricter
+/// than [`wanted_items`] on sets (near-complete only) but broader on lists (adds the
+/// buy list) — a relic only earns a spot on the Crack tab if a drop lands in here.
+pub fn crack_targets(db: &Db) -> AppResult<HashSet<String>> {
+    db.read(|c| {
+        let mut stmt = c.prepare(
+            "SELECT slug FROM watchlist
+             UNION
+             SELECT slug FROM buy_list
+             UNION
+             SELECT ci.slug
+               FROM catalog_items ci
+              WHERE ci.set_slug IS NOT NULL
+                AND COALESCE((SELECT qty FROM inventory_items ii WHERE ii.slug = ci.slug), 0) = 0
+                AND EXISTS (
+                    SELECT 1 FROM catalog_items m
+                    JOIN inventory_items mi ON mi.slug = m.slug
+                    WHERE m.set_slug = ci.set_slug AND mi.qty > 0
+                )
+                AND (
+                    SELECT COUNT(*) FROM catalog_items m2
+                     WHERE m2.set_slug = ci.set_slug
+                       AND COALESCE(
+                             (SELECT qty FROM inventory_items mi2 WHERE mi2.slug = m2.slug), 0) = 0
+                ) <= ?1",
+        )?;
+        let rows = stmt.query_map([SET_CLOSE_THRESHOLD], |r| r.get::<_, String>(0))?;
+        let mut out = HashSet::new();
+        for r in rows {
+            out.insert(r?);
+        }
+        Ok(out)
+    })
+}
+
+/// A set is "close to completing" when it's missing at most this many parts — so a
+/// relic dropping one of those missing parts would finish (or nearly finish) it.
+const SET_CLOSE_THRESHOLD: i64 = 2;

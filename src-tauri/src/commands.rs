@@ -1037,16 +1037,15 @@ pub fn remove_relic(
     relics::remove(&state.db, &tier, &name, refinement.as_deref())
 }
 
-/// Owned relics crackable in a live void fissure right now, wanted-set drops flagged.
+/// Owned relics that can drop a wanted item (watch/buy list or a near-complete set
+/// part), each flagged with whether a live fissure can crack it now. Powers the
+/// Rotation "Crack" tab.
 #[tauri::command]
 pub async fn get_crack_now(state: State<'_, Arc<AppState>>) -> AppResult<Vec<CrackNowRow>> {
     let ws = state.worldstate.get().await?;
     let live_tiers: std::collections::HashSet<String> =
         ws.fissures.iter().map(|f| f.tier.clone()).collect();
-    let wanted: std::collections::HashSet<String> = wanted::wanted_items(&state.db)?
-        .into_iter()
-        .map(|(slug, _)| slug)
-        .collect();
+    let wanted = wanted::crack_targets(&state.db)?;
     relics::crack_now(&state.db, &live_tiers, &wanted)
 }
 

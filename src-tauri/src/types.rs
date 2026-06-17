@@ -134,9 +134,10 @@ pub struct RelicChoice {
     pub display_name: String, // "Lith A1"
 }
 
-/// An owned relic that a live void fissure of its tier can crack right now, with any
-/// of its drops that are on your wanted list called out. Powers the Rotation
-/// "Crack now" panel.
+/// An owned relic whose drops include at least one wanted item (a watch/buy-list
+/// item, or the missing part of a set you're 1–2 parts from completing), with those
+/// drops called out and a flag for whether a live fissure can crack it right now.
+/// Powers the Rotation "Crack" tab.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrackNowRow {
     pub tier: String,
@@ -146,6 +147,7 @@ pub struct CrackNowRow {
     pub qty: i64,
     pub ev_plat: f64,
     pub wanted_drops: Vec<String>, // wanted-set drop display names this relic can yield
+    pub crackable_now: bool,       // a live fissure of this relic's tier is up right now
 }
 
 /// Progress of the throttled owned-item price refresh — drives the "pricing…"

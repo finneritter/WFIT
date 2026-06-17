@@ -132,14 +132,19 @@ pub fn owned_relics(db: &Db) -> AppResult<Vec<RelicRow>> {
     })
 }
 
-/// Owned relics whose tier has a live fissure right now, with any wanted-set drops
-/// flagged. `live_tiers` = fissure tiers currently active; `wanted` = wanted slugs.
+/// Owned relics that can drop a wanted item, each flagged with whether a live
+/// fissure can crack it right now. `live_tiers` = fissure tiers currently active;
+/// `wanted` = wanted slugs (watch/buy list + near-complete set parts, see
+/// [`wanted::crack_targets`]). Only relics with ≥1 wanted drop are returned;
+/// crackable-now relics sort first, so the actionable ones lead.
+///
+/// [`wanted::crack_targets`]: crate::db::wanted::crack_targets
 pub fn crack_now(
     db: &Db,
     live_tiers: &HashSet<String>,
     wanted: &HashSet<String>,
 ) -> AppResult<Vec<CrackNowRow>> {
-    if live_tiers.is_empty() {
+    if wanted.is_empty() {
         return Ok(Vec::new());
     }
     let name_to_slug = catalog::name_slug_map(db)?;
@@ -159,9 +164,6 @@ pub fn crack_now(
         let mut price_cache: HashMap<String, Option<i64>> = HashMap::new();
         let mut out = Vec::new();
         for (tier, relic_name, refinement, qty) in raw {
-            if !live_tiers.contains(&tier) {
-                continue;
-            }
             // Wanted drops: reward names whose resolved slug is in the wanted set.
             let drops = relic::drops_for(&tier, &relic_name, &refinement).unwrap_or(&[]);
             let mut wanted_drops = Vec::new();
@@ -172,6 +174,9 @@ pub fn crack_now(
                     }
                 }
             }
+            if wanted_drops.is_empty() {
+                continue; // nothing you want in here — keep it off the tab
+            }
             let v = value_relic(
                 c,
                 &name_to_slug,
@@ -181,6 +186,7 @@ pub fn crack_now(
                 &refinement,
             )?;
             out.push(CrackNowRow {
+                crackable_now: live_tiers.contains(&tier),
                 display_name: display_name(&tier, &relic_name),
                 tier,
                 relic_name,
@@ -190,11 +196,11 @@ pub fn crack_now(
                 wanted_drops,
             });
         }
-        // Relics that can yield a wanted item first, then by EV.
+        // Crackable-now first (actionable), then more-wanted, then by EV.
         out.sort_by(|a, b| {
-            b.wanted_drops
-                .len()
-                .cmp(&a.wanted_drops.len())
+            b.crackable_now
+                .cmp(&a.crackable_now)
+                .then_with(|| b.wanted_drops.len().cmp(&a.wanted_drops.len()))
                 .then_with(|| {
                     (b.ev_plat * b.qty as f64)
                         .partial_cmp(&(a.ev_plat * a.qty as f64))
