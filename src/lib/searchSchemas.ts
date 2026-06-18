@@ -421,7 +421,9 @@ export const PAGE_SCHEMAS: Partial<Record<ScreenId, AnySearchSchema>> = {
   sold: soldSchema,
   listings: listingsSchema,
   trends: trendsSchema,
-  account: arsenalSchema,
+  // Default tab is Overview (sales-backed); the Resources/Armory tabs compile their
+  // own schema against the same topbar text.
+  account: soldSchema,
 };
 
 export const PAGE_PLACEHOLDER: Partial<Record<ScreenId, string>> = {
@@ -435,7 +437,7 @@ export const PAGE_PLACEHOLDER: Partial<Record<ScreenId, string>> = {
   sold: "Search sales…  try days<7 unit>20",
   listings: "Search listings…  try is:undercut",
   trends: "Search trends…  try delta>10 is:owned",
-  account: "Search arsenal…  try cat:warframe is:mastered rank<30",
+  account: "Search account…  Overview: unit>20 days<7 · Armory: cat:warframe rank<30",
 };
 
 export const GLOBAL_PLACEHOLDER = "Search all items…  (ininv: to scope to inventory)";

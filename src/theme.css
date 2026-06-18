@@ -5506,3 +5506,383 @@ textarea:focus-visible {
   padding: 0;
   font: inherit;
 }
+
+/* ---- Account redesign: Tenno trader profile (Koala direction) ----
+   Identity header + 3 info columns + underline tab bar over a 5-tab body.
+   All colors come from existing tokens, so body.light parity is automatic. */
+.acc-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 4px 0 16px;
+}
+.acc-id {
+  flex: 1;
+  min-width: 0;
+}
+.acc-name {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.acc-handle {
+  font-size: 12.5px;
+  color: var(--faint);
+  margin-top: 2px;
+  display: inline-block;
+  text-decoration: none;
+}
+button.acc-handle:hover {
+  color: var(--soft);
+}
+.acc-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.acc-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+@media (max-width: 760px) {
+  .acc-cols {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+.acc-secH {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+  margin-bottom: 8px;
+}
+.acc-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--soft);
+  margin-top: 9px;
+}
+button.acc-info {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--accent);
+}
+.acc-info svg {
+  flex: none;
+}
+
+.acc-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  margin: 0 0 18px;
+}
+.acc-tab {
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--soft);
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: var(--sans);
+  margin-bottom: -1px;
+}
+.acc-tab:hover {
+  color: var(--ink);
+}
+.acc-tab.on {
+  color: var(--ink);
+  font-weight: 700;
+  border-bottom-color: var(--ink);
+}
+
+/* Overview — D/W/M stat cards */
+.acc-cards {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.acc-card {
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  padding: 13px 15px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.acc-card-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.acc-card-h .lbl {
+  font-size: 12px;
+  color: var(--soft);
+  flex: 1;
+}
+.acc-val {
+  font-family: var(--mono);
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin: 10px 0 4px;
+}
+.acc-val .u {
+  font-size: 15px;
+  color: var(--faint);
+}
+.acc-cap {
+  font-size: 11px;
+  color: var(--faint);
+}
+.dwm {
+  display: inline-flex;
+  border: 1px solid var(--line-2);
+}
+.dwm button {
+  width: 26px;
+  height: 22px;
+  font-family: var(--mono);
+  font-size: 11px;
+  border: none;
+  background: var(--panel);
+  color: var(--soft);
+  cursor: pointer;
+}
+.dwm button + button {
+  border-left: 1px solid var(--line-2);
+}
+.dwm button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+/* marker pill (trades type / value tier) */
+.acc-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  padding: 2px 7px;
+  font-size: 11px;
+  color: var(--ink);
+}
+.acc-pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+.acc-pill .sw {
+  width: 7px;
+  height: 7px;
+  flex: none;
+}
+.dtable tr.sel {
+  background: var(--hover);
+}
+
+/* Resources — drag-to-feature tray */
+.acc-tray {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-height: 104px;
+  padding: 12px;
+  margin-bottom: 20px;
+  border: 1px dashed var(--line-2);
+  background: var(--bg-2);
+}
+.acc-tray.over {
+  border-color: var(--accent);
+  background: var(--hover);
+}
+.acc-tray .ph {
+  margin: auto;
+  color: var(--faint);
+  font-size: 12px;
+}
+.acc-rescard {
+  position: relative;
+  width: 156px;
+  border: 1px solid var(--line-2);
+  border-top: 2px solid var(--line-2);
+  background: var(--panel);
+  padding: 12px 12px 11px;
+}
+.acc-rescard .x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  color: var(--faint);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+}
+.acc-rescard .nm {
+  font-size: 11px;
+  color: var(--soft);
+  margin-top: 9px;
+}
+.acc-rescard .qty {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.acc-rescard .sub {
+  font-size: 10px;
+  color: var(--faint);
+  margin-top: 2px;
+}
+.acc-grip {
+  background: none;
+  border: none;
+  color: var(--faint);
+  cursor: grab;
+  padding: 0;
+  font-size: 14px;
+}
+
+/* Codex — % header + per-category progress rows */
+.acc-codex-h {
+  margin-bottom: 14px;
+}
+.acc-bignum {
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.acc-codex-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 44px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+}
+.acc-codex-row + .acc-codex-row {
+  border-top: 1px solid var(--line);
+}
+.acc-codex-row .lbl {
+  font-size: 12px;
+  color: var(--soft);
+}
+.acc-codex-row .track {
+  height: 6px;
+  background: var(--line);
+  position: relative;
+}
+.acc-codex-row .fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+}
+.acc-codex-row .val {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink);
+  text-align: right;
+}
+
+/* Stats — career band + bar panels */
+.acc-career {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--line-2);
+  background: linear-gradient(100deg, var(--panel-2), var(--panel));
+  margin-bottom: 16px;
+}
+@media (max-width: 760px) {
+  .acc-career {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.acc-career-cell {
+  padding: 16px 20px;
+  border-left: 1px solid var(--line);
+}
+.acc-career-cell:first-child {
+  border-left: none;
+}
+.acc-career-cell .v {
+  font-family: var(--mono);
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.acc-career-cell .v .u {
+  font-size: 15px;
+  color: var(--faint);
+  font-weight: 600;
+}
+.acc-career-cell .k {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--faint);
+  margin-top: 6px;
+}
+.acc-twocol {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+@media (max-width: 760px) {
+  .acc-twocol {
+    grid-template-columns: 1fr;
+  }
+}
+.acc-barrow {
+  display: grid;
+  grid-template-columns: 1fr 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 0;
+}
+.acc-barrow.mono {
+  grid-template-columns: 26px 1fr 44px;
+}
+.acc-barrow .nm {
+  font-size: 11.5px;
+  color: var(--soft);
+  margin-bottom: 4px;
+}
+.acc-barrow .track {
+  height: 6px;
+  background: var(--line);
+  position: relative;
+}
+.acc-barrow .fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+}
+.acc-barrow .rt {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink);
+  text-align: right;
+}
