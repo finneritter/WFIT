@@ -8,6 +8,7 @@ use rusqlite_migration::{Migrations, M};
 use std::path::Path;
 use std::sync::Arc;
 
+pub mod account;
 pub mod arcanes;
 pub mod backup;
 pub mod buylist;
@@ -32,7 +33,7 @@ pub mod wfm;
 /// The schema version the MIGRATIONS list produces (`PRAGMA user_version` after
 /// `to_latest`). Bump in lockstep when appending a migration — the pre-migration
 /// backup gate and its test both pin it.
-pub const SCHEMA_VERSION: i64 = 12;
+pub const SCHEMA_VERSION: i64 = 13;
 
 // Append future migrations here; never edit a shipped one.
 static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
@@ -49,6 +50,7 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         M::up(include_str!("../../migrations/0010_order_fetch_meta.sql")),
         M::up(include_str!("../../migrations/0011_owned_relics.sql")),
         M::up(include_str!("../../migrations/0012_relic_data.sql")),
+        M::up(include_str!("../../migrations/0013_account.sql")),
     ])
 });
 

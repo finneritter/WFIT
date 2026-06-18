@@ -1,7 +1,7 @@
 use crate::db::wfm::{ImportApply, ListingMirror};
 use crate::db::{
-    buylist, catalog, gamescan as gamescan_db, inventory, meta, prices, recommend, relic_data,
-    relics, sales, sets, settings, trends, vault, vendor, wanted, watchlist, wfm,
+    account, buylist, catalog, gamescan as gamescan_db, inventory, meta, prices, recommend,
+    relic_data, relics, sales, sets, settings, trends, vault, vendor, wanted, watchlist, wfm,
 };
 use crate::error::{AppError, AppResult};
 use crate::gamescan;
@@ -51,7 +51,7 @@ pub async fn update_game_data(
     app: tauri::AppHandle,
 ) -> AppResult<GameDataUpdate> {
     use tauri::Emitter;
-    const STEPS: u32 = 4;
+    const STEPS: u32 = 5;
     // Emit a progress tick on `game-data-progress` for the UI bar (best-effort).
     let tick = |step: u32, label: &str, current: u32, total: u32| {
         let _ = app.emit(
@@ -92,9 +92,13 @@ pub async fn update_game_data(
     // 4) Relic data from WFCD (new relics/drop tables/vault), applied live.
     tick(4, "Updating relic data…", 0, 0);
     let relics_refreshed = relic_data::refresh(&state.db).await.unwrap_or(false);
+    // 5) Item manifest from WFCD (non-tradeable name/icon/mastery for the Account screen).
+    tick(5, "Updating item manifest…", 0, 0);
+    let manifest_refreshed = account::refresh_manifest(&state.db).await.unwrap_or(false);
 
     let catalog_total = catalog::count(&state.db)?;
     let relics_total = relic_data::relic_count(&state.db)?;
+    let manifest_total = account::manifest_count(&state.db)?;
     Ok(GameDataUpdate {
         catalog_new: (catalog_total - catalog_before).max(0),
         catalog_total,
@@ -103,6 +107,8 @@ pub async fn update_game_data(
         relics_new: (relics_total - relics_before).max(0),
         relics_total,
         relics_refreshed,
+        manifest_total,
+        manifest_refreshed,
     })
 }
 
@@ -1642,10 +1648,15 @@ pub async fn game_scan_preview(state: State<'_, Arc<AppState>>) -> AppResult<Vec
             "Warframe does not appear to be running".into(),
         ));
     }
-    let raw = gamescan::scan().await?;
+    let res = gamescan::scan().await?;
+    let raw = &res.inventory;
     let map = gamescan_db::game_ref_to_slug(&state.db)?;
     let resolved = gamescan::map::resolve(&raw.items, &map);
     gamescan_db::record_scan(&state.db, raw.account_id.as_deref())?;
+    // Same blob also refreshes the Account snapshot (silent — it's a rebuildable cache).
+    if let Err(e) = account::store_snapshot(&state.db, &res.account) {
+        tracing::warn!(error = %e, "account snapshot store failed during preview");
+    }
     gamescan_db::diff(&state.db, &resolved)
 }
 
@@ -1680,7 +1691,7 @@ pub async fn import_scanned_relics(state: State<'_, Arc<AppState>>) -> AppResult
             "Warframe does not appear to be running".into(),
         ));
     }
-    let raw = gamescan::scan().await?;
+    let raw = gamescan::scan().await?.inventory;
     let found = gamescan::map::resolve_relics(&raw.items);
     gamescan_db::record_scan(&state.db, raw.account_id.as_deref())?;
     let tuples: Vec<(&str, &str, &str, i64)> = found
@@ -1695,6 +1706,57 @@ pub async fn import_scanned_relics(state: State<'_, Arc<AppState>>) -> AppResult
         })
         .collect();
     relics::apply_scan(&state.db, &tuples)
+}
+
+// ===========================================================================
+// Account section — scan-populated Profile / Codex / Resources / Arsenal.
+// Reads work with the game CLOSED (the snapshot persists); only account_scan
+// needs the running client. account_scan is consent + OS gated like the item scan.
+// ===========================================================================
+
+/// Full account scan: one fetch, parse the Account snapshot, store it (silent — a
+/// rebuildable cache, no review modal), and return the fresh Profile.
+#[tauri::command]
+pub async fn account_scan(state: State<'_, Arc<AppState>>) -> AppResult<AccountProfile> {
+    if !gamescan::is_supported() {
+        return Err(AppError::Invalid(
+            "game inventory scan is Linux-only".into(),
+        ));
+    }
+    if !gamescan_db::is_consented(&state.db)? {
+        return Err(AppError::Invalid(
+            "game inventory scan requires consent first".into(),
+        ));
+    }
+    if !gamescan::warframe_running() {
+        return Err(AppError::NotConnected(
+            "Warframe does not appear to be running".into(),
+        ));
+    }
+    let res = gamescan::scan().await?;
+    gamescan_db::record_scan(&state.db, res.account.account_id.as_deref())?;
+    account::store_snapshot(&state.db, &res.account)?;
+    account::get_profile(&state.db)
+}
+
+#[tauri::command]
+pub fn get_account_profile(state: State<'_, Arc<AppState>>) -> AppResult<AccountProfile> {
+    account::get_profile(&state.db)
+}
+
+#[tauri::command]
+pub fn get_account_arsenal(state: State<'_, Arc<AppState>>) -> AppResult<Vec<GearRow>> {
+    account::get_arsenal(&state.db)
+}
+
+#[tauri::command]
+pub fn get_account_resources(state: State<'_, Arc<AppState>>) -> AppResult<Vec<ResourceRow>> {
+    account::get_resources(&state.db)
+}
+
+#[tauri::command]
+pub fn get_account_codex(state: State<'_, Arc<AppState>>) -> AppResult<CodexData> {
+    account::get_codex(&state.db)
 }
 
 // ===========================================================================

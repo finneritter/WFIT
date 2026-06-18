@@ -38,6 +38,13 @@ pub const KEY_LAST_RELIC_SYNC: &str = "last_relic_sync";
 /// are re-seeded from the bundle on the next launch — so a binary update refreshes the
 /// baseline even if the user never clicks "Update game data".
 pub const KEY_RELIC_BUNDLE_VERSION: &str = "relic_bundle_version";
+/// Version marker of the bundled item_manifest.tsv. Re-seeds the item_manifest table
+/// from the bundle on launch when the code's ITEM_MANIFEST_BUNDLE_VERSION differs.
+pub const KEY_ITEM_MANIFEST_BUNDLE_VERSION: &str = "item_manifest_bundle_version";
+/// Stamp of the last item-manifest refresh from WFCD (manual, via "Update game data").
+pub const KEY_LAST_MANIFEST_SYNC: &str = "last_manifest_sync";
+/// Stamp of the last account-snapshot scan (game scan → account_* tables).
+pub const KEY_LAST_ACCOUNT_SCAN: &str = "last_account_scan";
 /// Stamp of the pricing logic that produced the cached prices. When the code's
 /// PRICING_VERSION differs, the derived price caches are wiped and recomputed —
 /// so changes to how prices are derived take effect on the next launch without a

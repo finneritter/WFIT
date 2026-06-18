@@ -16,6 +16,7 @@ mod raw;
 
 pub use arbys::ArbitrationBlock;
 pub use extra::{Invasion, Nightwave, Sortie, SteelPath, Trader, VendorItem};
+pub use raw::star_chart_node_count;
 
 use crate::error::AppResult;
 use chrono::Utc;

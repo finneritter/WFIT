@@ -3,16 +3,19 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AccountProfile,
   ArcaneBreakdown,
   ArcaneDashboard,
   BackupInfo,
   BuyRow,
   CatalogRow,
+  CodexData,
   CrackNowRow,
   CrackPlanRow,
   DucatRow,
   GameDataUpdate,
   GameScanStatus,
+  GearRow,
   ImportRow,
   InventoryRow,
   ItemDetail,
@@ -26,6 +29,7 @@ import type {
   RelicRow,
   RepriceApply,
   RepriceRow,
+  ResourceRow,
   SaleRow,
   ScanApply,
   ScanDiffRow,
@@ -201,3 +205,10 @@ export const gameScanConsent = (phrase: string) => invoke<void>("game_scan_conse
 export const gameScanRevoke = () => invoke<void>("game_scan_revoke");
 export const gameScanPreview = () => invoke<ScanDiffRow[]>("game_scan_preview");
 export const gameScanApply = (rows: ScanApply[]) => invoke<number>("game_scan_apply", { rows });
+
+// account section (scan-populated Profile / Codex / Resources / Arsenal)
+export const accountScan = () => invoke<AccountProfile>("account_scan");
+export const getAccountProfile = () => invoke<AccountProfile>("get_account_profile");
+export const getAccountArsenal = () => invoke<GearRow[]>("get_account_arsenal");
+export const getAccountResources = () => invoke<ResourceRow[]>("get_account_resources");
+export const getAccountCodex = () => invoke<CodexData>("get_account_codex");

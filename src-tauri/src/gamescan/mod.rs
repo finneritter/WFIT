@@ -13,7 +13,9 @@
 //! `VirtualQueryEx`/`ReadProcessMemory`). Signature `accountId=<24 hex>&nonce=<digits>`,
 //! endpoint `mobile.warframe.com/api/inventory.php`. No upstream code is copied.
 
+pub mod account;
 pub mod consent;
+pub mod fingerprint;
 pub mod map;
 
 // The portable scan core is always compiled so its tests run on every host; it's
@@ -98,9 +100,16 @@ pub fn warframe_running() -> bool {
     false
 }
 
-/// Perform a live scan: process → memory (accountId + nonce) → DE inventory
-/// endpoint → normalized `RawInventory`. Linux + Windows.
-pub async fn scan() -> AppResult<RawInventory> {
+/// One scan's two parses of the SAME inventory.php blob: the tradeable-item inventory
+/// (existing item/relic path) and the Account snapshot (Account screen).
+pub struct ScanResult {
+    pub inventory: RawInventory,
+    pub account: account::AccountSnapshot,
+}
+
+/// Perform a live scan: process → memory (accountId + nonce) → DE inventory endpoint →
+/// one blob parsed two ways (`RawInventory` + `AccountSnapshot`). Linux + Windows.
+pub async fn scan() -> AppResult<ScanResult> {
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     {
         real_scan().await
@@ -114,7 +123,7 @@ pub async fn scan() -> AppResult<RawInventory> {
 }
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-async fn real_scan() -> AppResult<RawInventory> {
+async fn real_scan() -> AppResult<ScanResult> {
     use crate::error::AppError;
 
     let pid = process::find_pid()
@@ -144,7 +153,16 @@ async fn real_scan() -> AppResult<RawInventory> {
 
     let json = api::fetch_inventory(&session.account_id, &session.nonce).await?;
     let mut inv = map::parse_inventory(&json);
-    inv.account_id = Some(session.account_id); // trust the scanned id over the body
-    tracing::info!(lines = inv.items.len(), "gamescan: parsed inventory");
-    Ok(inv)
+    inv.account_id = Some(session.account_id.clone()); // trust the scanned id over the body
+    let mut acct = account::parse_account(&json);
+    acct.account_id = Some(session.account_id);
+    tracing::info!(
+        lines = inv.items.len(),
+        gear = acct.gear.len(),
+        "gamescan: parsed inventory + account"
+    );
+    Ok(ScanResult {
+        inventory: inv,
+        account: acct,
+    })
 }

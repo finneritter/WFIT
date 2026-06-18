@@ -191,6 +191,12 @@ pub(super) fn node_info(id: &str) -> Option<&'static NodeInfo> {
     NODES.get(id)
 }
 
+/// Count of real star-chart mission nodes (SolNode-prefixed) — the denominator for the
+/// Account screen's star-chart completion %. Excludes clan/settlement/key pseudo-nodes.
+pub fn star_chart_node_count() -> usize {
+    NODES.keys().filter(|k| k.starts_with("SolNode")).count()
+}
+
 static NODES: Lazy<HashMap<&'static str, NodeInfo>> = Lazy::new(|| {
     include_str!("data/sol_nodes.tsv")
         .lines()

@@ -415,6 +415,85 @@ export interface ScanApply {
   ranks: RankQty[];
 }
 
+// Account section (Profile · Codex · Resources · Arsenal) — mirrors src-tauri/src/types.rs
+export interface IntrinsicRow {
+  skill_key: string;
+  label: string;
+  rank: number;
+}
+export interface SyndicateRow {
+  tag: string;
+  label: string;
+  standing: number;
+  title: string | null;
+}
+export interface AccountProfile {
+  has_data: boolean;
+  scanned_at: string | null;
+  mastery_rank: number;
+  mr_into_next: number;
+  mr_needed: number;
+  equipped_glyph: string | null;
+  equipped_glyph_name: string | null;
+  created: string | null;
+  credits: number;
+  platinum: number;
+  regal_aya: number;
+  endo: number;
+  trades_remaining: number;
+  gifts_remaining: number;
+  nodes_completed: number;
+  nodes_total: number;
+  total_missions: number;
+  daily_focus: number;
+  focus_xp: number;
+  login_streak: number;
+  guild_id: string | null;
+  alignment: string | null;
+  training_date: string | null;
+  total_mastery_points: number;
+  intrinsics: IntrinsicRow[];
+  syndicates: SyndicateRow[];
+}
+export interface GearRow {
+  unique_name: string;
+  display_name: string;
+  category: string;
+  icon_url: string | null;
+  slug: string | null;
+  rank: number;
+  max_rank: number;
+  mastered: boolean;
+  mastery_req: number | null;
+}
+export interface ResourceRow {
+  unique_name: string;
+  display_name: string;
+  kind: string;
+  icon_url: string | null;
+  slug: string | null;
+  count: number;
+}
+export interface CodexCategory {
+  category: string;
+  owned: number;
+  total: number;
+  mastered: number;
+}
+export interface LoreScanRow {
+  display_name: string;
+  scans: number;
+}
+export interface CodexData {
+  has_data: boolean;
+  categories: CodexCategory[];
+  total_owned: number;
+  total_items: number;
+  total_mastered: number;
+  total_mastery_points: number;
+  lore_scans: LoreScanRow[];
+}
+
 // Worldstate (Rotation)
 export interface Cycle {
   id: string;
@@ -522,6 +601,8 @@ export interface GameDataUpdate {
   relics_new: number;
   relics_total: number;
   relics_refreshed: boolean;
+  manifest_total: number;
+  manifest_refreshed: boolean;
 }
 // One reward in a relic's drop table (for the To-crack expandable detail).
 export interface CrackDrop {

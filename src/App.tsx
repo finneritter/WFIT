@@ -21,6 +21,7 @@ import { clsx } from "./lib/format";
 import { type SearchKeyHandler, SearchProvider } from "./lib/searchContext";
 import { PAGE_SCHEMAS } from "./lib/searchSchemas";
 import { attachSmoothScroll } from "./lib/smoothScroll";
+import { Account } from "./routes/Account";
 import { Arcanes } from "./routes/Arcanes";
 // Routes are imported eagerly. This is a local desktop app — the bundle loads
 // from disk, so code-splitting saves nothing at startup and only adds a chunk-
@@ -55,6 +56,7 @@ const TITLES: Record<ScreenId, string> = {
   arcanes: "Arcanes",
   relics: "Relics",
   rotation: "Rotation",
+  account: "Account",
   sold: "Sold History",
   settings: "Settings",
 };
@@ -247,6 +249,7 @@ export default function App() {
                 {screen === "arcanes" && <Arcanes onOpen={open} />}
                 {screen === "relics" && <Relics onOpen={open} onNavigate={navigate} />}
                 {screen === "rotation" && <Rotation onOpen={open} />}
+                {screen === "account" && <Account onOpen={open} onNavigate={navigate} />}
                 {screen === "sold" && <SoldHistory onOpen={open} />}
                 {screen === "settings" && <Settings onNavigate={navigate} />}
               </ErrorBoundary>

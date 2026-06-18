@@ -8,11 +8,13 @@ import type {
   CatalogRow,
   CrackPlanRow,
   DucatRow,
+  GearRow,
   InventoryRow,
   ListingRow,
   OwnedArcane,
   RecommendationRow,
   RelicRow,
+  ResourceRow,
   SaleRow,
   SetRow,
   TrendRow,
@@ -370,6 +372,44 @@ export const trendsSchema: SearchSchema<TrendRow> = (() => {
 /** Screens whose rows the topbar query filters. Screens absent here fall back
  *  to the global catalog search: home, rotation, settings — and market, which
  *  keeps its own screener search box (it uses marketSchema directly). */
+const GEAR_CATEGORIES = [
+  "warframe",
+  "primary",
+  "secondary",
+  "melee",
+  "companion",
+  "archwing",
+  "necramech",
+  "amp",
+  "special",
+  "railjack",
+] as const;
+const RESOURCE_KINDS = ["resource", "consumable", "booster", "fusion_treasure"] as const;
+
+// Arsenal tab (owned gear). The Account screen registers this as its page schema;
+// the Resources tab compiles `resourcesSchema` against the same topbar text.
+export const arsenalSchema: SearchSchema<GearRow> = {
+  text: (r) => `${r.display_name} ${r.category}`,
+  is: {
+    mastered: { test: (r) => r.mastered, hint: "fully ranked" },
+    tradeable: { test: (r) => r.slug != null, hint: "opens in the market drawer" },
+  },
+  fields: {
+    cat: { kind: "enum", get: (r) => r.category, values: GEAR_CATEGORIES, hint: "gear category" },
+    rank: { kind: "number", get: (r) => r.rank, hint: "current rank" },
+    mr: { kind: "number", get: (r) => r.mastery_req ?? 0, hint: "MR requirement" },
+  },
+};
+
+export const resourcesSchema: SearchSchema<ResourceRow> = {
+  text: (r) => `${r.display_name} ${r.kind}`,
+  is: {},
+  fields: {
+    kind: { kind: "enum", get: (r) => r.kind, values: RESOURCE_KINDS, hint: "resource kind" },
+    count: { kind: "number", get: (r) => r.count, hint: "owned count" },
+  },
+};
+
 export const PAGE_SCHEMAS: Partial<Record<ScreenId, AnySearchSchema>> = {
   inventory: inventorySchema,
   watchlist: watchlistSchema,
@@ -381,6 +421,7 @@ export const PAGE_SCHEMAS: Partial<Record<ScreenId, AnySearchSchema>> = {
   sold: soldSchema,
   listings: listingsSchema,
   trends: trendsSchema,
+  account: arsenalSchema,
 };
 
 export const PAGE_PLACEHOLDER: Partial<Record<ScreenId, string>> = {
@@ -394,6 +435,7 @@ export const PAGE_PLACEHOLDER: Partial<Record<ScreenId, string>> = {
   sold: "Search sales…  try days<7 unit>20",
   listings: "Search listings…  try is:undercut",
   trends: "Search trends…  try delta>10 is:owned",
+  account: "Search arsenal…  try cat:warframe is:mastered rank<30",
 };
 
 export const GLOBAL_PLACEHOLDER = "Search all items…  (ininv: to scope to inventory)";

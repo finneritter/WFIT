@@ -121,15 +121,7 @@ pub fn parse_inventory(json: &Value) -> RawInventory {
 fn rank_for(array_key: &str, entry: &Value) -> Option<i64> {
     match array_key {
         "RawUpgrades" => Some(0),
-        "Upgrades" => {
-            let lvl = entry
-                .get("UpgradeFingerprint")
-                .and_then(|v| v.as_str())
-                .and_then(|s| serde_json::from_str::<Value>(s).ok())
-                .and_then(|fp| fp.get("lvl").and_then(|v| v.as_i64()))
-                .unwrap_or(0);
-            Some(lvl)
-        }
+        "Upgrades" => Some(super::fingerprint::parse_fingerprint(entry).0),
         _ => None,
     }
 }

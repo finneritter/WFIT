@@ -53,6 +53,10 @@ export const keys = {
   listings: ["listings"] as const,
   recommendations: ["recommendations"] as const,
   gameScan: ["gameScan"] as const,
+  accountProfile: ["accountProfile"] as const,
+  accountArsenal: ["accountArsenal"] as const,
+  accountResources: ["accountResources"] as const,
+  accountCodex: ["accountCodex"] as const,
   backups: ["backups"] as const,
 };
 
@@ -689,6 +693,39 @@ export function useGameScanApply() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.gameScan });
       invalidateInventoryDerived(qc);
+    },
+  });
+}
+
+// ---- account section ----
+export const useAccountProfile = () =>
+  useQuery({ queryKey: keys.accountProfile, queryFn: api.getAccountProfile });
+export const useAccountArsenal = () =>
+  useQuery({ queryKey: keys.accountArsenal, queryFn: api.getAccountArsenal });
+export const useAccountResources = () =>
+  useQuery({ queryKey: keys.accountResources, queryFn: api.getAccountResources });
+export const useAccountCodex = () =>
+  useQuery({ queryKey: keys.accountCodex, queryFn: api.getAccountCodex });
+
+function invalidateAccount(qc: QC) {
+  for (const k of [
+    keys.accountProfile,
+    keys.accountArsenal,
+    keys.accountResources,
+    keys.accountCodex,
+  ]) {
+    qc.invalidateQueries({ queryKey: k });
+  }
+}
+
+export function useAccountScan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.accountScan(),
+    onSuccess: (profile) => {
+      qc.setQueryData(keys.accountProfile, profile);
+      invalidateAccount(qc);
+      qc.invalidateQueries({ queryKey: keys.gameScan });
     },
   });
 }

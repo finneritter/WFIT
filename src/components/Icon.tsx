@@ -36,6 +36,8 @@ const PATHS: Record<string, string> = {
   chevrons: "M11 17l-5-5 5-5M18 17l-5-5 5-5",
   // feather "home" — Dashboard nav item
   home: "M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10",
+  // feather "user" — Account screen
+  user: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
 };
 
 export const Icon = memo(function Icon({ name }: { name: string }) {

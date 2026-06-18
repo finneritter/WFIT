@@ -268,6 +268,11 @@ pub fn run() {
             commands::game_scan_revoke,
             commands::game_scan_preview,
             commands::game_scan_apply,
+            commands::account_scan,
+            commands::get_account_profile,
+            commands::get_account_arsenal,
+            commands::get_account_resources,
+            commands::get_account_codex,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -485,6 +490,13 @@ async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
         .and_then(|()| relic_data::load_into_memory(&state.db))
     {
         tracing::warn!(error = %e, "relic data load failed; using bundled defaults");
+    }
+
+    // 1.7) Item manifest (Account screen's non-tradeable name/icon/mastery source):
+    // seed from the bundled TSV (or re-seed on a newer bundle). Live refresh via
+    // "Update game data". Same bundled-baseline pattern as relics.
+    if let Err(e) = crate::db::account::seed_if_empty_or_stale(&state.db) {
+        tracing::warn!(error = %e, "item manifest seed failed; Account names may be sparse");
     }
 
     // 2+3) Owned (then watchlist) pricing — the phase the inventory value depends on.

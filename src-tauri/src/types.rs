@@ -166,13 +166,15 @@ pub struct GameDataProgress {
 /// Result summary of the "Update game data" action (Settings → Data & cache).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameDataUpdate {
-    pub catalog_new: i64,       // tradeable items added this run
-    pub catalog_total: i64,     // total catalog items after
-    pub vault_refreshed: bool,  // vault status fetched from WFCD this run
-    pub sets_synced: i64,       // set-membership rows written
-    pub relics_new: i64,        // distinct relics added this run
-    pub relics_total: i64,      // total distinct relics after
-    pub relics_refreshed: bool, // relic data fetched from WFCD this run
+    pub catalog_new: i64,         // tradeable items added this run
+    pub catalog_total: i64,       // total catalog items after
+    pub vault_refreshed: bool,    // vault status fetched from WFCD this run
+    pub sets_synced: i64,         // set-membership rows written
+    pub relics_new: i64,          // distinct relics added this run
+    pub relics_total: i64,        // total distinct relics after
+    pub relics_refreshed: bool,   // relic data fetched from WFCD this run
+    pub manifest_total: i64,      // total item_manifest rows after
+    pub manifest_refreshed: bool, // item manifest fetched from WFCD this run
 }
 
 /// One reward row inside a [`CrackPlanRow`]'s drop table (for the expandable detail).
@@ -702,4 +704,112 @@ pub struct ScanApply {
     pub scan_qty: i64,
     #[serde(default)]
     pub ranks: Vec<RankQty>,
+}
+
+// ---------------------------------------------------------------------------
+// Account section (Profile · Codex · Resources · Arsenal). Finished display rows
+// assembled from the persisted account_* snapshot + item_manifest/catalog joins.
+// ---------------------------------------------------------------------------
+
+/// One intrinsic / Railjack-Drifter skill (finished, for the Profile tab).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IntrinsicRow {
+    pub skill_key: String,
+    pub label: String, // friendly name derived from the DE key
+    pub rank: i64,
+}
+
+/// One syndicate's standing (finished, for the Profile tab).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyndicateRow {
+    pub tag: String,
+    pub label: String, // friendly syndicate name
+    pub standing: i64,
+    pub title: Option<String>,
+}
+
+/// The Profile tab payload — the persisted profile row + derived MR progress, total
+/// mastery points, intrinsics and syndicates. `has_data` is false before the first scan.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountProfile {
+    pub has_data: bool,
+    pub scanned_at: Option<String>,
+    pub mastery_rank: i64,
+    pub mr_into_next: i64,              // affinity earned into the current rank
+    pub mr_needed: i64,                 // affinity span of the current rank
+    pub equipped_glyph: Option<String>, // raw DE avatar path
+    pub equipped_glyph_name: Option<String>, // derived label
+    pub created: Option<String>,
+    pub credits: i64,
+    pub platinum: i64,
+    pub regal_aya: i64,
+    pub endo: i64,
+    pub trades_remaining: i64,
+    pub gifts_remaining: i64,
+    pub nodes_completed: i64,
+    pub nodes_total: i64,
+    pub total_missions: i64,
+    pub daily_focus: i64,
+    pub focus_xp: i64,
+    pub login_streak: i64,
+    pub guild_id: Option<String>,
+    pub alignment: Option<String>,
+    pub training_date: Option<String>,
+    pub total_mastery_points: i64,
+    pub intrinsics: Vec<IntrinsicRow>,
+    pub syndicates: Vec<SyndicateRow>,
+}
+
+/// One owned arsenal item (Arsenal tab + Codex). `slug` is Some only for items that
+/// match a tradeable catalog entry (those open the Drawer).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GearRow {
+    pub unique_name: String,
+    pub display_name: String,
+    pub category: String,
+    pub icon_url: Option<String>,
+    pub slug: Option<String>,
+    pub rank: i64,
+    pub max_rank: i64,
+    pub mastered: bool,
+    pub mastery_req: Option<i64>,
+}
+
+/// One owned resource/consumable/booster (Resources tab).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceRow {
+    pub unique_name: String,
+    pub display_name: String,
+    pub kind: String,
+    pub icon_url: Option<String>,
+    pub slug: Option<String>,
+    pub count: i64,
+}
+
+/// Collection progress for one gear category (Codex tab).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexCategory {
+    pub category: String,
+    pub owned: i64,
+    pub total: i64,
+    pub mastered: i64,
+}
+
+/// One Cephalon Fragment / lore scan (Codex tab).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoreScanRow {
+    pub display_name: String,
+    pub scans: i64,
+}
+
+/// The Codex tab payload — per-category collection %, totals, lore scans.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexData {
+    pub has_data: bool,
+    pub categories: Vec<CodexCategory>,
+    pub total_owned: i64,
+    pub total_items: i64,
+    pub total_mastered: i64,
+    pub total_mastery_points: i64,
+    pub lore_scans: Vec<LoreScanRow>,
 }

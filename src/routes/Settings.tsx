@@ -536,8 +536,11 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
             {upd.vault_refreshed ? "vault refreshed · " : "vault unchanged · "}
             {`${upd.sets_synced} set parts · `}
             {upd.relics_refreshed
-              ? `+${upd.relics_new} relic${upd.relics_new === 1 ? "" : "s"} (${upd.relics_total} total)`
-              : "relics unchanged"}
+              ? `+${upd.relics_new} relic${upd.relics_new === 1 ? "" : "s"} (${upd.relics_total} total) · `
+              : "relics unchanged · "}
+            {upd.manifest_refreshed
+              ? `item manifest refreshed (${upd.manifest_total} items)`
+              : "manifest unchanged"}
           </div>
         ) : null}
         <Row
