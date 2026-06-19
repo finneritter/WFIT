@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WFIT — Account (Option B refinements)</title>
+    <link rel="stylesheet" href="theme.css" />
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      #root { height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" src="design-canvas.jsx"></script>
+    <script type="text/babel">
+      /* ============================================================
+         WFIT Account — Option B (Centered profile) refinements.
+         Three takes on the same centered concept, all theme.css.
+         ============================================================ */
+      const ACT = [
+        ["today", "Mesa Prime Set", "MP", "t-legend", "sold", "+485"],
+        ["today", "Arcane Energize", "EN", "t-legend", "sold", "+380"],
+        ["4h", "Serration ×3", "SR", "t-rare", "sold", "+135"],
+        ["8h", "Khora Prime Blueprint", "KP", "t-exotic", "bought", "-96"],
+        ["1d", "Condition Overload", "CO", "t-legend", "sold", "+120"],
+        ["2d", "Loki Prime Neuroptics", "LP", "t-exotic", "bought", "-78"],
+        ["3d", "Gauss Prime Set", "GP", "t-exotic", "sold", "+280"],
+      ];
+      const BAL = ["1,240", "755", "375", "240", "336", "216", "294"];
+      const SRC = [
+        ["Prime set sales", "38", "6,420"],
+        ["Part flips", "51", "3,180"],
+        ["Arcanes", "12", "2,940"],
+        ["Mods & misc", "26", "980"],
+      ];
+      const STRIP = [
+        { k: "Platinum", v: "1,240p", c: "var(--plat)" },
+        { k: "Portfolio", v: "24,310p" },
+        { k: "Ducats", v: "18,640d", c: "var(--ducat)" },
+        { k: "Distinct items", v: "214" },
+        { k: "Sets complete", v: "54" },
+        { k: "Codex", v: "68%" },
+      ];
+
+      /* ---- shared blocks ---- */
+      function Emb({ size = 92, glow }) {
+        return (
+          <div style={{ width: size, height: size, flex: "none", border: "1px solid var(--line-2)", background: "#16131c", position: "relative", overflow: "hidden", boxShadow: glow ? "0 0 0 5px rgba(124,116,160,.08)" : "none" }}>
+            <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(45deg, rgba(124,116,160,.20) 0 6px, transparent 6px 12px)" }} />
+            <svg viewBox="0 0 48 48" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", padding: size * 0.16, boxSizing: "border-box" }}>
+              <polygon points="24,4 42,14 42,34 24,44 6,34 6,14" fill="none" stroke="var(--soft)" strokeWidth="1.4" />
+              <polygon points="24,14 33,19 33,29 24,34 15,29 15,19" fill="none" stroke="var(--accent)" strokeWidth="1.1" />
+              <circle cx="24" cy="24" r="2.6" fill="var(--accent)" />
+            </svg>
+          </div>
+        );
+      }
+      function MRBadge() {
+        return (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, border: "1px solid var(--line-2)", padding: "4px 10px", background: "var(--panel)" }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".1em", color: "var(--faint)", textTransform: "uppercase" }}>MR</span>
+            <b style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>27</b>
+            <span style={{ fontSize: 11, color: "var(--soft)" }}>Legendary 2</span>
+          </span>
+        );
+      }
+      function MRRing({ size = 88, pct = 72 }) {
+        const r = size / 2 - 5, c = 2 * Math.PI * r;
+        return (
+          <div style={{ width: size, height: size, position: "relative", flex: "none" }}>
+            <svg viewBox={`0 0 ${size} ${size}`} style={{ width: "100%", height: "100%", transform: "rotate(-90deg)" }}>
+              <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--line)" strokeWidth="3" />
+              <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--accent)" strokeWidth="3" strokeDasharray={`${(c * pct) / 100} ${c}`} strokeLinecap="butt" />
+            </svg>
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+              <b style={{ fontFamily: "var(--mono)", fontSize: 26, fontWeight: 800, letterSpacing: "-.04em", lineHeight: 1 }}>27</b>
+              <span style={{ fontSize: 8, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)", marginTop: 1 }}>Rank</span>
+            </div>
+          </div>
+        );
+      }
+      function XP({ width = "100%" }) {
+        return (
+          <div style={{ width }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--faint)", fontFamily: "var(--mono)", marginBottom: 4 }}>
+              <span>MR 27 → 28</span>
+              <span>184,200 / 220,000</span>
+            </div>
+            <div className="set-bar"><i style={{ width: "72%" }} /></div>
+          </div>
+        );
+      }
+      function ActTable({ rows, balance }) {
+        return (
+          <table className="dtable">
+            <thead>
+              <tr>
+                <th>When</th><th>Item</th><th>Type</th><th className="r">Δ Plat</th>
+                {balance && <th className="r">Balance</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((a, i) => (
+                <tr key={i}>
+                  <td className="when">{a[0]}</td>
+                  <td><div className="dnm"><div className={"gl " + a[3]}>{a[2]}</div><div className="di"><span className="nm">{a[1]}</span></div></div></td>
+                  <td>{a[4] === "sold" ? <span className="badge at">sold</span> : <span className="badge">bought</span>}</td>
+                  <td className={"r num " + (a[5][0] === "+" ? "pos" : "neg")}>{a[5]}p</td>
+                  {balance && <td className="r num" style={{ color: "var(--plat)" }}>{BAL[i]}p</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      }
+      function SrcTable() {
+        const max = 6420;
+        return (
+          <table className="dtable">
+            <thead><tr><th>Source</th><th className="r">Trades</th><th className="r">Plat</th></tr></thead>
+            <tbody>
+              {SRC.map((s, i) => (
+                <tr key={i}>
+                  <td>{s[0]}</td>
+                  <td className="r num">{s[1]}</td>
+                  <td className="r num" style={{ color: "var(--plat)" }}>{s[2]}p</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      }
+      /* tabbed platinum panel (Activity / By source) */
+      function Ledger({ balance }) {
+        const [tab, setTab] = React.useState("act");
+        return (
+          <div className="tpanel" style={{ textAlign: "left" }}>
+            <div className="tpanel-h">
+              <h3>Platinum</h3>
+              <span style={{ display: "inline-flex", gap: 4, marginLeft: 10 }}>
+                <button className="chip" aria-pressed={tab === "act"} onClick={() => setTab("act")}>Activity</button>
+                <button className="chip" aria-pressed={tab === "src"} onClick={() => setTab("src")}>By source</button>
+              </span>
+              <span className="meta">{tab === "act" ? "last 7 days" : "90 days"}</span>
+            </div>
+            {tab === "act" ? <ActTable rows={ACT} balance={balance} /> : <SrcTable />}
+          </div>
+        );
+      }
+      const eyebrow = { fontSize: 12, letterSpacing: ".18em", textTransform: "uppercase", color: "var(--faint)", fontWeight: 600 };
+
+      /* ============================== B1 · Crest banner ============================== */
+      function B1() {
+        return (
+          <div style={{ color: "var(--ink)", fontFamily: "var(--sans)", background: "var(--bg)", minHeight: "100%" }}>
+            {/* hero banner */}
+            <div style={{ position: "relative", textAlign: "center", padding: "34px 32px 24px", borderBottom: "1px solid var(--line)", overflow: "hidden" }}>
+              <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 120% at 50% -20%, rgba(124,116,160,.12), transparent 60%)", pointerEvents: "none" }} />
+              <div style={{ position: "relative", display: "flex", justifyContent: "center", marginBottom: 14 }}><Emb size={96} glow /></div>
+              <div style={{ ...eyebrow, position: "relative" }}>Tenno Profile</div>
+              <div style={{ position: "relative", fontSize: 60, fontWeight: 800, letterSpacing: "-.03em", lineHeight: 1, margin: "6px 0 14px" }}>bigfinnn</div>
+              <div style={{ position: "relative", display: "flex", justifyContent: "center", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <MRBadge />
+                <span style={{ fontSize: 12, color: "var(--soft)" }}>Clan · Void Syndicate · Joined 2018</span>
+              </div>
+              <div style={{ position: "relative", maxWidth: 460, margin: "16px auto 0" }}><XP /></div>
+            </div>
+            {/* stat cards */}
+            <div style={{ padding: "18px 32px 0" }}>
+              <div className="statband" style={{ gridTemplateColumns: "repeat(6, 1fr)" }}>
+                {STRIP.map((s, i) => (
+                  <div className="statbox" key={i}>
+                    <div className="k">{s.k}</div>
+                    <div className="v num" style={{ color: s.c || "var(--ink)" }}>{s.v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ padding: "16px 32px 30px" }}><Ledger /></div>
+          </div>
+        );
+      }
+
+      /* ============================== B2 · Clean ledger ============================== */
+      function B2() {
+        return (
+          <div style={{ padding: "36px 36px 30px", textAlign: "center", color: "var(--ink)", fontFamily: "var(--sans)", background: "var(--bg)", minHeight: "100%" }}>
+            <div style={{ display: "flex", justifyContent: "center" }}><Emb size={88} /></div>
+            <div style={{ ...eyebrow, marginTop: 16 }}>Tenno Profile</div>
+            <div style={{ fontSize: 58, fontWeight: 800, letterSpacing: "-.03em", lineHeight: 1, margin: "6px 0 12px" }}>bigfinnn</div>
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+              <MRBadge />
+              <span style={{ fontSize: 12, color: "var(--soft)" }}>Clan · Void Syndicate · Joined 2018</span>
+            </div>
+            <div style={{ maxWidth: 520, margin: "0 auto 24px" }}><XP /></div>
+            <div style={{ display: "flex", justifyContent: "center", borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)" }}>
+              {STRIP.map((s, i) => (
+                <div key={i} style={{ padding: "15px 28px", borderLeft: i ? "1px solid var(--line)" : "none" }}>
+                  <div style={{ fontFamily: "var(--mono)", fontSize: 23, fontWeight: 700, letterSpacing: "-.03em", color: s.c || "var(--ink)" }}>{s.v}</div>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--faint)", marginTop: 3 }}>{s.k}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 24 }}><Ledger balance /></div>
+          </div>
+        );
+      }
+
+      /* ============================== B3 · Identity + split ============================== */
+      function B3() {
+        return (
+          <div style={{ color: "var(--ink)", fontFamily: "var(--sans)", background: "var(--bg)", minHeight: "100%" }}>
+            <div style={{ textAlign: "center", padding: "34px 32px 22px", borderBottom: "1px solid var(--line)" }}>
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 22 }}>
+                <MRRing size={92} />
+                <div style={{ textAlign: "left" }}>
+                  <div style={eyebrow}>Tenno Profile</div>
+                  <div style={{ fontSize: 56, fontWeight: 800, letterSpacing: "-.03em", lineHeight: 1, margin: "4px 0 8px" }}>bigfinnn</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ fontSize: 12, color: "var(--soft)" }}>Legendary 2 · Clan · Void Syndicate</span>
+                  </div>
+                </div>
+                <Emb size={72} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "center", gap: 0, marginTop: 18 }}>
+                {STRIP.map((s, i) => (
+                  <div key={i} style={{ padding: "0 22px", borderLeft: i ? "1px solid var(--line)" : "none" }}>
+                    <div style={{ fontFamily: "var(--mono)", fontSize: 19, fontWeight: 700, letterSpacing: "-.03em", color: s.c || "var(--ink)" }}>{s.v}</div>
+                    <div style={{ fontSize: 9.5, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--faint)", marginTop: 2 }}>{s.k}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 14, padding: "20px 32px 30px" }}>
+              <div className="tpanel">
+                <div className="tpanel-h"><h3>Platinum activity</h3><span className="meta">last 7 days</span></div>
+                <ActTable rows={ACT} />
+              </div>
+              <div className="tpanel">
+                <div className="tpanel-h"><h3>By source</h3><span className="meta">90d</span></div>
+                <SrcTable />
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function App() {
+        return (
+          <DesignCanvas>
+            <DCSection id="b" title="Account · Option B" subtitle="Centered profile, three refinements. Tabbed platinum panel is live — click Activity / By source. Focus any one (⤢) to view full-size.">
+              <DCArtboard id="B1" label="B1 · Crest banner" width={1080} height={780} style={{ background: "var(--bg)" }}><B1 /></DCArtboard>
+              <DCArtboard id="B2" label="B2 · Clean ledger" width={1080} height={780} style={{ background: "var(--bg)" }}><B2 /></DCArtboard>
+              <DCArtboard id="B3" label="B3 · Rank ring + split" width={1080} height={560} style={{ background: "var(--bg)" }}><B3 /></DCArtboard>
+            </DCSection>
+          </DesignCanvas>
+        );
+      }
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

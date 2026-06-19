@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WFIT — Account profile</title>
+    <link rel="stylesheet" href="theme.css" />
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      #root { height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" src="design-canvas.jsx"></script>
+    <script type="text/babel">
+      /* ============================================================
+         WFIT Account profile — centered identity (Option B) with a
+         4-section switcher: Resources · Stats · Armory · Codex.
+         All theme.css. Section selector is live.
+         ============================================================ */
+      const RES = [
+        ["Ferrite", "Fe", "1.24M", "t-basic"], ["Alloy Plate", "Al", "842K", "t-basic"],
+        ["Nano Spores", "Ns", "1.51M", "t-basic"], ["Salvage", "Sv", "690K", "t-basic"],
+        ["Rubedo", "Ru", "388K", "t-rare"], ["Plastids", "Pl", "214K", "t-rare"],
+        ["Polymer Bundle", "Pb", "410K", "t-basic"], ["Circuits", "Ci", "96K", "t-basic"],
+        ["Oxium", "Ox", "58.4K", "t-rare"], ["Cryotic", "Cy", "88K", "t-rare"],
+        ["Orokin Cell", "Oc", "1,240", "t-exotic"], ["Control Module", "Cm", "820", "t-exotic"],
+        ["Neural Sensors", "Nu", "640", "t-exotic"], ["Neurodes", "Nd", "1,180", "t-exotic"],
+        ["Argon Crystal", "Ar", "12", "t-legend"], ["Kuva", "Kv", "142K", "t-legend"],
+      ];
+      const CAREER = [
+        ["Hours played", "1,640", ""], ["Enemies defeated", "1.84", "M"],
+        ["Missions cleared", "9,420", ""], ["Star chart", "98", "%"],
+      ];
+      const MOST_USED = [["Saryn Prime", "SP", "t-legend", 28], ["Mesa Prime", "MP", "t-legend", 19], ["Wisp", "WI", "t-rare", 14], ["Octavia Prime", "OP", "t-exotic", 11], ["Khora", "KH", "t-exotic", 8]];
+      const MISSIONS = [["Survival", 32], ["Exterminate", 21], ["Defense", 18], ["Void Fissure", 15], ["Capture", 14]];
+      const PSTAT = [
+        ["Accuracy", "42", "%"], ["Deaths", "318", ""], ["Revives", "1,204", ""], ["Pickups", "284", "K"],
+      ];
+      const TIERLBL = { "t-basic": "Common", "t-rare": "Uncommon", "t-exotic": "Rare", "t-legend": "Special" };
+      const TIERVAR = { "t-basic": "var(--t-basic)", "t-rare": "var(--t-rare)", "t-exotic": "var(--t-exotic)", "t-legend": "var(--t-legend)" };
+      const ARM = [
+        ["Warframes", [["Saryn Prime", "SP", "t-legend", 5], ["Mesa Prime", "MP", "t-legend", 4], ["Octavia Prime", "OP", "t-exotic", 6], ["Wisp", "WI", "t-rare", 3], ["Revenant", "RV", "t-rare", 2], ["Khora", "KH", "t-exotic", 4]]],
+        ["Primary", [["Kuva Bramma", "KB", "t-legend", 6], ["Rubico Prime", "RP", "t-exotic", 3], ["Soma Prime", "SP", "t-rare", 2]]],
+        ["Secondary", [["Kuva Nukor", "KN", "t-legend", 4], ["Lex Prime", "LP", "t-rare", 1]]],
+        ["Melee", [["Kronen Prime", "KP", "t-exotic", 5], ["Nikana Prime", "NP", "t-rare", 3]]],
+      ];
+      const CDX = [["Warframes", 70], ["Primary", 50], ["Secondary", 58], ["Melee", 44], ["Companions", 67], ["Archwing", 75]];
+      function Stats() {
+        return (
+          <div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", border: "1px solid var(--line-2)", background: "linear-gradient(100deg, var(--panel-2), var(--panel))", marginBottom: 16 }}>
+              {CAREER.map((s, i) => (
+                <div key={i} style={{ padding: "16px 20px", borderLeft: i ? "1px solid var(--line)" : "none" }}>
+                  <div style={{ fontFamily: "var(--mono)", fontSize: 34, fontWeight: 800, letterSpacing: "-.04em", lineHeight: 1 }}>{s[1]}{s[2] && <span style={{ fontSize: 15, color: "var(--faint)", fontWeight: 600 }}>{s[2]}</span>}</div>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--faint)", marginTop: 6 }}>{s[0]}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+              <div className="tpanel">
+                <div className="tpanel-h"><h3>Most-used Warframes</h3><span className="meta">by mission time</span></div>
+                <div style={{ padding: "4px 12px 10px" }}>{MOST_USED.map((m, i) => <BarRow key={i} name={m[0]} mono={m[1]} tier={m[2]} pct={m[3]} max={28} />)}</div>
+              </div>
+              <div className="tpanel">
+                <div className="tpanel-h"><h3>Mission types</h3><span className="meta">last 90 days</span></div>
+                <div style={{ padding: "4px 12px 10px" }}>{MISSIONS.map((m, i) => <BarRow key={i} name={m[0]} pct={m[1]} max={32} />)}</div>
+              </div>
+            </div>
+            <div className="statband" style={{ gridTemplateColumns: "repeat(4, 1fr)", margin: 0 }}>
+              {PSTAT.map((s, i) => (
+                <div className="statbox" key={i}>
+                  <div className="k">{s[0]}</div>
+                  <div className="v num">{s[1]}{s[2] && <span className="u">{s[2]}</span>}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      function Armory() {
+        const [cat, setCat] = React.useState("All");
+        const cats = ["All", ...ARM.map((a) => a[0])];
+        let rows = ARM.flatMap(([type, items]) => items.map((g) => [...g, type]));
+        if (cat !== "All") rows = rows.filter((r) => r[4] === cat);
+        return (
+          <div>
+            <div className="filters" style={{ marginBottom: 10 }}>
+              {cats.map((c) => <button key={c} className="chip" aria-pressed={cat === c} onClick={() => setCat(c)}>{c}</button>)}
+            </div>
+            <table className="dtable">
+              <thead><tr><th>Item</th><th>Type</th><th className="r">Level</th><th className="r">Forma</th><th>Mastery</th></tr></thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td><div className="dnm"><div className={"gl " + r[2]}>{r[1]}</div><div className="di"><span className="nm">{r[0]}</span></div></div></td>
+                    <td style={{ color: "var(--soft)" }}>{r[4]}</td>
+                    <td className="r num">30</td>
+                    <td className="r num">{r[3]}◆</td>
+                    <td><span className="badge at">mastered</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+      const STRIP = [
+        { k: "Platinum", v: "1,240", u: "p", c: "var(--plat)" },
+        { k: "Credits", v: "12.4", u: "M" },
+        { k: "Endo", v: "48,200", u: "" },
+        { k: "Codex", v: "68", u: "%" },
+        { k: "Account age", v: "7", u: "yrs" },
+      ];
+      const TABS = [["resources", "Resources", "16"], ["stats", "Stats", ""], ["armory", "Armory", "13"], ["codex", "Codex", "68%"]];
+
+      function Emb({ size = 86 }) {
+        return (
+          <div style={{ width: size, height: size, flex: "none", border: "1px solid var(--line-2)", background: "#16131c", position: "relative", overflow: "hidden", boxShadow: "0 0 0 5px rgba(124,116,160,.07)" }}>
+            <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(45deg, rgba(124,116,160,.20) 0 6px, transparent 6px 12px)" }} />
+            <svg viewBox="0 0 48 48" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", padding: size * 0.16, boxSizing: "border-box" }}>
+              <polygon points="24,4 42,14 42,34 24,44 6,34 6,14" fill="none" stroke="var(--soft)" strokeWidth="1.4" />
+              <polygon points="24,14 33,19 33,29 24,34 15,29 15,19" fill="none" stroke="var(--accent)" strokeWidth="1.1" />
+              <circle cx="24" cy="24" r="2.6" fill="var(--accent)" />
+            </svg>
+          </div>
+        );
+      }
+      function MRBadge() {
+        return (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, border: "1px solid var(--line-2)", padding: "4px 10px", background: "var(--panel)" }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".1em", color: "var(--faint)", textTransform: "uppercase" }}>MR</span>
+            <b style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>27</b>
+            <span style={{ fontSize: 11, color: "var(--soft)" }}>Legendary 2</span>
+          </span>
+        );
+      }
+      function XP({ width = "100%" }) {
+        return (
+          <div style={{ width }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--faint)", fontFamily: "var(--mono)", marginBottom: 4 }}>
+              <span>MR 27 → 28</span><span>184,200 / 220,000</span>
+            </div>
+            <div className="set-bar"><i style={{ width: "72%" }} /></div>
+          </div>
+        );
+      }
+      const secH = { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--faint)", marginBottom: 8 };
+
+      /* ---- section bodies ---- */
+      function Resources() {
+        const [pinned, setPinned] = React.useState([15, 10, 14]);
+        const [over, setOver] = React.useState(false);
+        const add = (i) => setPinned((p) => (p.includes(i) ? p : [...p, i]));
+        const remove = (i) => setPinned((p) => p.filter((x) => x !== i));
+        return (
+          <div>
+            <div style={secH}>Tracked resources <span style={{ fontFamily: "var(--mono)", color: "var(--faint)", textTransform: "none", letterSpacing: 0 }}>· drag a row up here</span></div>
+            <div
+              onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+              onDragLeave={() => setOver(false)}
+              onDrop={(e) => { e.preventDefault(); setOver(false); const i = +e.dataTransfer.getData("text/plain"); if (!Number.isNaN(i)) add(i); }}
+              style={{ display: "flex", gap: 10, flexWrap: "wrap", minHeight: 104, padding: 12, marginBottom: 20, border: "1px dashed " + (over ? "var(--accent)" : "var(--line-2)"), background: over ? "var(--hover)" : "var(--bg-2)", transition: "background .12s, border-color .12s" }}>
+              {pinned.length === 0 && <div style={{ margin: "auto", color: "var(--faint)", fontSize: 12 }}>Drag a resource up here to feature it</div>}
+              {pinned.map((i) => {
+                const r = RES[i];
+                return (
+                  <div key={i} style={{ position: "relative", width: 156, border: "1px solid var(--line-2)", borderTop: "2px solid " + TIERVAR[r[3]], background: "var(--panel)", padding: "12px 12px 11px" }}>
+                    <button onClick={() => remove(i)} title="Remove" style={{ position: "absolute", top: 4, right: 4, width: 18, height: 18, border: "1px solid var(--line-2)", background: "var(--panel)", color: "var(--faint)", cursor: "pointer", fontSize: 10, lineHeight: 1 }}>✕</button>
+                    <div className={"gl " + r[3]} style={{ width: 34, height: 34, marginBottom: 9 }}>{r[1]}</div>
+                    <div style={{ fontSize: 11, color: "var(--soft)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r[0]}</div>
+                    <div style={{ fontFamily: "var(--mono)", fontSize: 26, fontWeight: 700, letterSpacing: "-.03em", lineHeight: 1.1 }}>{r[2]}</div>
+                    <div style={{ fontSize: 10, color: "var(--faint)", marginTop: 2 }}>{TIERLBL[r[3]]}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={secH}>All resources <span style={{ fontFamily: "var(--mono)", color: "var(--faint)" }}>16</span></div>
+            <table className="dtable">
+              <thead><tr><th style={{ width: 22 }}></th><th>Resource</th><th>Rarity</th><th className="r">Quantity</th></tr></thead>
+              <tbody>
+                {RES.map((r, i) => (
+                  <tr key={i} draggable onDragStart={(e) => e.dataTransfer.setData("text/plain", String(i))} onClick={() => add(i)} style={{ cursor: "grab" }} title="Drag up to track">
+                    <td style={{ color: "var(--faint)", fontSize: 12 }}>⠿</td>
+                    <td><div className="dnm"><div className={"gl " + r[3]}>{r[1]}</div><div className="di"><span className="nm">{r[0]}</span></div></div></td>
+                    <td style={{ color: "var(--soft)" }}>{TIERLBL[r[3]]}</td>
+                    <td className="r num">{r[2]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+      function BarRow({ name, mono, tier, pct, max }) {
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: mono ? "26px 1fr 38px" : "1fr 38px", alignItems: "center", gap: 9, padding: "7px 0" }}>
+            {mono && <div className={"gl " + tier} style={{ width: 24, height: 24 }}>{mono}</div>}
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--soft)", marginBottom: 4 }}>{name}</div>
+              <div style={{ height: 6, background: "var(--line)", position: "relative" }}><i style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: (pct / max) * 100 + "%", background: "var(--accent)" }} /></div>
+            </div>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 11.5, color: "var(--ink)", textAlign: "right" }}>{pct}%</span>
+          </div>
+        );
+      }
+      function Codex() {
+        return (
+          <div>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
+              <div>
+                <span style={{ fontFamily: "var(--mono)", fontSize: 30, fontWeight: 800, letterSpacing: "-.03em" }}>68%</span>
+                <span style={{ fontSize: 12, color: "var(--soft)", marginLeft: 10 }}>complete · 412 / 631 entries</span>
+              </div>
+              <button className="chip">View full codex →</button>
+            </div>
+            {CDX.map((c, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "120px 1fr 44px", alignItems: "center", gap: 12, padding: "9px 0", borderTop: i ? "1px solid var(--line)" : "none" }}>
+                <span style={{ fontSize: 12, color: "var(--soft)" }}>{c[0]}</span>
+                <span style={{ height: 6, background: "var(--line)", position: "relative" }}><i style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: c[1] + "%", background: c[1] >= 70 ? "var(--pos)" : "var(--soft)" }} /></span>
+                <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--ink)", textAlign: "right" }}>{c[1]}%</span>
+              </div>
+            ))}
+          </div>
+        );
+      }
+
+      function Profile() {
+        const [tab, setTab] = React.useState("resources");
+        const Body = { resources: Resources, stats: Stats, armory: Armory, codex: Codex }[tab];
+        return (
+          <div style={{ color: "var(--ink)", fontFamily: "var(--sans)", background: "var(--bg)", minHeight: "100%" }}>
+            {/* identity */}
+            <div style={{ textAlign: "center", padding: "32px 32px 22px" }}>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}><Emb size={88} /></div>
+              <div style={{ fontSize: 12, letterSpacing: ".18em", textTransform: "uppercase", color: "var(--faint)", fontWeight: 600 }}>Tenno Profile</div>
+              <div style={{ fontSize: 56, fontWeight: 800, letterSpacing: "-.03em", lineHeight: 1, margin: "6px 0 12px" }}>bigfinnn</div>
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+                <MRBadge />
+                <span style={{ fontSize: 12, color: "var(--soft)" }}>Clan · Void Syndicate · Joined 2018</span>
+              </div>
+              <div style={{ maxWidth: 480, margin: "0 auto" }}><XP /></div>
+            </div>
+            {/* headline stats */}
+            <div style={{ display: "flex", justifyContent: "center", borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)" }}>
+              {STRIP.map((s, i) => (
+                <div key={i} style={{ padding: "15px 30px", borderLeft: i ? "1px solid var(--line)" : "none", textAlign: "center" }}>
+                  <div style={{ fontFamily: "var(--mono)", fontSize: 24, fontWeight: 700, letterSpacing: "-.03em", color: s.c || "var(--ink)" }}>{s.v}{s.u && <span style={{ fontSize: 12, color: "var(--faint)", fontWeight: 500 }}>{s.u}</span>}</div>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--faint)", marginTop: 3 }}>{s.k}</div>
+                </div>
+              ))}
+            </div>
+            {/* section switcher */}
+            <div style={{ display: "flex", justifyContent: "center", gap: 4, borderBottom: "1px solid var(--line)" }}>
+              {TABS.map(([id, label, n]) => {
+                const on = tab === id;
+                return (
+                  <button key={id} onClick={() => setTab(id)} style={{ padding: "12px 22px", background: "transparent", border: "none", borderBottom: on ? "2px solid var(--accent)" : "2px solid transparent", color: on ? "var(--ink)" : "var(--soft)", fontWeight: on ? 700 : 500, fontSize: 13, cursor: "pointer", fontFamily: "var(--sans)", marginBottom: -1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    {label}{n && <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--faint)" }}>{n}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            {/* section body */}
+            <div style={{ padding: "20px 32px 30px" }}><Body /></div>
+          </div>
+        );
+      }
+
+      function App() {
+        return (
+          <DesignCanvas>
+            <DCSection id="profile" title="Account profile" subtitle="Centered identity + headline stats (Platinum · Credits · Endo · Codex · Age), then a live 4-section switcher. Click Resources / Stats / Armory / Codex.">
+              <DCArtboard id="P" label="Account profile" width={1100} height={820} style={{ background: "var(--bg)" }}><Profile /></DCArtboard>
+            </DCSection>
+          </DesignCanvas>
+        );
+      }
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

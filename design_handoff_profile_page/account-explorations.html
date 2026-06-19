@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WFIT — Account page explorations</title>
+    <link rel="stylesheet" href="theme.css" />
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      #root { height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" src="design-canvas.jsx"></script>
+    <script type="text/babel">
+      /* ============================================================
+         WFIT Account / Tenno Profile — four layout directions.
+         All built from theme.css components (dark, dense, square,
+         mono numerals). Same data, different compositions.
+         ============================================================ */
+      const ACT = [
+        ["today", "Mesa Prime Set", "MP", "t-legend", "sold", "+485"],
+        ["today", "Arcane Energize", "EN", "t-legend", "sold", "+380"],
+        ["4h", "Serration ×3", "SR", "t-rare", "sold", "+135"],
+        ["8h", "Khora Prime Blueprint", "KP", "t-exotic", "bought", "-96"],
+        ["1d", "Condition Overload", "CO", "t-legend", "sold", "+120"],
+        ["2d", "Loki Prime Neuroptics", "LP", "t-exotic", "bought", "-78"],
+        ["3d", "Gauss Prime Set", "GP", "t-exotic", "sold", "+280"],
+      ];
+      const BAL = ["1,240", "755", "375", "240", "336", "216", "294"];
+      const SRC = [
+        ["Prime set sales", "38", "6,420"],
+        ["Part flips", "51", "3,180"],
+        ["Arcanes", "12", "2,940"],
+        ["Mods & misc", "26", "980"],
+      ];
+      const SB = [
+        ["Portfolio value", "24,310", "p"],
+        ["Distinct items", "214", ""],
+        ["Total ducats", "18,640", "d"],
+        ["Sets complete", "54", ""],
+        ["Codex complete", "68", "%"],
+        ["Sold · 30d", "8,920", "p"],
+      ];
+      const STRIP = [
+        { k: "Platinum", v: "1,240p", c: "var(--plat)" },
+        { k: "Portfolio", v: "24,310p" },
+        { k: "Ducats", v: "18,640d", c: "var(--ducat)" },
+        { k: "Distinct items", v: "214" },
+        { k: "Sets complete", v: "54" },
+        { k: "Codex", v: "68%" },
+      ];
+      const BRK = [
+        ["Warframes", 42, "10,210"],
+        ["Weapons", 27, "6,560"],
+        ["Arcanes", 19, "4,620"],
+        ["Mods", 12, "2,920"],
+      ];
+
+      /* ---- shared building blocks ---- */
+      function Emb({ size = 76 }) {
+        return (
+          <div style={{ width: size, height: size, flex: "none", border: "1px solid var(--line-2)", background: "#16131c", position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(45deg, rgba(124,116,160,.20) 0 6px, transparent 6px 12px)" }} />
+            <svg viewBox="0 0 48 48" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", padding: size * 0.16, boxSizing: "border-box" }}>
+              <polygon points="24,4 42,14 42,34 24,44 6,34 6,14" fill="none" stroke="var(--soft)" strokeWidth="1.4" />
+              <polygon points="24,14 33,19 33,29 24,34 15,29 15,19" fill="none" stroke="var(--accent)" strokeWidth="1.1" />
+              <circle cx="24" cy="24" r="2.6" fill="var(--accent)" />
+            </svg>
+          </div>
+        );
+      }
+      function MRBadge() {
+        return (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, border: "1px solid var(--line-2)", padding: "4px 10px", background: "var(--panel)" }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".1em", color: "var(--faint)", textTransform: "uppercase" }}>MR</span>
+            <b style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>27</b>
+            <span style={{ fontSize: 11, color: "var(--soft)" }}>Legendary 2</span>
+          </span>
+        );
+      }
+      function XP({ width = "100%" }) {
+        return (
+          <div style={{ width }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--faint)", fontFamily: "var(--mono)", marginBottom: 4 }}>
+              <span>MR 27 → 28</span>
+              <span>184,200 / 220,000</span>
+            </div>
+            <div className="set-bar"><i style={{ width: "72%" }} /></div>
+          </div>
+        );
+      }
+      function StatBoxes({ cols, style }) {
+        return (
+          <div className="statband" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, ...style }}>
+            {SB.map((s, i) => (
+              <div className="statbox" key={i}>
+                <div className="k">{s[0]}</div>
+                <div className="v num">{s[1]}{s[2] && <span className="u">{s[2]}</span>}</div>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      function ActTable({ rows, balance }) {
+        return (
+          <table className="dtable">
+            <thead>
+              <tr>
+                <th>When</th><th>Item</th><th>Type</th><th className="r">Δ Plat</th>
+                {balance && <th className="r">Balance</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((a, i) => (
+                <tr key={i}>
+                  <td className="when">{a[0]}</td>
+                  <td><div className="dnm"><div className={"gl " + a[3]}>{a[2]}</div><div className="di"><span className="nm">{a[1]}</span></div></div></td>
+                  <td>{a[4] === "sold" ? <span className="badge at">sold</span> : <span className="badge">bought</span>}</td>
+                  <td className={"r num " + (a[5][0] === "+" ? "pos" : "neg")}>{a[5]}p</td>
+                  {balance && <td className="r num" style={{ color: "var(--plat)" }}>{BAL[i]}p</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      }
+      function SrcTable() {
+        return (
+          <table className="dtable">
+            <thead><tr><th>Source</th><th className="r">Trades</th><th className="r">Plat</th></tr></thead>
+            <tbody>
+              {SRC.map((s, i) => (
+                <tr key={i}>
+                  <td>{s[0]}</td>
+                  <td className="r num">{s[1]}</td>
+                  <td className="r num" style={{ color: "var(--plat)" }}>{s[2]}p</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      }
+      const eyebrow = { fontSize: 12, letterSpacing: ".16em", textTransform: "uppercase", color: "var(--faint)", fontWeight: 600 };
+
+      /* ============================== A · Trader banner ============================== */
+      function OptionA() {
+        return (
+          <div style={{ padding: "30px 32px", color: "var(--ink)", fontFamily: "var(--sans)", background: "var(--bg)", minHeight: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 22, paddingBottom: 20, borderBottom: "1px solid var(--line)" }}>
+              <Emb size={84} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={eyebrow}>Tenno Profile</div>
+                <div style={{ fontSize: 52, fontWeight: 800, letterSpacing: "-.03em", lineHeight: 1, margin: "4px 0 10px" }}>bigfinnn</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                  <MRBadge />
+                  <span style={{ fontSize: 12, color: "var(--soft)" }}>Clan · Void Syndicate</span>
+                  <span style={{ fontSize: 12, color: "var(--faint)" }}>Joined 2018 · 1,640 days played</span>
+                </div>
+              </div>
+              <div style={{ textAlign: "right", flex: "none" }}>
+                <div style={{ fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" }}>Platinum balance</div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 44, fontWeight: 700, color: "var(--plat)", letterSpacing: "-.03em", lineHeight: 1.1 }}>1,240<span style={{ fontSize: 18, color: "var(--faint)" }}>p</span></div>
+                <div style={{ fontSize: 11, color: "var(--pos)" }}>▲ +320p this week</div>
+              </div>
+            </div>
+            <div style={{ padding: "14px 0 18px" }}><XP /></div>
+            <StatBoxes cols={6} style={{ marginBottom: 18 }} />
+            <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 14 }}>
+              <div className="tpanel">
+                <div className="tpanel-h"><h3>Platinum activity</h3><span className="meta">last 7 days</span></div>
+                <ActTable rows={ACT} />
+              </div>
+              <div className="tpanel">
+                <div className="tpanel-h"><h3>Platinum by source</h3><span className="meta">90 days</span></div>
+                <SrcTable />
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      /* ============================== B · Centered profile ============================== */
+      function OptionB() {
+        return (
+          <div style={{ padding: "34px 32px", textAlign: "center", color: "var(--ink)", fontFamily: "var(--sans)", background: "var(--bg)", minHeight: "100%" }}>
+            <div style={{ display: "flex", justifyContent: "center" }}><Emb size={92} /></div>
+            <div style={{ ...eyebrow, marginTop: 16 }}>Tenno Profile</div>
+            <div style={{ fontSize: 58, fontWeight: 800, letterSpacing: "-.03em", lineHeight: 1, margin: "6px 0 12px" }}>bigfinnn</div>
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+              <MRBadge />
+              <span style={{ fontSize: 12, color: "var(--soft)" }}>Clan · Void Syndicate · Joined 2018</span>
+            </div>
+            <div style={{ maxWidth: 520, margin: "0 auto 22px" }}><XP /></div>
+            <div style={{ display: "flex", justifyContent: "center", borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)" }}>
+              {STRIP.map((s, i) => (
+                <div key={i} style={{ padding: "14px 26px", borderLeft: i ? "1px solid var(--line)" : "none" }}>
+                  <div style={{ fontFamily: "var(--mono)", fontSize: 22, fontWeight: 700, letterSpacing: "-.03em", color: s.c || "var(--ink)" }}>{s.v}</div>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--faint)", marginTop: 3 }}>{s.k}</div>
+                </div>
+              ))}
+            </div>
+            <div className="tpanel" style={{ marginTop: 22, textAlign: "left" }}>
+              <div className="tpanel-h"><h3>Platinum ledger</h3><span className="meta">running balance · last 7 days</span></div>
+              <ActTable rows={ACT} balance />
+            </div>
+          </div>
+        );
+      }
+
+      /* ============================== C · Split dashboard ============================== */
+      function Vital({ k, v, c }) {
+        return (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "9px 0", borderBottom: "1px solid var(--line)" }}>
+            <span style={{ fontSize: 12, color: "var(--soft)" }}>{k}</span>
+            <b style={{ fontFamily: "var(--mono)", fontSize: 15, fontWeight: 700, color: c || "var(--ink)" }}>{v}</b>
+          </div>
+        );
+      }
+      function OptionC() {
+        return (
+          <div style={{ display: "flex", height: 720, color: "var(--ink)", fontFamily: "var(--sans)", background: "var(--bg)" }}>
+            <div style={{ width: 320, flex: "none", borderRight: "1px solid var(--line)", padding: "30px 26px", display: "flex", flexDirection: "column", gap: 18 }}>
+              <Emb size={80} />
+              <div>
+                <div style={eyebrow}>Tenno</div>
+                <div style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-.03em", lineHeight: 1.02, margin: "4px 0" }}>bigfinnn</div>
+                <div style={{ fontSize: 12, color: "var(--soft)" }}>Clan · Void Syndicate</div>
+              </div>
+              <div style={{ border: "1px solid var(--line-2)", background: "var(--panel)", padding: 14 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                  <span style={{ fontFamily: "var(--mono)", fontSize: 46, fontWeight: 800, letterSpacing: "-.04em", lineHeight: 1 }}>27</span>
+                  <div>
+                    <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--faint)" }}>Mastery Rank</div>
+                    <div style={{ fontSize: 12, color: "var(--soft)" }}>Legendary 2</div>
+                  </div>
+                </div>
+                <div style={{ marginTop: 12 }}><XP /></div>
+              </div>
+              <div style={{ borderTop: "1px solid var(--line)" }}>
+                <Vital k="Platinum balance" v="1,240p" c="var(--plat)" />
+                <Vital k="Portfolio value" v="24,310p" />
+                <Vital k="Total ducats" v="18,640d" c="var(--ducat)" />
+                <Vital k="Distinct items" v="214" />
+                <Vital k="Sets complete" v="54" />
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 0, padding: "30px 28px", display: "flex", flexDirection: "column", gap: 14 }}>
+              <div className="tpanel">
+                <div className="tpanel-h"><h3>Platinum activity</h3><span className="meta">last 7 days</span></div>
+                <ActTable rows={ACT} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                <div className="tpanel">
+                  <div className="tpanel-h"><h3>By source</h3><span className="meta">90d</span></div>
+                  <SrcTable />
+                </div>
+                <div className="tpanel">
+                  <div className="tpanel-h"><h3>Value breakdown</h3><span className="meta">24,310p</span></div>
+                  <div style={{ padding: "4px 12px 10px" }}>
+                    {BRK.map((b, i) => (
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "78px 1fr 54px", alignItems: "center", gap: 9, padding: "7px 0", borderTop: i ? "1px solid var(--line)" : "none" }}>
+                        <span style={{ fontSize: 11.5, color: "var(--soft)" }}>{b[0]}</span>
+                        <span style={{ height: 6, background: "var(--line)", position: "relative" }}><i style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: b[1] + "%", background: "var(--soft)" }} /></span>
+                        <span style={{ fontFamily: "var(--mono)", fontSize: 11.5, color: "var(--ink)", textAlign: "right" }}>{b[2]}p</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      /* ============================== D · Rank emphasis ============================== */
+      function OptionD() {
+        return (
+          <div style={{ padding: "30px 32px", color: "var(--ink)", fontFamily: "var(--sans)", background: "var(--bg)", minHeight: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 18, paddingBottom: 18, borderBottom: "1px solid var(--line)" }}>
+              <Emb size={56} />
+              <div style={{ fontSize: 60, fontWeight: 800, letterSpacing: "-.035em", lineHeight: 1 }}>bigfinnn</div>
+              <div style={{ marginLeft: "auto", textAlign: "right" }}>
+                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".08em", color: "var(--faint)" }}>Platinum</div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 30, fontWeight: 700, color: "var(--plat)", letterSpacing: "-.02em" }}>1,240p</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 14, margin: "18px 0" }}>
+              <div style={{ border: "1px solid var(--line-2)", background: "linear-gradient(100deg, var(--panel-2), var(--panel))", padding: "16px 20px", display: "flex", alignItems: "center", gap: 18, flex: "none" }}>
+                <span style={{ fontFamily: "var(--mono)", fontSize: 64, fontWeight: 800, letterSpacing: "-.05em", lineHeight: 1 }}>27</span>
+                <div>
+                  <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".07em", color: "var(--faint)" }}>Mastery Rank</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 9 }}>Legendary 2</div>
+                  <div style={{ width: 220 }}><XP /></div>
+                </div>
+              </div>
+              <StatBoxes cols={3} style={{ flex: 1, margin: 0 }} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 14 }}>
+              <div className="tpanel">
+                <div className="tpanel-h"><h3>Recent platinum</h3><span className="meta">last 7 days</span></div>
+                <ActTable rows={ACT} />
+              </div>
+              <div className="tpanel">
+                <div className="tpanel-h"><h3>By source</h3><span className="meta">90d</span></div>
+                <SrcTable />
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      /* ============================== canvas ============================== */
+      function App() {
+        return (
+          <DesignCanvas>
+            <DCSection id="account" title="Account page" subtitle="Glyph → name → mastery rank → stats → platinum. Four directions, same data — focus any one (⤢) to see it full-size.">
+              <DCArtboard id="A" label="A · Trader banner" width={1080} height={700} style={{ background: "var(--bg)" }}><OptionA /></DCArtboard>
+              <DCArtboard id="B" label="B · Centered profile" width={1080} height={760} style={{ background: "var(--bg)" }}><OptionB /></DCArtboard>
+              <DCArtboard id="C" label="C · Split dashboard" width={1080} height={720} style={{ background: "var(--bg)" }}><OptionC /></DCArtboard>
+              <DCArtboard id="D" label="D · Rank emphasis" width={1080} height={720} style={{ background: "var(--bg)" }}><OptionD /></DCArtboard>
+            </DCSection>
+          </DesignCanvas>
+        );
+      }
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
