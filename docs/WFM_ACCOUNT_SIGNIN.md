@@ -17,7 +17,7 @@
 > *listings* feature stays entirely within warframe.market's public + authenticated API and remains the
 > zero-risk default recommendation; the game scan is the power-user lane.
 
-This refines `DESKTOP_REWRITE_PRD.md` (commands + schema) and reuses the rate limiter / client from
+This refines `archive/DESKTOP_REWRITE_PRD.md` (commands + schema) and reuses the rate limiter / client from
 `DATA_SOURCING_MASTER_PLAN.md`. It adds **one new external capability** (authenticated WFM calls) and
 treats it as strictly optional — the app is fully functional without ever signing in.
 

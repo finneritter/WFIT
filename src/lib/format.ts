@@ -23,6 +23,20 @@ export const fmtK = (n: number | null | undefined): string => {
 
 export const pct = (n: number): string => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
 
+/** Human byte size — "1.2 MB" / "640 KB" (min 1 KB). */
+export const fmtBytes = (n: number): string =>
+  n >= 1_048_576 ? `${(n / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+
+/** plat × qty line total, null-safe. */
+export const lineTotal = (plat: number | null | undefined, qty: number): number =>
+  (plat ?? 0) * qty;
+
+/** A priced row has reached its buy target (price fell to/below target). */
+export const atTarget = (r: {
+  median_plat: number | null;
+  target_plat: number | null;
+}): boolean => r.target_plat != null && r.median_plat != null && r.median_plat <= r.target_plat;
+
 export const TIERS = [
   { key: "exotic", min: 120, label: "120p+" },
   { key: "legend", min: 45, label: "45–119p" },

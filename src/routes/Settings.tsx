@@ -23,9 +23,6 @@ import {
   useWfmAccount,
 } from "../hooks/queries";
 
-const fmtBytes = (n: number): string =>
-  n >= 1_048_576 ? `${(n / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
-
 // Categories that can have a per-category cheap-item floor.
 const CAT_FLOORS: [string, string][] = [
   ["warframe", "Warframe"],
@@ -35,7 +32,7 @@ const CAT_FLOORS: [string, string][] = [
   ["arcane", "Arcane"],
 ];
 import { openBackupsDir, sendTestNotification, wipeApp } from "../lib/api";
-import { clsx, syncedAgo } from "../lib/format";
+import { clsx, fmtBytes, syncedAgo } from "../lib/format";
 import {
   FONTS,
   type Font,

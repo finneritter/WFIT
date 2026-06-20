@@ -67,7 +67,7 @@ export function Ducats({ onOpen }: { onOpen: (slug: string) => void }) {
         <StatBox k="Avg ducats/part" v={fmt(stats.avg)} unit="d" />
       </div>
 
-      <div className="mkt-filters" style={{ marginBottom: 12 }}>
+      <div className="mkt-filters">
         <Chip active={highDp === "1"} onClick={() => setHighDp(highDp === "1" ? "0" : "1")}>
           d/p ≥ {HIGH_DP}
         </Chip>

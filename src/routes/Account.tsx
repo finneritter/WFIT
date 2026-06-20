@@ -6,7 +6,15 @@
 import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { useMemo, useState } from "react";
 import type { ScreenId } from "../components/Sidebar";
-import { Chip, Glyph, ItemName, SortTh, TableStatus, rowAction } from "../components/ui";
+import {
+  BlockStatus,
+  Chip,
+  Glyph,
+  ItemName,
+  SortTh,
+  TableStatus,
+  rowAction,
+} from "../components/ui";
 import {
   useAccountArsenal,
   useAccountCodex,
@@ -771,8 +779,10 @@ function ArmoryTab({ onOpen }: { onOpen: OpenFn }) {
 // --------------------------------------------------------------------------- Codex
 
 function CodexTab() {
-  const { data: codex } = useAccountCodex();
-  if (!codex) return <div className="empty">Loading…</div>;
+  const { data: codex, isLoading, isError } = useAccountCodex();
+  if (isLoading) return <BlockStatus />;
+  if (isError) return <BlockStatus error />;
+  if (!codex) return <BlockStatus text="No codex data yet — run a game scan from Settings." />;
   const collPct = codex.total_items > 0 ? (codex.total_owned / codex.total_items) * 100 : 0;
 
   return (

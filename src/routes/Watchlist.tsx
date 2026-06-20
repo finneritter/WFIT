@@ -3,15 +3,12 @@ import { ItemTags } from "../components/ItemTags";
 import { Chip, ItemName, SortTh, StatBox, TableStatus, rowAction } from "../components/ui";
 import { useAddToBuyList, useListedSlugs, useRemoveWatch, useWatchlist } from "../hooks/queries";
 import { useColumnSort, usePaged } from "../hooks/useTable";
-import { clsx, fmt, pct, relativeDay } from "../lib/format";
+import { atTarget, clsx, fmt, pct, relativeDay } from "../lib/format";
 import { usePersisted } from "../lib/persist";
 import { usePageSearch } from "../lib/searchContext";
 import { compileQuery } from "../lib/searchQuery";
 import { watchlistSchema } from "../lib/searchSchemas";
 import type { WatchRow } from "../lib/types";
-
-const atTarget = (r: { median_plat: number | null; target_plat: number | null }) =>
-  r.target_plat != null && r.median_plat != null && r.median_plat <= r.target_plat;
 
 // Gap from target as a fraction (how far the price still has to fall). null when
 // unknown; used both for the status badge and the gap-aware default ordering.
@@ -81,7 +78,7 @@ export function Watchlist({ onOpen }: { onOpen: (slug: string) => void }) {
         <StatBox k="Avg gap to target" v={`${stats.avgGap.toFixed(0)}%`} />
       </div>
 
-      <div className="mkt-filters" style={{ marginBottom: 12 }}>
+      <div className="mkt-filters">
         <Chip active={atOnly === "1"} onClick={() => setAtOnly(atOnly === "1" ? "0" : "1")}>
           At target
         </Chip>

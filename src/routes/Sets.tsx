@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import type { ScreenId } from "../components/Sidebar";
-import { Chip, StatBox } from "../components/ui";
+import { BlockStatus, Chip, StatBox } from "../components/ui";
 import { useSets } from "../hooks/queries";
 import { useColumnSort, usePaged } from "../hooks/useTable";
 import { clsx, fmt } from "../lib/format";
@@ -154,7 +154,7 @@ export function Sets({
         <StatBox k="Avg completion" v={`${stats.avg.toFixed(0)}%`} />
       </div>
 
-      <div className="mkt-filters" style={{ marginBottom: 12 }}>
+      <div className="mkt-filters">
         <span className="muted" style={{ fontSize: 11 }}>
           Sort
         </span>
@@ -166,11 +166,11 @@ export function Sets({
 
       <div className="tpanel">
         {isError ? (
-          <div className="empty">Couldn't load sets. Try again in a moment.</div>
+          <BlockStatus error />
         ) : isLoading ? (
-          <div className="empty">Loading sets…</div>
+          <BlockStatus />
         ) : visible.length === 0 ? (
-          <div className="empty">No sets match your search.</div>
+          <BlockStatus text="No sets match your search." />
         ) : (
           <>
             {visible.map((s) => (

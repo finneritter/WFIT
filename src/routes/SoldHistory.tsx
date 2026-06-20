@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Chip, ItemName, SortTh, StatBox, TableStatus, rowAction } from "../components/ui";
 import { useSales, useUndoSale } from "../hooks/queries";
 import { useColumnSort, usePaged } from "../hooks/useTable";
-import { CATEGORY_LABELS, clsx, fmt, pct, relativeDay } from "../lib/format";
+import { CATEGORY_LABELS, clsx, fmt, lineTotal, pct, relativeDay } from "../lib/format";
 import { usePersisted } from "../lib/persist";
 import { usePageSearch } from "../lib/searchContext";
 import { compileQuery } from "../lib/searchQuery";
@@ -15,7 +15,7 @@ const vsMedian = (r: SaleRow): number | null =>
   r.market_median_at_sale_time && r.market_median_at_sale_time > 0 && r.plat_per_unit != null
     ? ((r.plat_per_unit - r.market_median_at_sale_time) / r.market_median_at_sale_time) * 100
     : null;
-const lineTotal = (r: SaleRow): number => (r.plat_per_unit ?? 0) * r.qty;
+const saleTotal = (r: SaleRow): number => lineTotal(r.plat_per_unit, r.qty);
 
 type SoldCol = "when" | "name" | "vsmedian" | "qty" | "unit" | "total";
 const SOLD_CMP: Record<SoldCol, (a: SaleRow, b: SaleRow) => number> = {
@@ -25,7 +25,7 @@ const SOLD_CMP: Record<SoldCol, (a: SaleRow, b: SaleRow) => number> = {
     (vsMedian(a) ?? Number.NEGATIVE_INFINITY) - (vsMedian(b) ?? Number.NEGATIVE_INFINITY),
   qty: (a, b) => a.qty - b.qty,
   unit: (a, b) => (a.plat_per_unit ?? 0) - (b.plat_per_unit ?? 0),
-  total: (a, b) => lineTotal(a) - lineTotal(b),
+  total: (a, b) => saleTotal(a) - saleTotal(b),
 };
 
 export function SoldHistory({ onOpen }: { onOpen: (slug: string) => void }) {
@@ -82,7 +82,7 @@ export function SoldHistory({ onOpen }: { onOpen: (slug: string) => void }) {
       </div>
 
       {cats.length > 1 ? (
-        <div className="mkt-filters" style={{ marginBottom: 12 }}>
+        <div className="mkt-filters">
           <Chip active={cat === "all"} onClick={() => setCat("all")}>
             All
           </Chip>
@@ -149,7 +149,7 @@ export function SoldHistory({ onOpen }: { onOpen: (slug: string) => void }) {
                     </td>
                     <td className="r">{r.qty}</td>
                     <td className="r">{fmt(r.plat_per_unit)}p</td>
-                    <td className="r">{fmt(lineTotal(r))}p</td>
+                    <td className="r">{fmt(saleTotal(r))}p</td>
                     <td
                       className="r"
                       onClick={(e) => e.stopPropagation()}

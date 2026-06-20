@@ -5183,6 +5183,7 @@ button.rsetbar:hover .rsetbox.hit-sp {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 .mkt-sep {
   width: 1px;

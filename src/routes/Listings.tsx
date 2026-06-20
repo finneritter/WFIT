@@ -522,7 +522,7 @@ function RecommendedTable({
 
   return (
     <>
-      <div className="mkt-filters" style={{ marginBottom: 12 }}>
+      <div className="mkt-filters">
         {REC_CATEGORIES.map((c) => (
           <Chip key={c} active={cat === c} count={counts[c] ?? 0} onClick={() => setCat(c)}>
             {c === "all" ? "All" : CATEGORY_LABELS[c]}

@@ -680,6 +680,7 @@ impl Market {
         order_type: &str,
         platinum: i64,
         quantity: i64,
+        per_trade: i64,
         rank: Option<i64>,
         visible: bool,
     ) -> AppResult<RawOrder> {
@@ -693,6 +694,9 @@ impl Market {
             order_type: &'a str,
             platinum: i64,
             quantity: i64,
+            // Required by warframe.market v2 (≥ v0.25.0) — units exchanged per
+            // in-game trade. Omitting it is a 400 `perTrade: app.field.required`.
+            per_trade: i64,
             #[serde(skip_serializing_if = "Option::is_none")]
             rank: Option<i64>,
             visible: bool,
@@ -713,6 +717,7 @@ impl Market {
                 order_type,
                 platinum,
                 quantity,
+                per_trade,
                 rank,
                 visible,
             });
@@ -788,6 +793,14 @@ impl Market {
             let status = r.status();
             if status.is_success() {
                 return Ok(r);
+            }
+            // A rejected session (expired / revoked JWT) is the one write failure
+            // the user can act on — surface a plain "reconnect" message instead of
+            // the raw status + HTML body.
+            if matches!(status.as_u16(), 401 | 403) {
+                return Err(AppError::Other(
+                    "warframe.market session expired — reconnect your account in Settings.".into(),
+                ));
             }
             if status.as_u16() != 429 || attempt >= WRITE_MAX_ATTEMPTS {
                 let body = r.text().await.unwrap_or_default();

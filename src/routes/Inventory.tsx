@@ -3,7 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Dropdown, type DropdownOption } from "../components/Dropdown";
 import { Icon } from "../components/Icon";
 import { Spark } from "../components/charts";
-import { Glyph, SortTh, StatBox, rowAction } from "../components/ui";
+import { BlockStatus, Glyph, SortTh, StatBox, rowAction } from "../components/ui";
 import { useInventory, useListings, usePricingProgress, useSummary } from "../hooks/queries";
 import {
   CATEGORY_LABELS,
@@ -660,9 +660,9 @@ export function Inventory({ onOpen }: { onOpen: (slug: string) => void }) {
       </div>
 
       {isError ? (
-        <div className="empty">Couldn't load your inventory. Try again in a moment.</div>
+        <BlockStatus error />
       ) : isLoading ? (
-        <div className="empty">Loading inventory…</div>
+        <BlockStatus />
       ) : visible.length === 0 ? (
         <div className="empty">
           {inv.length === 0 ? (

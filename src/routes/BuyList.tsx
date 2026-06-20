@@ -11,21 +11,21 @@ import {
   useSetBuyQty,
 } from "../hooks/queries";
 import { useColumnSort, usePaged } from "../hooks/useTable";
-import { fmt, relativeDay } from "../lib/format";
+import { fmt, lineTotal, relativeDay } from "../lib/format";
 import { usePersisted } from "../lib/persist";
 import { usePageSearch } from "../lib/searchContext";
 import { compileQuery } from "../lib/searchQuery";
 import { buySchema } from "../lib/searchSchemas";
 import type { BuyRow } from "../lib/types";
 
-const lineTotal = (r: BuyRow): number => (r.median_plat ?? 0) * r.buy_qty;
+const buyTotal = (r: BuyRow): number => lineTotal(r.median_plat, r.buy_qty);
 
 type BuyCol = "name" | "unit" | "qty" | "total" | "added";
 const BUY_CMP: Record<BuyCol, (a: BuyRow, b: BuyRow) => number> = {
   name: (a, b) => a.display_name.localeCompare(b.display_name),
   unit: (a, b) => (a.median_plat ?? 0) - (b.median_plat ?? 0),
   qty: (a, b) => a.buy_qty - b.buy_qty,
-  total: (a, b) => lineTotal(a) - lineTotal(b),
+  total: (a, b) => buyTotal(a) - buyTotal(b),
   added: (a, b) => new Date(a.added_at).getTime() - new Date(b.added_at).getTime(),
 };
 
@@ -51,7 +51,7 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
 
   const stats = useMemo(() => {
     const units = rows.reduce((s, r) => s + r.buy_qty, 0);
-    const total = rows.reduce((s, r) => s + lineTotal(r), 0);
+    const total = rows.reduce((s, r) => s + buyTotal(r), 0);
     const remaining = (budget ?? 0) - total;
     return { items: rows.length, units, total, remaining };
   }, [rows, budget]);
@@ -90,7 +90,7 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
         />
       </div>
 
-      <div className="mkt-filters" style={{ marginBottom: 12 }}>
+      <div className="mkt-filters">
         <Chip active={falling === "1"} onClick={() => setFalling(falling === "1" ? "0" : "1")}>
           Trending down
         </Chip>
@@ -186,7 +186,7 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
                       </button>
                     </span>
                   </td>
-                  <td className="r">{fmt(lineTotal(r))}p</td>
+                  <td className="r">{fmt(buyTotal(r))}p</td>
                   <td className="r muted">{relativeDay(r.added_at)}</td>
                   <td
                     className="r"

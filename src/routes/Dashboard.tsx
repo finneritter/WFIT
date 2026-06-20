@@ -22,6 +22,7 @@ import {
 } from "../hooks/queries";
 import {
   CATEGORY_LABELS,
+  atTarget,
   clsx,
   dayTime,
   fmt,
@@ -213,13 +214,11 @@ function DoNextPanel({
     [listings],
   );
 
-  // The at-target predicate from Watchlist.tsx, sorted by savings.
-  const atTarget = useMemo(
+  // Shared at-target predicate (lib/format), sorted by savings.
+  const atTargetRows = useMemo(
     () =>
       watch
-        .filter(
-          (r) => r.target_plat != null && r.median_plat != null && r.median_plat <= r.target_plat,
-        )
+        .filter(atTarget)
         .sort((a, b) => b.target_plat! - b.median_plat! - (a.target_plat! - a.median_plat!)),
     [watch],
   );
@@ -254,7 +253,8 @@ function DoNextPanel({
     setsQ.isLoading ||
     trendsQ.isLoading ||
     arcQ.isLoading;
-  const total = over.length + atTarget.length + oneAway.length + sell.length + (dissolve ? 1 : 0);
+  const total =
+    over.length + atTargetRows.length + oneAway.length + sell.length + (dissolve ? 1 : 0);
 
   return (
     <div className="tpanel">
@@ -294,14 +294,14 @@ function DoNextPanel({
             </>
           ) : null}
 
-          {atTarget.length > 0 ? (
+          {atTargetRows.length > 0 ? (
             <>
               <GroupHeader
                 label="Watchlist at target"
-                count={atTarget.length}
+                count={atTargetRows.length}
                 onNav={() => onNavigate("watchlist")}
               />
-              {atTarget.slice(0, 3).map((r) => (
+              {atTargetRows.slice(0, 3).map((r) => (
                 // div (not button): the row contains the inline + buy control.
                 <div key={r.slug} className="dx-row" {...rowAction(() => onOpen(r.slug))}>
                   <ItemName

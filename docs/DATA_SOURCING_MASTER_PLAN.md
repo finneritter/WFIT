@@ -11,7 +11,7 @@
 > With warframe.market as the only allowed source, the "vaulted" badge has no data and stays off in v1.
 
 This document is the contract for the Rust `market.rs` data layer. It refines the market-sourcing
-details in `DESKTOP_REWRITE_PRD.md §5.1` with field-level facts verified against the live API.
+details in `archive/DESKTOP_REWRITE_PRD.md §5.1` with field-level facts verified against the live API.
 
 ---
 

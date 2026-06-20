@@ -169,7 +169,7 @@ sticker. WFIT shows that number only as the optimistic ceiling ("Market value") 
 
 Realizable value is recomputed fresh on every inventory read (it's not cached), so valuation-rule
 changes apply instantly. The research behind the model lives in
-`docs/CLAUDE_ECONOMIC_RESEARCH/`.
+`docs/archive/CLAUDE_ECONOMIC_RESEARCH/`.
 
 ---
 
@@ -311,13 +311,17 @@ The local database lives at `$APPDATA/dev.finn.wfit/wfit.sqlite` (e.g.
 
 - `docs/HANDOFF.md` — **current-state handoff; read first.**
 - `CLAUDE.md` — working guidance, hard constraints, and the pricing/valuation model.
-- `docs/CLAUDE_ECONOMIC_RESEARCH/` — the economics behind realizable valuation (liquidity,
-  market impact, honest presentation).
 - `docs/DATA_SOURCING_MASTER_PLAN.md` — the warframe.market data contract.
 - `docs/GAMESTATE_WORLDSTATE.md` — world-state sources (DE raw, derived cycles, arbitrations).
 - `docs/ROTATION_PAGE_DESIGN.md` — the visual design language (tokens, rules, components).
 - `docs/ARCANE_DISSOLUTION.md` — the Vosfor/collection-EV methodology.
 - `docs/GAME_INVENTORY_IMPORT.md` / `docs/WFM_ACCOUNT_SIGNIN.md` — import + account-connect specs.
-- `docs/` — the rest of the design/spec docs (DESKTOP_REWRITE_PRD, INVENTORY_REDESIGN, …).
+- `docs/archive/` — historical design/spec docs (DESKTOP_REWRITE_PRD, INVENTORY_REDESIGN,
+  CLAUDE_ECONOMIC_RESEARCH — the economics behind realizable valuation).
 - `reference/` — code scaffolds (prior-tauri-attempt, market-proxy) + retired/target design handoffs.
 - `.claude/plans/` — historical design notes (game-inventory-import, pricing-rework, etc.).
+- `CHANGELOG.md` — release notes.
+
+## License
+
+Proprietary — Copyright (c) 2026 Finn Ellis. All rights reserved. See [`LICENSE`](LICENSE).

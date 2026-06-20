@@ -1300,6 +1300,7 @@ pub async fn wfm_create_order(
     slug: String,
     platinum: i64,
     quantity: i64,
+    per_trade: Option<i64>,
     rank: Option<i64>,
     visible: bool,
 ) -> AppResult<usize> {
@@ -1309,6 +1310,10 @@ pub async fn wfm_create_order(
     if quantity < 1 {
         return Err(AppError::Invalid("quantity must be at least 1".into()));
     }
+    // warframe.market requires `perTrade` (units moved per in-game trade). Default
+    // to 1 — safe whether the API treats it as a per-trade min or max — and never
+    // let it exceed the listed quantity.
+    let per_trade = per_trade.unwrap_or(1).clamp(1, quantity);
     let jwt = require_jwt()?;
     let item_id = catalog::wfm_id_for(&state.db, &slug)?
         .ok_or_else(|| AppError::NotFound(format!("no warframe.market id for {slug}")))?;
@@ -1317,13 +1322,16 @@ pub async fn wfm_create_order(
         item_id,
         platinum,
         quantity,
+        per_trade,
         ?rank,
         visible,
         "wfm_create_order"
     );
     state
         .market
-        .create_order(&jwt, &item_id, "sell", platinum, quantity, rank, visible)
+        .create_order(
+            &jwt, &item_id, "sell", platinum, quantity, per_trade, rank, visible,
+        )
         .await
         .inspect_err(|e| tracing::warn!(error = %e, "wfm_create_order failed"))?;
     sync_listings_impl(state.inner()).await

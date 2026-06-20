@@ -135,7 +135,7 @@ number reads as a bug to the user.
 - Hard constraints, schema, pricing model: `CLAUDE.md` (read first).
 - Current running state: `docs/HANDOFF.md`.
 - Data contract / endpoints: `docs/DATA_SOURCING_MASTER_PLAN.md`.
-- Valuation economics: `docs/PERF_OPTIMIZATION.md`, `docs/CLAUDE_ECONOMIC_RESEARCH/` (historical).
+- Valuation economics: `docs/PERF_OPTIMIZATION.md`, `docs/archive/CLAUDE_ECONOMIC_RESEARCH/` (historical).
 - Design target: `reference/design_handoff_wfit_update1/`.
 - Representative code to copy patterns from: `src/routes/Inventory.tsx` (filters/views),
   `src/routes/Listings.tsx` (tabs + Recommended), `src/db/prices.rs` + `src/db/inventory.rs`

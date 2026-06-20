@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Countdown, TierBadge } from "../components/Countdown";
-import { rowAction } from "../components/ui";
+import { BlockStatus, rowAction } from "../components/ui";
 import { useCrackNow, useVendorIntel, useWantedNow, useWorldstate } from "../hooks/queries";
 import { clsx, dayTime, fmt, glyph, hhmm, msUntil, nextUtc, tzLabel } from "../lib/format";
 import type {
@@ -340,14 +340,9 @@ function CrackTab() {
         </span>
       </div>
       {isLoading ? (
-        <div className="empty" style={{ padding: "10px 12px" }}>
-          Loading relics…
-        </div>
+        <BlockStatus text="Loading relics…" />
       ) : rows.length === 0 ? (
-        <div className="empty" style={{ padding: "10px 12px" }}>
-          None of your relics drop a wanted item yet. Add items to your watch or buy list, or get
-          closer (within 2 parts) to completing a set, and matching relics show up here.
-        </div>
+        <BlockStatus text="None of your relics drop a wanted item yet. Add items to your watch or buy list, or get closer (within 2 parts) to completing a set, and matching relics show up here." />
       ) : (
         <>
           {now.length > 0 ? (
@@ -515,13 +510,13 @@ function VendorTable({
                 glyph(r.item)
               )}
             </span>
-            <span className="vn">
+            <span className="vn" title={r.item}>
               {r.item}
               {r.good_deal ? <span className="deal-tag">DEAL</span> : null}
               {r.owned_qty > 0 ? <span className="owned-tag">OWNED ×{r.owned_qty}</span> : null}
             </span>
             <span className="v-plat">{r.median_plat != null ? `${fmt(r.median_plat)}p` : "—"}</span>
-            <span className={costCls}>{r.cost ?? "—"}</span>
+            <span className={costCls}>{fmt(r.cost)}</span>
           </div>
         );
       })}
@@ -713,9 +708,7 @@ function FissuresTab({ ws, deVerified }: { ws: Worldstate; deVerified: boolean }
           ))}
         </div>
         {fissures.length === 0 ? (
-          <div className="empty" style={{ padding: "10px 12px" }}>
-            No active fissures match this filter.
-          </div>
+          <BlockStatus text="No active fissures match this filter." />
         ) : (
           <>
             {groups.normal.length > 0 ? (
@@ -748,7 +741,7 @@ function FissuresTab({ ws, deVerified }: { ws: Worldstate; deVerified: boolean }
 // ---------------------------------------------------------------------------
 
 export function Rotation({ onOpen }: { onOpen: (slug: string) => void }) {
-  const { data: ws, isLoading, isError } = useWorldstate();
+  const { data: ws, isLoading, isError, isFetching, refetch } = useWorldstate();
   const [tab, setTab] = useState<TabId>("overview");
 
   if (isLoading) return <div className="empty">Loading world-state…</div>;
@@ -756,6 +749,11 @@ export function Rotation({ onOpen }: { onOpen: (slug: string) => void }) {
     return (
       <div className="empty">
         Couldn't reach api.warframestat.us. The rest of WFIT works offline.
+        <div style={{ marginTop: 10 }}>
+          <button type="button" className="chip" disabled={isFetching} onClick={() => refetch()}>
+            {isFetching ? "Retrying…" : "Retry"}
+          </button>
+        </div>
       </div>
     );
 
