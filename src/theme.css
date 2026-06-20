@@ -5895,11 +5895,16 @@ button.acc-info {
 .hw-wrap {
   margin-top: 2px;
 }
+/* Slim footer under the grid (was a tall top row that ate a row of dead space).
+   Idle it's just a right-aligned "Customize" button; in edit mode it grows to
+   hold the add/done actions. */
 .hw-bar {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 10px;
+  margin-top: 8px;
+}
+.hw-bar.editing {
   min-height: 30px;
 }
 .hw-bar-sp {
@@ -5916,18 +5921,18 @@ button.acc-info {
   gap: 8px;
 }
 
-/* The grid itself: RGL sets each tile's absolute position + px size inline. */
-/* CSS Grid: tiles span --w columns / --h rows and flow across, filling gaps
-   (grid-auto-flow: dense). Drag-reorder + corner-resize are wired by hand on
-   top of this with Pointer Events (see HomeWidgetGrid.tsx). */
+/* Freeform CSS Grid: each tile is placed at an explicit grid-column/grid-row
+   (set inline from its x/y/w/h in HomeWidgetGrid.tsx), so gaps are allowed and
+   tiles only move when a drag/resize would overlap them (collision push-down).
+   Drag + corner-resize are wired by hand with Pointer Events. */
 .hw-grid {
   position: relative;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   grid-auto-rows: 150px;
-  grid-auto-flow: row dense;
   gap: 10px;
   align-items: stretch;
+  min-height: 150px;
 }
 
 /* Edit-mode snap-cell backdrop, sized to the grid's real geometry (the JS sets
@@ -5958,8 +5963,6 @@ button.acc-info {
   box-sizing: border-box;
   position: relative;
   z-index: 1;
-  grid-column: span var(--w, 2);
-  grid-row: span var(--h, 2);
   min-width: 0;
 }
 .hw.editing {
@@ -5967,16 +5970,31 @@ button.acc-info {
   touch-action: none;
   user-select: none;
 }
-.hw.dragging {
-  /* Raised while grabbed — shadow only, no transform (the FLIP animation owns
-     transform) and no pointer-events change (reorder hit-testing is geometric). */
-  z-index: 5;
-  cursor: grabbing;
+/* The grabbed tile's slot: a dashed cell the others reflow around. The real
+   card is drawn by the floating overlay, so this stays empty. */
+.hw-placeholder {
+  border: 1px dashed var(--line-2);
+  background: color-mix(in srgb, var(--panel) 40%, transparent);
 }
-.hw.dragging .hw-card {
+/* The floating clone that follows the cursor. Absolutely positioned in the grid
+   (gridRef is the positioning context), moved only via translate3d → its own GPU
+   layer, so the moving shadow composites cleanly with no repaint trails. */
+.hw-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  pointer-events: none;
+  cursor: grabbing;
+  will-change: transform;
+  /* span-based sizing doesn't apply here; width/height come from inline px. */
+  grid-column: auto;
+  grid-row: auto;
+}
+.hw-overlay .hw-card {
   border-style: solid;
   border-color: var(--accent);
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
 }
 .hw-card {
   box-sizing: border-box;

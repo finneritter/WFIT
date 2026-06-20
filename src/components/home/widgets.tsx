@@ -1085,10 +1085,12 @@ export const WIDGET_MAP: Record<string, WidgetDef> = Object.fromEntries(
 /** The seed layout for a never-customized home screen: the five reworked
  *  panels, uniform 2×2, flowing two per row. Order-based (no x/y) — the grid
  *  flows tiles across and fills gaps automatically. */
+// Freeform x/y placement on a 4-column grid (each cell 150px tall). Tiles live
+// where they're put — gaps are allowed; dropping onto a tile pushes it down.
 export const DEFAULT_LAYOUT = [
-  { key: "do-next", w: 2, h: 2 },
-  { key: "movers", w: 2, h: 2 },
-  { key: "market-pulse", w: 2, h: 2 },
-  { key: "arbitration", w: 2, h: 2 },
-  { key: "market-search", w: 2, h: 2 },
+  { key: "do-next", x: 0, y: 0, w: 2, h: 2 },
+  { key: "movers", x: 2, y: 0, w: 2, h: 2 },
+  { key: "market-pulse", x: 0, y: 2, w: 2, h: 2 },
+  { key: "arbitration", x: 2, y: 2, w: 2, h: 2 },
+  { key: "market-search", x: 0, y: 4, w: 2, h: 2 },
 ];
