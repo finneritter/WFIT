@@ -548,6 +548,31 @@ export function useBackupNow() {
   });
 }
 
+// ---- developer: simulate fake inventory ----
+export function useSimulateInventory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.simulateInventory(),
+    onSuccess: (s) => {
+      pushToast(
+        `Simulated ${s.items} items, ${s.mods} mods, ${s.arcanes} arcanes, ${s.resources} resources · ${s.platinum}p`,
+        "info",
+      );
+      qc.invalidateQueries(); // inventory + account replaced — refetch everything
+    },
+  });
+}
+export function useClearSimulatedInventory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.clearSimulatedInventory(),
+    onSuccess: () => {
+      pushToast("Simulated data cleared", "info");
+      qc.invalidateQueries();
+    },
+  });
+}
+
 // ---- wfm account ----
 export function useWfmConnect() {
   const qc = useQueryClient();

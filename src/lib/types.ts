@@ -327,6 +327,17 @@ export interface WfmAccount {
   session_expired: boolean;
 }
 
+// Result of the developer "simulate fake inventory" tool (1:1 with Rust SimSummary).
+export interface SimSummary {
+  items: number;
+  mods: number;
+  arcanes: number;
+  resources: number;
+  platinum: number;
+  credits: number;
+  backup_path: string;
+}
+
 export interface ListingRow {
   order_id: string;
   slug: string;

@@ -607,6 +607,19 @@ pub struct WfmAccount {
     pub session_expired: bool,
 }
 
+/// Result of the developer "simulate fake inventory" tool — counts written +
+/// the random balances, for a confirmation toast.
+#[derive(Debug, Clone, Serialize)]
+pub struct SimSummary {
+    pub items: i64, // prime sets/parts
+    pub mods: i64,
+    pub arcanes: i64,
+    pub resources: i64,
+    pub platinum: i64,
+    pub credits: i64,
+    pub backup_path: String,
+}
+
 /// A row in the read-only mirror of your warframe.market sell orders.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListingRow {

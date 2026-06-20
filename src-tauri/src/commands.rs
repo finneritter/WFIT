@@ -1821,6 +1821,27 @@ pub fn open_backups_dir(app: tauri::AppHandle) -> AppResult<()> {
 }
 
 // ===========================================================================
+// Developer — simulate a fake owned inventory for local testing (no game scan).
+// Gated behind Developer mode in the UI; snapshots the DB before replacing data.
+// ===========================================================================
+
+/// Replace the inventory + account snapshot with random test data (backs up first).
+#[tauri::command]
+pub fn simulate_inventory(
+    state: State<'_, Arc<AppState>>,
+    app: tauri::AppHandle,
+) -> AppResult<crate::types::SimSummary> {
+    let db_path = app_db_path(&app)?;
+    crate::db::simulate::simulate(&state.db, &db_path)
+}
+
+/// Drop the simulated inventory/account data and the `random_user` name.
+#[tauri::command]
+pub fn clear_simulated_inventory(state: State<'_, Arc<AppState>>) -> AppResult<()> {
+    crate::db::simulate::clear(&state.db)
+}
+
+// ===========================================================================
 // Recovery — commands that work WITHOUT AppState (startup failed). They take
 // AppHandle and gate on RecoveryInfo so the live DB can never be raw-copied
 // or renamed out from under the writer in healthy mode.

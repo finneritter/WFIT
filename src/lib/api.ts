@@ -34,6 +34,7 @@ import type {
   ScanApply,
   ScanDiffRow,
   SetRow,
+  SimSummary,
   StartupStatus,
   Summary,
   TrendsData,
@@ -64,6 +65,10 @@ export const updateGameData = () => invoke<GameDataUpdate>("update_game_data");
 export const rebuildCache = () => invoke<number>("rebuild_cache");
 export const wipeApp = () => invoke<void>("wipe_app");
 export const setsRefresh = () => invoke<number>("sets_refresh");
+
+// developer — simulate a fake owned inventory for local testing
+export const simulateInventory = () => invoke<SimSummary>("simulate_inventory");
+export const clearSimulatedInventory = () => invoke<void>("clear_simulated_inventory");
 export const getCatalog = (category?: string) =>
   invoke<CatalogRow[]>("get_catalog", { category: category ?? null });
 export const getCatalogItem = (slug: string) =>

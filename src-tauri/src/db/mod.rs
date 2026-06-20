@@ -23,6 +23,7 @@ pub mod relics;
 pub mod sales;
 pub mod sets;
 pub mod settings;
+pub mod simulate;
 pub mod trends;
 pub mod vault;
 pub mod vendor;

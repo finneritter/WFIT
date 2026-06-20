@@ -225,6 +225,9 @@ pub fn run() {
             commands::backup_now,
             commands::list_backups,
             commands::open_backups_dir,
+            // developer — simulate fake inventory
+            commands::simulate_inventory,
+            commands::clear_simulated_inventory,
             // startup / recovery
             commands::startup_status,
             commands::recovery_backup_db,

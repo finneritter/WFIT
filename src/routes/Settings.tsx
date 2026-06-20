@@ -7,6 +7,7 @@ import {
   useBackupNow,
   useBackups,
   useCatalogRefresh,
+  useClearSimulatedInventory,
   useExcludedMinPlat,
   useExcludedMinPlatByCat,
   useExcludedRarities,
@@ -18,6 +19,7 @@ import {
   useSetExcludedRarities,
   useSetNotificationPrefs,
   useSetsRefresh,
+  useSimulateInventory,
   useSummary,
   useUpdateGameData,
   useWfmAccount,
@@ -240,6 +242,79 @@ function DangerZone() {
         </button>
       </div>
     </div>
+  );
+}
+
+// Developer aid: fill the DB with a random owned inventory + account so the
+// value-bearing screens can be exercised without a live game-client scan.
+// Both actions back up / are reversible, but still confirm before replacing data.
+function SimPanel() {
+  const sim = useSimulateInventory();
+  const clear = useClearSimulatedInventory();
+  const [armed, setArmed] = useState<null | "sim" | "clear">(null);
+  const busy = sim.isPending || clear.isPending;
+  return (
+    <>
+      <Row
+        label="Simulate fake inventory"
+        hint="Replace your inventory & account with random sets, mods, arcanes, resources and a plat/credit balance (profile shows random_user). Snapshots the DB to /backups first. For testing screens without a game scan."
+      >
+        {armed === "sim" ? (
+          <div className="wipe-act">
+            <button
+              type="button"
+              className="btn warn"
+              disabled={busy}
+              onClick={() => {
+                sim.mutate();
+                setArmed(null);
+              }}
+            >
+              {sim.isPending ? "Simulating…" : "Replace with fake data"}
+            </button>
+            <button type="button" className="btn" disabled={busy} onClick={() => setArmed(null)}>
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="btn warn"
+            disabled={busy}
+            onClick={() => setArmed("sim")}
+          >
+            Simulate…
+          </button>
+        )}
+      </Row>
+      <Row
+        label="Clear simulated data"
+        hint="Empty the inventory + account snapshot and reset the profile name back to default. Use to return to a fresh state without a full app wipe."
+      >
+        {armed === "clear" ? (
+          <div className="wipe-act">
+            <button
+              type="button"
+              className="btn warn"
+              disabled={busy}
+              onClick={() => {
+                clear.mutate();
+                setArmed(null);
+              }}
+            >
+              {clear.isPending ? "Clearing…" : "Clear everything"}
+            </button>
+            <button type="button" className="btn" disabled={busy} onClick={() => setArmed(null)}>
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="btn" disabled={busy} onClick={() => setArmed("clear")}>
+            Clear…
+          </button>
+        )}
+      </Row>
+    </>
   );
 }
 
@@ -663,12 +738,20 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
       </section>
 
       {dev ? (
-        <section className="tpanel danger">
-          <div className="tpanel-h">
-            <h3>Developer · danger zone</h3>
-          </div>
-          <DangerZone />
-        </section>
+        <>
+          <section className="tpanel">
+            <div className="tpanel-h">
+              <h3>Developer · simulation</h3>
+            </div>
+            <SimPanel />
+          </section>
+          <section className="tpanel danger">
+            <div className="tpanel-h">
+              <h3>Developer · danger zone</h3>
+            </div>
+            <DangerZone />
+          </section>
+        </>
       ) : null}
     </div>
   );
