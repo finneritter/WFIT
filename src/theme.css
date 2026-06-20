@@ -5887,3 +5887,594 @@ button.acc-info {
   color: var(--ink);
   text-align: right;
 }
+
+/* ======================================================================
+   Home widget grid (customizable dashboard) — react-grid-layout tiles.
+   Uniform, glanceable, square/dense/mono; sizes snap to 1×1 … 2×2.
+   ====================================================================== */
+.hw-wrap {
+  margin-top: 2px;
+}
+.hw-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  min-height: 30px;
+}
+.hw-bar-sp {
+  flex: 1;
+}
+.hw-hint {
+  flex: 1;
+  font-size: 11px;
+  color: var(--faint);
+  letter-spacing: 0.02em;
+}
+.hw-bar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* The grid itself: RGL sets each tile's absolute position + px size inline. */
+/* CSS Grid: tiles span --w columns / --h rows and flow across, filling gaps
+   (grid-auto-flow: dense). Drag-reorder + corner-resize are wired by hand on
+   top of this with Pointer Events (see HomeWidgetGrid.tsx). */
+.hw-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 150px;
+  grid-auto-flow: row dense;
+  gap: 10px;
+  align-items: stretch;
+}
+
+/* Edit-mode snap-cell backdrop, sized to the grid's real geometry (the JS sets
+   --hw-pitch-x from the measured column width; --hw-pitch-y is rowHeight+gap).
+   Graph-paper lines mark where tiles snap; sits behind the tiles. */
+.hw-grid.editing::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+      to right,
+      var(--line-2) 0 1px,
+      transparent 1px var(--hw-pitch-x, 25%)
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      var(--line-2) 0 1px,
+      transparent 1px var(--hw-pitch-y, 160px)
+    );
+  opacity: 0.6;
+}
+
+/* One tile. Spans whole grid cells; the visible card fills it. The corner
+   resize handle is a direct child so it's never clipped by the card. */
+.hw {
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+  grid-column: span var(--w, 2);
+  grid-row: span var(--h, 2);
+  min-width: 0;
+}
+.hw.editing {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.hw.dragging {
+  /* Raised while grabbed — shadow only, no transform (the FLIP animation owns
+     transform) and no pointer-events change (reorder hit-testing is geometric). */
+  z-index: 5;
+  cursor: grabbing;
+}
+.hw.dragging .hw-card {
+  border-style: solid;
+  border-color: var(--accent);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+}
+.hw-card {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  overflow: hidden;
+}
+.hw.editing .hw-card {
+  border-style: dashed;
+}
+.hw.editing .hw-b {
+  /* While arranging, the body is inert so a drag/tap never opens an item. */
+  pointer-events: none;
+}
+
+/* Header — fixed chrome shared by every widget. */
+.hw-h {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px 0 10px;
+  height: 30px;
+  flex: none;
+  border-bottom: 1px solid var(--line);
+  color: var(--soft);
+}
+.hw-h > svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--soft);
+  flex: none;
+}
+/* Brighten icon + label together when hovering a navigable widget header. */
+.hw-h:has(button.hw-nav:hover) {
+  color: var(--ink);
+}
+.hw-t {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+button.hw-nav {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+button.hw-nav:hover {
+  color: var(--ink);
+}
+.hw-go {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--faint);
+}
+.hw-x {
+  margin-left: auto;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--line-2);
+  color: var(--soft);
+  cursor: pointer;
+}
+.hw-x:hover {
+  color: var(--neg);
+  border-color: var(--neg);
+}
+
+/* Body — flexes to fill the rest of the tile; content scales with size. */
+.hw-b {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 11px 9px;
+  overflow: hidden;
+}
+/* 1×1 with no strip/list/spark — center the lone headline so it doesn't float. */
+.hw-b.solo {
+  justify-content: center;
+  gap: 2px;
+}
+.hw-msg {
+  color: var(--faint);
+  font-size: 11.5px;
+}
+.hw-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+}
+.hw-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.hw-big {
+  font-family: var(--mono);
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.hw-big .hw-u {
+  font-size: 0.55em;
+  font-weight: 600;
+  color: var(--soft);
+  margin-left: 1px;
+}
+/* Colored delta pill (semantic green/red). */
+.hw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.hw-chip.pos {
+  color: var(--pos);
+}
+.hw-chip.neg {
+  color: var(--neg);
+}
+.hw-sub {
+  font-size: 10.5px;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Sparkline filling the 1×1 tier. */
+.hw-spark {
+  flex: 1;
+  min-height: 18px;
+  display: flex;
+  align-items: stretch;
+}
+.hw-spark svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Metric strip (shown when ≥2 wide). */
+.hw-cells {
+  display: flex;
+  flex: none;
+  border-top: 1px solid var(--line);
+}
+/* When the strip is the last block (2×1), let it fill and center vertically. */
+.hw-cells.fill {
+  flex: 1;
+  align-items: center;
+}
+.hw-cell {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px 4px;
+}
+.hw-cell:not(:first-child) {
+  border-left: 1px solid var(--line);
+}
+.hw-cv {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hw-ck {
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Preview rows (shown when ≥2 tall) — fills the remaining height. */
+.hw-rows {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.hw-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 2px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink);
+}
+.hw-row:hover {
+  background: var(--hover);
+}
+.hw-row-static {
+  cursor: default;
+}
+.hw-row-static:hover {
+  background: none;
+}
+.hw-row-i {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.hw-row-n {
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hw-row-s {
+  font-size: 9.5px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hw-row-v {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+/* Market-pulse spark + market-search input. */
+.hw-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+.hw-area svg {
+  width: 100%;
+  height: 100%;
+}
+.hw-search {
+  gap: 7px;
+}
+.hw-search-box {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line-2);
+  background: var(--bg);
+  padding: 0 8px;
+  height: 30px;
+  flex: none;
+}
+.hw-search-box svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: var(--faint);
+  stroke-width: 2;
+  flex: none;
+}
+.hw-search-box input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: none;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 12px;
+}
+.hw-search-res {
+  overflow-y: auto;
+}
+
+/* Tone helpers (descendant match wins over the base .hw-big/.hw-cv color). */
+.hw .pos {
+  color: var(--pos);
+}
+.hw .neg {
+  color: var(--neg);
+}
+.hw .hot {
+  color: var(--hot);
+}
+
+/* Empty home call-to-action. */
+/* Temporary edit-mode diagnostic: shows measured grid width + tile cells. */
+.hw-debug {
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--faint);
+  word-break: break-word;
+}
+
+.hw-blank {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 16px;
+  border: 1px dashed var(--line-2);
+  background: var(--panel);
+}
+.hw-blank-t {
+  font-size: 15px;
+  font-weight: 700;
+}
+.hw-blank-s {
+  font-size: 12px;
+  color: var(--faint);
+  margin-bottom: 4px;
+}
+
+/* Add-widget checklist modal. */
+.hw-add {
+  margin: auto;
+  width: 100%;
+  max-width: 540px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  min-height: 0;
+}
+.hw-add-h {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line-2);
+  flex: none;
+}
+.hw-add-h h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+.hw-add-c {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--faint);
+}
+.hw-add-b {
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.hw-add-grp {
+  padding: 4px 0;
+}
+.hw-add-gt {
+  padding: 6px 14px 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--faint);
+}
+.hw-add-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 14px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.hw-add-row:hover {
+  background: var(--hover);
+}
+.hw-add-row > svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--soft);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+.hw-add-chk {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-2);
+  font-size: 11px;
+  color: var(--accent-ink);
+  flex: none;
+}
+.hw-add-row.on .hw-add-chk {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.hw-add-n {
+  font-size: 12.5px;
+}
+
+/* Corner resize grip — only shown in edit mode; big, obvious, accent-tinted
+   target anchored to the tile's bottom-right corner. */
+.hw-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 26px;
+  height: 26px;
+  z-index: 6;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: se-resize;
+  touch-action: none;
+}
+.hw-resize::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+}
+.hw-resize:hover::after {
+  right: 4px;
+  bottom: 4px;
+  width: 12px;
+  height: 12px;
+}
+
+/* Edit-mode wobble — on the inner .hw-card so the tile element itself isn't
+   transformed. Paused on the tile being dragged. Off for reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .hw-grid.editing .hw:not(.dragging) .hw-card {
+    animation: hw-wobble 2.4s ease-in-out infinite;
+  }
+  .hw-grid.editing .hw:nth-child(2n) .hw-card {
+    animation-delay: -1.2s;
+  }
+  @keyframes hw-wobble {
+    0%,
+    100% {
+      transform: rotate(-0.25deg);
+    }
+    50% {
+      transform: rotate(0.25deg);
+    }
+  }
+}
