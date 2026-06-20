@@ -15,11 +15,16 @@ use chrono::Utc;
 use rusqlite::{params, Transaction};
 use std::path::Path;
 
-// Roughly how many of each kind to own. Actual counts cap at what the catalog holds.
-const N_PRIME: i64 = 32; // warframe/weapon/set parts
-const N_MODS: i64 = 20;
-const N_ARCANES: i64 = 10;
-const N_RESOURCES: i64 = 24;
+/// `fill` (a 1..=100 percentage) is how full the simulated account is — what
+/// fraction of the tradeable catalog (and resource manifest) it owns. 100 ≈ a
+/// maxed "lived-in" account that owns nearly everything; low values are sparse.
+/// Take `pct`% of `total` (rounded up), at least 1 when anything exists.
+fn scaled(total: i64, pct: i64) -> i64 {
+    if total <= 0 {
+        return 0;
+    }
+    (((total * pct) + 99) / 100).clamp(1, total)
+}
 
 /// Tiny xorshift64 PRNG seeded from the wall clock — enough for test fixtures,
 /// and avoids pulling in the `rand` crate (the dep list is intentionally lean).
@@ -60,6 +65,13 @@ impl Rng {
     }
 }
 
+/// Count tradeable catalog rows matching a fixed predicate (a compile-time
+/// constant — never user input).
+fn count_where(tx: &Transaction, predicate: &str) -> AppResult<i64> {
+    let sql = format!("SELECT COUNT(*) FROM catalog_items WHERE is_tradeable = 1 AND {predicate}");
+    Ok(tx.query_row(&sql, [], |r| r.get(0))?)
+}
+
 /// `SELECT slug, max_rank` for a random sample of catalog rows matching a fixed
 /// category predicate. The predicate is a compile-time constant — never user input.
 fn sample(tx: &Transaction, predicate: &str, limit: i64) -> AppResult<Vec<(String, Option<i64>)>> {
@@ -77,9 +89,11 @@ fn sample(tx: &Transaction, predicate: &str, limit: i64) -> AppResult<Vec<(Strin
     Ok(rows)
 }
 
-/// Replace the current inventory + account snapshot with random test data.
-/// Backs the DB up first; returns a summary for the toast.
-pub fn simulate(db: &Db, db_path: &Path) -> AppResult<SimSummary> {
+/// Replace the current inventory + account snapshot with random test data sized
+/// to `fill` (1..=100 % of the catalog owned). Backs the DB up first; returns a
+/// summary for the toast.
+pub fn simulate(db: &Db, db_path: &Path, fill: i64) -> AppResult<SimSummary> {
+    let fill = fill.clamp(1, 100);
     // Guard: the catalog must be populated (and rank-backfilled) or there is
     // nothing to sample. Point the user at the existing refresh tools.
     if catalog::count(db)? == 0 || !catalog::has_any_max_rank(db)? {
@@ -117,7 +131,9 @@ pub fn simulate(db: &Db, db_path: &Path) -> AppResult<SimSummary> {
         }
 
         // --- Prime sets/parts: no ranks, just a (mostly single) owned qty. ---
-        let primes = sample(&tx, "category IN ('warframe','weapon','set')", N_PRIME)?;
+        let prime_pred = "category IN ('warframe','weapon','set')";
+        let n_prime = scaled(count_where(&tx, prime_pred)?, fill);
+        let primes = sample(&tx, prime_pred, n_prime)?;
         for (slug, _) in &primes {
             let qty = rng.small_qty();
             tx.execute(
@@ -129,9 +145,11 @@ pub fn simulate(db: &Db, db_path: &Path) -> AppResult<SimSummary> {
         }
 
         // --- Mods + arcanes: rank-aware, so per-rank pricing is exercised. ---
-        let mut rank_aware = sample(&tx, "category = 'mod'", N_MODS)?;
+        let n_mods_target = scaled(count_where(&tx, "category = 'mod'")?, fill);
+        let mut rank_aware = sample(&tx, "category = 'mod'", n_mods_target)?;
         let n_mods = rank_aware.len() as i64;
-        let arcanes = sample(&tx, "category = 'arcane'", N_ARCANES)?;
+        let n_arc_target = scaled(count_where(&tx, "category = 'arcane'")?, fill);
+        let arcanes = sample(&tx, "category = 'arcane'", n_arc_target)?;
         let n_arcanes = arcanes.len() as i64;
         rank_aware.extend(arcanes);
 
@@ -159,13 +177,19 @@ pub fn simulate(db: &Db, db_path: &Path) -> AppResult<SimSummary> {
         }
 
         // --- Resources: realistic names/icons come from the bundled manifest. ---
+        let res_total: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM item_manifest WHERE category = 'resource'",
+            [],
+            |r| r.get(0),
+        )?;
+        let n_res = scaled(res_total, fill);
         let resources: Vec<String> = {
             let mut stmt = tx.prepare(
                 "SELECT unique_name FROM item_manifest
                  WHERE category = 'resource' ORDER BY RANDOM() LIMIT ?1",
             )?;
             let out = stmt
-                .query_map(params![N_RESOURCES], |r| r.get::<_, String>(0))?
+                .query_map(params![n_res], |r| r.get::<_, String>(0))?
                 .collect::<Result<Vec<_>, _>>()?;
             out
         };
@@ -300,7 +324,7 @@ mod tests {
         set_max_rank(&db, "energize", 5);
         seed_resource(&db, "/Lotus/Types/Items/Ferrite");
 
-        let s = simulate(&db, &path).unwrap();
+        let s = simulate(&db, &path, 100).unwrap();
         assert!(s.items >= 1 && s.mods >= 1 && s.arcanes >= 1 && s.resources >= 1);
         assert!(s.platinum > 0 && s.credits > 0);
 
@@ -345,9 +369,18 @@ mod tests {
     }
 
     #[test]
+    fn scaled_covers_the_range() {
+        assert_eq!(scaled(0, 100), 0); // nothing to own
+        assert_eq!(scaled(200, 100), 200); // full account owns everything
+        assert_eq!(scaled(200, 50), 100); // half
+        assert_eq!(scaled(200, 1), 2); // ceil of 2.0
+        assert_eq!(scaled(10, 1), 1); // always at least one when some exist
+    }
+
+    #[test]
     fn simulate_errors_on_empty_catalog() {
         let db = test_db("simulate-empty");
         let path = std::env::temp_dir().join("wfit-sim-empty.sqlite");
-        assert!(simulate(&db, &path).is_err());
+        assert!(simulate(&db, &path, 50).is_err());
     }
 }

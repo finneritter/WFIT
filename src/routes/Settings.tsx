@@ -252,9 +252,30 @@ function SimPanel() {
   const sim = useSimulateInventory();
   const clear = useClearSimulatedInventory();
   const [armed, setArmed] = useState<null | "sim" | "clear">(null);
+  // How full the simulated account is: % of the tradeable catalog it owns.
+  // High = a lived-in, near-maxed account (thousands of items).
+  const [fill, setFill] = useState(75);
   const busy = sim.isPending || clear.isPending;
   return (
     <>
+      <Row
+        label="Inventory size"
+        hint="How full the fake account is — the share of the catalog it owns. 100% ≈ a maxed, lived-in account (thousands of items); low is sparse."
+      >
+        <div className="sim-scale">
+          <input
+            type="range"
+            min={5}
+            max={100}
+            step={5}
+            value={fill}
+            disabled={busy}
+            onChange={(e) => setFill(Number(e.target.value))}
+            aria-label="Inventory fill percent"
+          />
+          <span className="num">{fill}%</span>
+        </div>
+      </Row>
       <Row
         label="Simulate fake inventory"
         hint="Replace your inventory & account with random sets, mods, arcanes, resources and a plat/credit balance (profile shows random_user). Snapshots the DB to /backups first. For testing screens without a game scan."
@@ -266,7 +287,7 @@ function SimPanel() {
               className="btn warn"
               disabled={busy}
               onClick={() => {
-                sim.mutate();
+                sim.mutate(fill);
                 setArmed(null);
               }}
             >

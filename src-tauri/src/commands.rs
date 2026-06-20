@@ -1825,14 +1825,16 @@ pub fn open_backups_dir(app: tauri::AppHandle) -> AppResult<()> {
 // Gated behind Developer mode in the UI; snapshots the DB before replacing data.
 // ===========================================================================
 
-/// Replace the inventory + account snapshot with random test data (backs up first).
+/// Replace the inventory + account snapshot with random test data (backs up
+/// first). `fill` is how full the account is (1..=100 % of the catalog owned).
 #[tauri::command]
 pub fn simulate_inventory(
     state: State<'_, Arc<AppState>>,
     app: tauri::AppHandle,
+    fill: i64,
 ) -> AppResult<crate::types::SimSummary> {
     let db_path = app_db_path(&app)?;
-    crate::db::simulate::simulate(&state.db, &db_path)
+    crate::db::simulate::simulate(&state.db, &db_path, fill)
 }
 
 /// Drop the simulated inventory/account data and the `random_user` name.

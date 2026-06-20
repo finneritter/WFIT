@@ -552,7 +552,7 @@ export function useBackupNow() {
 export function useSimulateInventory() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.simulateInventory(),
+    mutationFn: (fill: number) => api.simulateInventory(fill),
     onSuccess: (s) => {
       pushToast(
         `Simulated ${s.items} items, ${s.mods} mods, ${s.arcanes} arcanes, ${s.resources} resources · ${s.platinum}p`,

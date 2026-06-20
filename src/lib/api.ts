@@ -66,8 +66,10 @@ export const rebuildCache = () => invoke<number>("rebuild_cache");
 export const wipeApp = () => invoke<void>("wipe_app");
 export const setsRefresh = () => invoke<number>("sets_refresh");
 
-// developer — simulate a fake owned inventory for local testing
-export const simulateInventory = () => invoke<SimSummary>("simulate_inventory");
+// developer — simulate a fake owned inventory for local testing. `fill` is how
+// full the account is (1–100 % of the catalog owned).
+export const simulateInventory = (fill: number) =>
+  invoke<SimSummary>("simulate_inventory", { fill });
 export const clearSimulatedInventory = () => invoke<void>("clear_simulated_inventory");
 export const getCatalog = (category?: string) =>
   invoke<CatalogRow[]>("get_catalog", { category: category ?? null });
