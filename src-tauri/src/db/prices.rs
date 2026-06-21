@@ -31,24 +31,43 @@ pub fn effective_price(c: &Connection, slug: &str, rank: Option<i64>) -> AppResu
             )
             .optional()?,
     };
-    if order.is_some() {
-        return Ok(order);
-    }
-    match rank {
-        Some(r) => rank_price(c, slug, r),
-        None => Ok(c
+    // The rank-appropriate robust trade median — used both as the fallback when
+    // there's no ask AND as the sanity bound that rejects a troll-high ask.
+    let median: Option<i64> = match rank {
+        Some(r) => rank_price(c, slug, r)?,
+        None => c
             .query_row(
                 "SELECT median_plat FROM price_cache WHERE slug = ?1",
                 params![slug],
                 |x| x.get(0),
             )
-            .optional()?),
-    }
+            .optional()?,
+    };
+    Ok(effective_from(order, median))
 }
 
 // Recommended "best" sell price tuning.
 const LOWBALL_FRAC: f64 = 0.7; // ignore a live floor this far below the normal trade median
 const UNDERCUT: i64 = 1; // sit 1p under the robust low to be the cheapest reasonable seller
+
+// A live ask above this multiple of the robust trade median is treated as a thin
+// or troll book, not a real price — VALUATION ignores it and trusts the median.
+// (Symmetric to LOWBALL_FRAC, which guards the sell-suggestion path on the low side.)
+const HIGHBALL_MULT: f64 = 4.0;
+
+/// Decide the VALUATION price from the live ask and the rank-appropriate trade
+/// median. Prefer the live ask (it tracks the real market for illiquid items),
+/// EXCEPT when it sits far above the trade median — a single fat-finger/troll ask
+/// must not inflate portfolio value (e.g. a lone 80000p ask on a 145p item). Shared
+/// by [`effective_price`] and its in-memory twin [`effective_price_from`]; both must
+/// route through this so they stay identical.
+pub fn effective_from(order: Option<i64>, median: Option<i64>) -> Option<i64> {
+    match (order, median) {
+        (Some(ask), Some(med)) if med > 0 && ask as f64 > HIGHBALL_MULT * med as f64 => Some(med),
+        (Some(ask), _) => Some(ask),
+        (None, m) => m,
+    }
+}
 
 /// Pure decision for the recommended sell price from the two robust signals:
 /// `robust_low` = median of the cheapest 5 online asks (`order_cache`), `median` =
@@ -184,36 +203,34 @@ fn nearest(entries: &[(i64, i64)], target: i64) -> Option<i64> {
 /// In-memory twin of [`effective_price`] — same precedence: live ask
 /// (`order_cache`) → per-rank trade median (`price_rank`) → headline median.
 pub fn effective_price_from(maps: &PriceMaps, slug: &str, rank: Option<i64>) -> Option<i64> {
-    if let Some(orders) = maps.orders.get(slug) {
-        let order = match rank {
-            // exact/nearest non-negative rank, tie → higher rank
-            Some(r) => nearest(
-                &orders
-                    .iter()
-                    .copied()
-                    .filter(|&(rk, _)| rk >= 0)
-                    .collect::<Vec<_>>(),
-                r,
-            ),
-            // non-ranked: rank -1 (true unranked) preferred over 0
-            None => orders
+    let order = maps.orders.get(slug).and_then(|orders| match rank {
+        // exact/nearest non-negative rank, tie → higher rank
+        Some(r) => nearest(
+            &orders
                 .iter()
-                .filter(|&&(rk, _)| rk == -1 || rk == 0)
-                .min_by_key(|&&(rk, _)| rk)
-                .map(|&(_, sell)| sell),
-        };
-        if order.is_some() {
-            return order;
-        }
-    }
-    match rank {
+                .copied()
+                .filter(|&(rk, _)| rk >= 0)
+                .collect::<Vec<_>>(),
+            r,
+        ),
+        // non-ranked: rank -1 (true unranked) preferred over 0
+        None => orders
+            .iter()
+            .filter(|&&(rk, _)| rk == -1 || rk == 0)
+            .min_by_key(|&&(rk, _)| rk)
+            .map(|&(_, sell)| sell),
+    });
+    // Same rank-appropriate median as `effective_price` (per-rank → headline), used
+    // as the fallback AND the troll-high-ask sanity bound — keep the two in lockstep.
+    let median = match rank {
         Some(r) => maps
             .ranks
             .get(slug)
             .and_then(|rs| nearest(rs, r))
             .or_else(|| maps.headline.get(slug).copied()),
         None => maps.headline.get(slug).copied(),
-    }
+    };
+    effective_from(order, median)
 }
 
 /// Σ qty_r × effective per-rank price for a slug's owned rank breakdown, using
@@ -713,6 +730,35 @@ mod tests {
                 let mem = effective_price_from(&maps, slug, rank);
                 assert_eq!(sql, mem, "slug={slug} rank={rank:?}");
             }
+        }
+    }
+
+    // A single troll/fat-finger ask far above the robust trade median must not be
+    // taken as the valuation price — it falls back to the median. (Regression:
+    // xiphos_set had a lone 80000p ask vs a 145p trade median, inflating realizable.)
+    #[test]
+    fn effective_price_clamps_a_troll_high_ask_to_the_trade_median() {
+        let c = fixture();
+        c.execute_batch(
+            "INSERT INTO inventory_items VALUES ('troll', 1), ('legit', 1), ('rankt', 1);
+             INSERT INTO order_cache VALUES ('troll', -1, 80000);
+             INSERT INTO price_cache VALUES ('troll', 145);
+             -- an ask within band is trusted as-is
+             INSERT INTO order_cache VALUES ('legit', -1, 160);
+             INSERT INTO price_cache VALUES ('legit', 145);
+             -- ranked: a troll rank-0 ask vs the per-rank trade median
+             INSERT INTO order_cache VALUES ('rankt', 0, 9000);
+             INSERT INTO price_rank VALUES ('rankt', 0, 30);",
+        )
+        .unwrap();
+        let maps = load_owned_price_maps(&c).unwrap();
+        for (slug, rank, want) in [
+            ("troll", None, Some(145)), // 80000 >> 4×145 → median
+            ("legit", None, Some(160)), // 160 within band → live ask
+            ("rankt", Some(0), Some(30)), // 9000 >> 4×30 → per-rank median
+        ] {
+            assert_eq!(effective_price(&c, slug, rank).unwrap(), want, "sql {slug}");
+            assert_eq!(effective_price_from(&maps, slug, rank), want, "mem {slug}");
         }
     }
 
