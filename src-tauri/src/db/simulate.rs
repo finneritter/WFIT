@@ -55,14 +55,71 @@ impl Rng {
     fn chance(&mut self, num: u64, den: u64) -> bool {
         self.next_u64() % den < num
     }
-    /// A small owned quantity, weighted hard toward a single copy.
-    fn small_qty(&mut self) -> i64 {
+    /// A prime set/part owned quantity. Usually one (you sell duplicates), but
+    /// real accounts keep a few dupes and sometimes a pile of a heavily-farmed
+    /// common part. Primes don't hoard the way mods do, so this stays modest.
+    fn prime_qty(&mut self) -> i64 {
         match self.range(1, 100) {
-            1..=70 => 1,
-            71..=92 => 2,
-            _ => 3,
+            1..=75 => 1,
+            76..=92 => self.range(2, 3),
+            93..=98 => self.range(4, 8),
+            _ => self.range(9, 20),
         }
     }
+
+    /// A rank-0 mod stack — the bulk of a real account's item count. Most mods
+    /// you hold a handful of; many commons pile into the dozens (kept for endo /
+    /// ranking). Scaled by `fill` so a sparse account also has shallower hoards.
+    fn mod_stack(&mut self, fill: i64) -> i64 {
+        let base = match self.range(1, 100) {
+            1..=60 => self.range(1, 4),
+            61..=92 => self.range(5, 16),
+            _ => self.range(25, 60),
+        };
+        (base * fill / 100).max(1)
+    }
+
+    /// A rank-0 arcane stack. You need 21 rank-0 copies to max one, so meaningful
+    /// holds run deeper than primes. Scaled by `fill`.
+    fn arcane_stack(&mut self, fill: i64) -> i64 {
+        let base = match self.range(1, 100) {
+            1..=60 => self.range(1, 8),
+            _ => self.range(9, 21),
+        };
+        (base * fill / 100).max(1)
+    }
+}
+
+/// Insert a rank-aware owned item (mod or arcane): a rank-0 stack of `base_qty`
+/// plus, sometimes, a single maxed copy. Keeps `inventory_items.qty` equal to the
+/// sum of its rank rows (the scan invariant). Returns the total owned qty written.
+fn insert_rank_aware(
+    tx: &Transaction,
+    rng: &mut Rng,
+    now: &str,
+    slug: &str,
+    max_rank: Option<i64>,
+    base_qty: i64,
+) -> AppResult<i64> {
+    let max_rank = max_rank.unwrap_or(0).max(0);
+    let mut ranks: Vec<(i64, i64)> = vec![(0, base_qty)];
+    if max_rank > 0 && rng.chance(2, 5) {
+        ranks.push((max_rank, rng.range(1, 2)));
+    }
+    let total: i64 = ranks.iter().map(|(_, q)| q).sum();
+    tx.execute(
+        "INSERT INTO inventory_items
+            (slug, qty, first_added_at, last_modified_at, source, last_scan_qty)
+         VALUES (?1, ?2, ?3, ?3, 'de_scan', ?2)",
+        params![slug, total, now],
+    )?;
+    for (rank, qty) in ranks {
+        tx.execute(
+            "INSERT INTO inventory_ranks (slug, rank, qty) VALUES (?1, ?2, ?3)",
+            params![slug, rank, qty],
+        )?;
+    }
+    Ok(total)
 }
 
 /// Count tradeable catalog rows matching a fixed predicate (a compile-time
@@ -135,7 +192,7 @@ pub fn simulate(db: &Db, db_path: &Path, fill: i64) -> AppResult<SimSummary> {
         let n_prime = scaled(count_where(&tx, prime_pred)?, fill);
         let primes = sample(&tx, prime_pred, n_prime)?;
         for (slug, _) in &primes {
-            let qty = rng.small_qty();
+            let qty = rng.prime_qty();
             tx.execute(
                 "INSERT INTO inventory_items
                     (slug, qty, first_added_at, last_modified_at, source, last_scan_qty)
@@ -144,36 +201,24 @@ pub fn simulate(db: &Db, db_path: &Path, fill: i64) -> AppResult<SimSummary> {
             )?;
         }
 
-        // --- Mods + arcanes: rank-aware, so per-rank pricing is exercised. ---
+        // --- Mods: rank-aware and the bulk of the item count (deep duplicate
+        // stacks, scaled by `fill`), so per-rank pricing + multi-copy haircut are
+        // exercised hard. ---
         let n_mods_target = scaled(count_where(&tx, "category = 'mod'")?, fill);
-        let mut rank_aware = sample(&tx, "category = 'mod'", n_mods_target)?;
-        let n_mods = rank_aware.len() as i64;
+        let mods = sample(&tx, "category = 'mod'", n_mods_target)?;
+        let n_mods = mods.len() as i64;
+        for (slug, max_rank) in &mods {
+            let base = rng.mod_stack(fill);
+            insert_rank_aware(&tx, &mut rng, &now, slug, *max_rank, base)?;
+        }
+
+        // --- Arcanes: rank-aware, deeper holds than primes (21 rank-0 = one max). ---
         let n_arc_target = scaled(count_where(&tx, "category = 'arcane'")?, fill);
         let arcanes = sample(&tx, "category = 'arcane'", n_arc_target)?;
         let n_arcanes = arcanes.len() as i64;
-        rank_aware.extend(arcanes);
-
-        for (slug, max_rank) in &rank_aware {
-            // Always a rank-0 stack; sometimes a maxed copy too. inventory_items.qty
-            // is kept equal to the sum of its rank rows (the scan invariant).
-            let max_rank = max_rank.unwrap_or(0).max(0);
-            let mut ranks: Vec<(i64, i64)> = vec![(0, rng.small_qty())];
-            if max_rank > 0 && rng.chance(2, 5) {
-                ranks.push((max_rank, rng.range(1, 2)));
-            }
-            let total: i64 = ranks.iter().map(|(_, q)| q).sum();
-            tx.execute(
-                "INSERT INTO inventory_items
-                    (slug, qty, first_added_at, last_modified_at, source, last_scan_qty)
-                 VALUES (?1, ?2, ?3, ?3, 'de_scan', ?2)",
-                params![slug, total, now],
-            )?;
-            for (rank, qty) in ranks {
-                tx.execute(
-                    "INSERT INTO inventory_ranks (slug, rank, qty) VALUES (?1, ?2, ?3)",
-                    params![slug, rank, qty],
-                )?;
-            }
+        for (slug, max_rank) in &arcanes {
+            let base = rng.arcane_stack(fill);
+            insert_rank_aware(&tx, &mut rng, &now, slug, *max_rank, base)?;
         }
 
         // --- Resources: realistic names/icons come from the bundled manifest. ---
@@ -234,12 +279,20 @@ pub fn simulate(db: &Db, db_path: &Path, fill: i64) -> AppResult<SimSummary> {
             [],
         )?;
 
+        // Headline "how many items does this account hold" — the sum of owned qty
+        // across every tradeable row (what the user sees as "~15k items").
+        let total_items: i64 =
+            tx.query_row("SELECT COALESCE(SUM(qty), 0) FROM inventory_items", [], |r| {
+                r.get(0)
+            })?;
+
         tx.commit()?;
         Ok(SimSummary {
             items: primes.len() as i64,
             mods: n_mods,
             arcanes: n_arcanes,
             resources: resources.len() as i64,
+            total_items,
             platinum,
             credits,
             backup_path,
@@ -251,6 +304,7 @@ pub fn simulate(db: &Db, db_path: &Path, fill: i64) -> AppResult<SimSummary> {
         mods = summary.mods,
         arcanes = summary.arcanes,
         resources = summary.resources,
+        total_items = summary.total_items,
         "simulated inventory written"
     );
     Ok(summary)
@@ -327,6 +381,9 @@ mod tests {
         let s = simulate(&db, &path, 100).unwrap();
         assert!(s.items >= 1 && s.mods >= 1 && s.arcanes >= 1 && s.resources >= 1);
         assert!(s.platinum > 0 && s.credits > 0);
+        // total_items is the sum of owned qty, and must be >= the distinct row
+        // count (deep stacks make it strictly larger on a real-sized catalog).
+        assert!(s.total_items >= s.items + s.mods + s.arcanes);
 
         db.read(|c| {
             // inventory_items.qty must equal the sum of its rank rows (scan invariant).
@@ -375,6 +432,54 @@ mod tests {
         assert_eq!(scaled(200, 50), 100); // half
         assert_eq!(scaled(200, 1), 2); // ceil of 2.0
         assert_eq!(scaled(10, 1), 1); // always at least one when some exist
+    }
+
+    #[test]
+    fn stacks_collapse_to_one_at_minimum_fill() {
+        // At fill=1 every base stack (<= ~60) scales to 0 and floors to 1, so a
+        // sparse account holds shallow stacks regardless of the rarity roll.
+        let mut rng = Rng::new();
+        for _ in 0..200 {
+            assert_eq!(rng.mod_stack(1), 1);
+            assert_eq!(rng.arcane_stack(1), 1);
+            assert!(rng.mod_stack(100) >= 1);
+            assert!(rng.arcane_stack(100) >= 1);
+            assert!(rng.prime_qty() >= 1);
+        }
+    }
+
+    #[test]
+    fn full_fill_lands_near_a_real_account_size() {
+        // Seed a catalog matching the live tradeable counts (warframe 200, weapon
+        // 607, set 231, mod 1388, arcane 170) so total item count is realistic.
+        let db = test_db("simulate-size");
+        let path = std::env::temp_dir().join(format!("wfit-size-{}.sqlite", std::process::id()));
+        let mut n = 0;
+        let mut seed = |cat: &str, count: usize, max_rank: Option<i64>| {
+            for _ in 0..count {
+                n += 1;
+                seed_item(&db, &format!("{cat}_{n}"), cat, Some(10));
+                if let Some(mr) = max_rank {
+                    set_max_rank(&db, &format!("{cat}_{n}"), mr);
+                }
+            }
+        };
+        seed("warframe", 200, None);
+        seed("weapon", 607, None);
+        seed("set", 231, None);
+        seed("mod", 1388, Some(10));
+        seed("arcane", 170, Some(5));
+
+        let s = simulate(&db, &path, 100).unwrap();
+        // ~15k is the target; RNG + the rarity tiers spread it, so assert a wide
+        // but realistic band (and that it's an order of magnitude past row count).
+        eprintln!("full-fill total_items = {}", s.total_items);
+        assert!(
+            (9_000..=24_000).contains(&s.total_items),
+            "total_items {} outside realistic band",
+            s.total_items
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

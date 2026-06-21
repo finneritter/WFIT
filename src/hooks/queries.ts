@@ -555,7 +555,7 @@ export function useSimulateInventory() {
     mutationFn: (fill: number) => api.simulateInventory(fill),
     onSuccess: (s) => {
       pushToast(
-        `Simulated ${s.items} items, ${s.mods} mods, ${s.arcanes} arcanes, ${s.resources} resources · ${s.platinum}p`,
+        `Simulated ${s.total_items.toLocaleString()} items total — ${s.items} sets/parts, ${s.mods} mods, ${s.arcanes} arcanes, ${s.resources} resources · ${s.platinum}p`,
         "info",
       );
       qc.invalidateQueries(); // inventory + account replaced — refetch everything

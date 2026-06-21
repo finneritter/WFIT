@@ -333,6 +333,7 @@ export interface SimSummary {
   mods: number;
   arcanes: number;
   resources: number;
+  total_items: number; // sum of owned qty across all tradeable rows (the "15k" headline)
   platinum: number;
   credits: number;
   backup_path: string;

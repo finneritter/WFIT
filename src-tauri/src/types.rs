@@ -615,6 +615,7 @@ pub struct SimSummary {
     pub mods: i64,
     pub arcanes: i64,
     pub resources: i64,
+    pub total_items: i64, // sum of owned qty across all tradeable rows (the "15k" headline)
     pub platinum: i64,
     pub credits: i64,
     pub backup_path: String,
