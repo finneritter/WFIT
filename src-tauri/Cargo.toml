@@ -62,11 +62,14 @@ windows = { version = "0.58", features = [
 ] }
 
 [features]
-default = ["custom-protocol"]
+# `dev-dashboard` ships ON by default so every build (incl. release bundles) carries
+# the local web dashboard for anyone to test. Build lean with `--no-default-features
+# --features custom-protocol` to drop it (and its axum dep) entirely.
+default = ["custom-protocol", "dev-dashboard"]
 custom-protocol = ["tauri/custom-protocol"]
-# Dev-only local web dashboard (observability + stress + fault injection). Compiles
-# the devtools server + axum ONLY when enabled — never in shipped release builds.
-# Run with: npm run tauri:dev:dash  (passes --features dev-dashboard to cargo).
+# Local web dashboard (observability + stress + fault injection): a loopback HTTP
+# server + axum. Default-on; the server binds 127.0.0.1:8848 (WFIT_DASH_PORT, 0 to
+# disable) and is opened from Settings › Developer › Web dashboard.
 dev-dashboard = ["dep:axum", "tokio/net"]
 # Exposes a tiny `bench_api` re-export of the crate-private valuation hot paths so
 # `benches/` can reach them. Off by default; never enabled in release. Run benches
