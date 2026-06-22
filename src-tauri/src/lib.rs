@@ -1,5 +1,9 @@
 mod commands;
 mod db;
+// Dev-only tooling (dashboard/metrics/faults). The module is always present so
+// hot-path shims resolve, but its server + axum dep compile only under the
+// `dev-dashboard` feature — see devtools/mod.rs.
+mod devtools;
 mod domain;
 mod error;
 mod gamescan;
@@ -19,6 +23,14 @@ use tracing_subscriber::EnvFilter;
 /// One User-Agent for every outbound request; tracks the crate version so a
 /// release bump can never leave a stale version string behind.
 pub const USER_AGENT: &str = concat!("wfit-desktop/", env!("CARGO_PKG_VERSION"));
+
+/// Public re-exports for criterion benches only (feature `bench`). Lets `benches/`
+/// reach the otherwise crate-private valuation hot paths without widening the
+/// normal public API. Never enabled in release.
+#[cfg(feature = "bench")]
+pub mod bench_api {
+    pub use crate::db::inventory::realizable_value;
+}
 
 pub struct AppState {
     pub db: db::Db,
@@ -225,6 +237,8 @@ pub fn run() {
             commands::backup_now,
             commands::list_backups,
             commands::open_backups_dir,
+            commands::dev_dashboard_url,
+            commands::open_dev_dashboard,
             // developer — simulate fake inventory
             commands::simulate_inventory,
             commands::clear_simulated_inventory,
@@ -374,6 +388,24 @@ fn init_app(
     });
     app.manage(state.clone());
 
+    // Dev-only local stress/observability dashboard (feature `dev-dashboard`).
+    // Loopback-only; `WFIT_DASH_PORT=0` disables. It does NOT auto-open — Settings ›
+    // Developer has an "Open dashboard" button (the URL is published on bind).
+    #[cfg(feature = "dev-dashboard")]
+    {
+        let port: u16 = std::env::var("WFIT_DASH_PORT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(8848);
+        if port != 0 {
+            tauri::async_runtime::spawn(devtools::server::serve(
+                state.clone(),
+                db_path.clone(),
+                port,
+            ));
+        }
+    }
+
     // Presence keeper: holds the warframe.market socket open while the
     // user is online/ingame so their orders show active to buyers.
     tauri::async_runtime::spawn(wfm_socket::supervisor(presence_rx));
@@ -418,7 +450,7 @@ impl Drop for PricingGuard<'_> {
 /// On launch: refresh the catalog if empty/stale, prime owned + watchlist prices,
 /// then drain the rest in the background at the throttled rate. UI never blocks
 /// and the 350 ms global limit is never exceeded.
-async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
+pub(crate) async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()> {
     use db::{catalog, meta, prices, relic_data, vault};
 
     // Hold the "syncing…" flag for the entire warm-up (catalog → vault → owned →
@@ -570,6 +602,8 @@ fn spawn_price_heartbeat(state: Arc<AppState>, app: tauri::AppHandle) {
                     Err(e) => tracing::warn!(error = %e, "heartbeat listings sync failed"),
                 }
             }
+            // Record every tick (even no-change) so the dashboard sees cadence + age.
+            devtools::rec_heartbeat(changed as u64);
             if changed > 0 {
                 tracing::debug!(changed, "heartbeat: refreshed");
                 let _ = db::meta::set(

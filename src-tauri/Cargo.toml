@@ -41,6 +41,15 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.25"
 
+# Dev-only: the local stress/observability dashboard HTTP server (feature
+# `dev-dashboard`, off by default). axum is hyper/tokio-based like reqwest, so it
+# adds little beyond what's already in the graph — and only when the feature is on.
+axum = { version = "0.7", optional = true, default-features = false, features = [
+  "json",
+  "tokio",
+  "http1",
+] }
+
 # Windows: game-inventory memory scan (gamescan/memory_windows.rs, process_windows.rs).
 # Pure-Rust bindings — no extra SDK needed to `cargo check` the target from other hosts.
 [target.'cfg(windows)'.dependencies]
@@ -55,6 +64,21 @@ windows = { version = "0.58", features = [
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+# Dev-only local web dashboard (observability + stress + fault injection). Compiles
+# the devtools server + axum ONLY when enabled — never in shipped release builds.
+# Run with: npm run tauri:dev:dash  (passes --features dev-dashboard to cargo).
+dev-dashboard = ["dep:axum", "tokio/net"]
+# Exposes a tiny `bench_api` re-export of the crate-private valuation hot paths so
+# `benches/` can reach them. Off by default; never enabled in release. Run benches
+# with: cargo bench --features bench
+bench = []
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "valuation"
+harness = false
 
 # Smaller, faster installed binary (scripts/install.sh builds --release).
 # panic stays "unwind" — Tauri callbacks tolerate caught panics better.

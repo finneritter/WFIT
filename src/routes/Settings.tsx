@@ -8,10 +8,12 @@ import {
   useBackups,
   useCatalogRefresh,
   useClearSimulatedInventory,
+  useDevDashboardUrl,
   useExcludedMinPlat,
   useExcludedMinPlatByCat,
   useExcludedRarities,
   useNotificationPrefs,
+  useOpenDevDashboard,
   usePricesRefresh,
   useRebuildCache,
   useSetExcludedMinPlat,
@@ -336,6 +338,33 @@ function SimPanel() {
         )}
       </Row>
     </>
+  );
+}
+
+// Opens the local dev web dashboard (stress + observability + fault injection).
+// The URL is only non-null when the app was launched with the dev-dashboard build
+// (`npm run tauri:dev:dash`); otherwise the button explains how to enable it.
+function DevDashboardRow() {
+  const { data: url } = useDevDashboardUrl();
+  const open = useOpenDevDashboard();
+  return (
+    <Row
+      label="Web dashboard"
+      hint={
+        url
+          ? `Live stress & observability dashboard at ${url} — metrics, load generation, fault injection.`
+          : "Not running. Launch with `npm run tauri:dev:dash` to enable the dev dashboard."
+      }
+    >
+      <button
+        type="button"
+        className="btn"
+        disabled={!url || open.isPending}
+        onClick={() => open.mutate()}
+      >
+        {url ? "Open dashboard" : "Unavailable"}
+      </button>
+    </Row>
   );
 }
 
@@ -760,6 +789,12 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
 
       {dev ? (
         <>
+          <section className="tpanel">
+            <div className="tpanel-h">
+              <h3>Developer · tools</h3>
+            </div>
+            <DevDashboardRow />
+          </section>
           <section className="tpanel">
             <div className="tpanel-h">
               <h3>Developer · simulation</h3>

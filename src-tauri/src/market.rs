@@ -85,7 +85,23 @@ impl Market {
     /// Idempotent public reads only — auth'd/write requests don't use this.
     async fn get_throttled(&self, url: &str) -> AppResult<reqwest::Response> {
         self.throttled().await;
-        let first = self.http.get(url).send().await;
+        // Dev fault injection (after the throttle, so serialization is preserved;
+        // a no-op when the dev-dashboard feature is off). 1 = timeout, 2 = 429.
+        match crate::devtools::fault_request().await {
+            1 => {
+                crate::devtools::rec_market(None, Duration::ZERO, true);
+                return Err(AppError::Other("injected fault: timeout".into()));
+            }
+            2 => {
+                crate::devtools::rec_market(Some(429), Duration::ZERO, true);
+                tracing::warn!(url, "injected fault: 429 — retrying once");
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                self.throttled().await;
+                return Ok(self.timed_send(url).await?);
+            }
+            _ => {}
+        }
+        let first = self.timed_send(url).await;
         let transient = match &first {
             Ok(r) => r.status().as_u16() == 429 || r.status().is_server_error(),
             Err(e) => e.is_timeout() || e.is_connect(),
@@ -96,7 +112,22 @@ impl Market {
         tracing::warn!(url, "transient warframe.market failure — retrying once");
         tokio::time::sleep(Duration::from_secs(1)).await;
         self.throttled().await;
-        Ok(self.http.get(url).send().await?)
+        Ok(self.timed_send(url).await?)
+    }
+
+    /// A single GET, timing ONLY `send().await` (never the throttle wait) and
+    /// recording latency/status to the dev metrics. The recorder is a no-op when
+    /// the `dev-dashboard` feature is off, so this is just `get(url).send()` then.
+    async fn timed_send(&self, url: &str) -> reqwest::Result<reqwest::Response> {
+        let t = Instant::now();
+        let res = self.http.get(url).send().await;
+        let elapsed = t.elapsed();
+        let (status, is_err) = match &res {
+            Ok(r) => (Some(r.status().as_u16()), !r.status().is_success()),
+            Err(_) => (None, true),
+        };
+        crate::devtools::rec_market(status, elapsed, is_err);
+        res
     }
 
     /// Pass A: the full item list. Classifies into the 5 categories and skips
@@ -482,6 +513,8 @@ impl Market {
             }
         }
         let bids = bids.into_iter().map(|((rk, p), q)| (rk, p, q)).collect();
+        // Dev fault injection: optional empty book / outlier ask (no-op when off).
+        let (sells, bids) = crate::devtools::fault_order_book(sells, bids);
         Ok(Some(OrderBook { sells, bids }))
     }
 
@@ -789,7 +822,21 @@ impl Market {
             let send = req
                 .try_clone()
                 .ok_or_else(|| AppError::Other("request body not cloneable for retry".into()))?;
-            let r = send.send().await?;
+            let t = Instant::now();
+            let r = match send.send().await {
+                Ok(r) => {
+                    crate::devtools::rec_market(
+                        Some(r.status().as_u16()),
+                        t.elapsed(),
+                        !r.status().is_success(),
+                    );
+                    r
+                }
+                Err(e) => {
+                    crate::devtools::rec_market(None, t.elapsed(), true);
+                    return Err(e.into());
+                }
+            };
             let status = r.status();
             if status.is_success() {
                 return Ok(r);

@@ -93,6 +93,18 @@ Retired (do not build from): `reference/design/` (old "Primely" hi-fi),
   Linux + Windows bundles into a draft GitHub release.
 - `npm run build` — `tsc` typecheck + Vite build. In `src-tauri/`: `cargo build` / `cargo clippy` /
   `cargo test` (Rust unit tests exist — pricing/valuation/gamescan logic).
+- **Dev dashboard (`npm run tauri:dev:dash`)** — runs the app with the `dev-dashboard` Cargo
+  feature, which spawns a loopback HTTP server (`127.0.0.1:8848`, `WFIT_DASH_PORT` to change, `0` to
+  disable) serving a local **stress + observability + fault-injection** dashboard. Open it from
+  **Settings › Developer › Web dashboard** (no auto-open). Everything lives in `src-tauri/src/devtools/`
+  and is **compiled out of release entirely** — the feature + its axum dep are absent from the default
+  build (verify with `cargo tree -e no-dev | grep axum`). Hot-path instrumentation (market throttle,
+  DB writer/read pool, heartbeat, `owned_holdings`) is zero-cost when the feature is off (no-op shims /
+  `#[cfg]` blocks). Reproducible CLI: `cargo bench --features bench` (criterion microbench of the
+  liquidation curve) and `scripts/stress.sh` (drives the dashboard's HTTP API through a scenario).
+  When touching the market/db hot paths, keep the recorder/fault shims intact and DON'T let timing
+  wrap the throttle *wait* (only `send().await`) — that would skew latency and risk the serialization
+  guarantee.
 - "Verify" = gates green (`cargo test`/`clippy`, `tsc`, `npm run build`, `biome`) AND it builds/runs.
   Data-level bugs need a live-DB spot-check (`sqlite3 $DB`), not just the gates — most pricing bugs
   this project hit were data/integration issues invisible to unit tests.

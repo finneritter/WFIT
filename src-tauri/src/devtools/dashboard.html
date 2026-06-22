@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WFIT dev dashboard</title>
+<style>
+  :root {
+    --bg: #0c0d10; --panel: #131519; --panel-2: #171a1f; --line: #23262d;
+    --ink: #e6e8ec; --soft: #9aa0aa; --faint: #5c626c; --accent: #7aa2f7;
+    --pos: #6ad08e; --neg: #e06c75; --hot: #e0a06c;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--mono); font-size: 13px; line-height: 1.5;
+  }
+  header {
+    display: flex; align-items: baseline; gap: 12px;
+    padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { font-size: 14px; margin: 0; letter-spacing: 0.5px; }
+  header .sub { color: var(--faint); font-size: 12px; }
+  header .conn { margin-left: auto; color: var(--soft); }
+  .dot { display: inline-block; width: 8px; height: 8px; background: var(--faint); margin-right: 6px; }
+  .dot.live { background: var(--pos); }
+  main { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; }
+  .tile .k { color: var(--soft); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .tile .v { font-size: 22px; margin-top: 4px; }
+  .tile .u { color: var(--faint); font-size: 12px; margin-left: 3px; }
+  .tile .x { color: var(--faint); font-size: 11px; margin-top: 2px; }
+  .v.warn { color: var(--hot); } .v.bad { color: var(--neg); } .v.good { color: var(--pos); }
+  section h2 {
+    font-size: 12px; color: var(--soft); text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 8px; font-weight: 600;
+  }
+  .spark { background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; }
+  canvas { display: block; width: 100%; height: 80px; }
+  .controls { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+  .ctl { background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .ctl label { color: var(--soft); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .ctl .field { display: flex; align-items: center; gap: 6px; }
+  input[type="number"], select {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--ink);
+    font-family: var(--mono); font-size: 13px; padding: 4px 6px; width: 100%;
+  }
+  input[type="number"] { width: 80px; }
+  button {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--ink);
+    font-family: var(--mono); font-size: 12px; padding: 5px 10px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.warn:hover { border-color: var(--neg); color: var(--neg); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .chk { flex-direction: row; align-items: center; gap: 8px; }
+  .chk input { width: auto; }
+  pre#log {
+    background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; margin: 0;
+    max-height: 200px; overflow: auto; color: var(--soft); font-size: 12px; white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>WFIT · dev dashboard</h1>
+  <span class="sub">observability</span>
+  <span class="conn"><span id="dot" class="dot"></span><span id="connState">connecting…</span> · up <span id="uptime">0s</span></span>
+</header>
+<main>
+  <section>
+    <h2>warframe.market</h2>
+    <div class="grid">
+      <div class="tile"><div class="k">req / s</div><div class="v" id="reqps">0</div></div>
+      <div class="tile"><div class="k">requests</div><div class="v" id="reqs">0</div></div>
+      <div class="tile"><div class="k">429s</div><div class="v" id="r429">0</div></div>
+      <div class="tile"><div class="k">errors</div><div class="v" id="errs">0</div><div class="x" id="errrate"></div></div>
+      <div class="tile"><div class="k">latency p50</div><div class="v" id="p50">0<span class="u">ms</span></div></div>
+      <div class="tile"><div class="k">latency p95</div><div class="v" id="p95">0<span class="u">ms</span></div></div>
+      <div class="tile"><div class="k">latency max</div><div class="v" id="lmax">0<span class="u">ms</span></div></div>
+    </div>
+  </section>
+  <section class="spark">
+    <h2>request latency (recent)</h2>
+    <canvas id="latcanvas"></canvas>
+  </section>
+  <section>
+    <h2>heartbeat &amp; pricing</h2>
+    <div class="grid">
+      <div class="tile"><div class="k">last tick</div><div class="v" id="hbage">—</div></div>
+      <div class="tile"><div class="k">ticks</div><div class="v" id="hbticks">0</div></div>
+      <div class="tile"><div class="k">slugs changed</div><div class="v" id="hbchanged">0</div></div>
+      <div class="tile"><div class="k">pricing coverage</div><div class="v" id="cov">0<span class="u">%</span></div><div class="x" id="covx"></div></div>
+    </div>
+  </section>
+  <section>
+    <h2>database</h2>
+    <div class="grid">
+      <div class="tile"><div class="k">writer ops</div><div class="v" id="wops">0</div></div>
+      <div class="tile"><div class="k">writer wait avg</div><div class="v" id="wwait">0<span class="u">µs</span></div></div>
+      <div class="tile"><div class="k">writer held avg</div><div class="v" id="wheld">0<span class="u">µs</span></div></div>
+      <div class="tile"><div class="k">read ops</div><div class="v" id="rops">0</div></div>
+      <div class="tile"><div class="k">read wait avg</div><div class="v" id="rwait">0<span class="u">µs</span></div></div>
+      <div class="tile"><div class="k">read query avg</div><div class="v" id="rquery">0<span class="u">µs</span></div></div>
+    </div>
+  </section>
+  <section>
+    <h2>valuation (owned_holdings)</h2>
+    <div class="grid">
+      <div class="tile"><div class="k">runs</div><div class="v" id="vruns">0</div></div>
+      <div class="tile"><div class="k">last</div><div class="v" id="vlast">0<span class="u">ms</span></div></div>
+      <div class="tile"><div class="k">avg</div><div class="v" id="vavg">0<span class="u">ms</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>stress</h2>
+    <div class="controls">
+      <div class="ctl">
+        <label>simulate inventory</label>
+        <div class="field"><input type="number" id="simFill" value="100" min="1" max="100" /><span class="u">% fill</span></div>
+        <button class="warn" data-act="sim">replace inventory</button>
+      </div>
+      <div class="ctl">
+        <label>market burst (concurrent)</label>
+        <div class="field">
+          <input type="number" id="burstN" value="8" min="1" max="30" />
+          <select id="burstKind"><option value="orders">order books</option><option value="stats">statistics</option></select>
+        </div>
+        <button data-act="burst">fire burst</button>
+      </div>
+      <div class="ctl">
+        <label>valuation bench</label>
+        <div class="field"><input type="number" id="benchN" value="20" min="1" max="200" /><span class="u">runs</span></div>
+        <button data-act="bench">run bench</button>
+      </div>
+      <div class="ctl">
+        <label>full launch sync</label>
+        <button data-act="sync">run full sync</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>fault injection</h2>
+    <div class="controls">
+      <div class="ctl chk"><input type="checkbox" id="fEnabled" /><label>enabled (master switch)</label></div>
+      <div class="ctl"><label>429 chance %</label><input type="number" id="fP429" value="0" min="0" max="100" /></div>
+      <div class="ctl"><label>timeout chance %</label><input type="number" id="fTimeout" value="0" min="0" max="100" /></div>
+      <div class="ctl"><label>added latency ms</label><input type="number" id="fLatency" value="0" min="0" /></div>
+      <div class="ctl"><label>latency jitter ms</label><input type="number" id="fJitter" value="0" min="0" /></div>
+      <div class="ctl"><label>empty order book %</label><input type="number" id="fEmpty" value="0" min="0" max="100" /></div>
+      <div class="ctl"><label>outlier price %</label><input type="number" id="fMalformed" value="0" min="0" max="100" /></div>
+      <div class="ctl"><label>db writer hold ms</label><input type="number" id="fDbHold" value="0" min="0" max="4000" /></div>
+      <div class="ctl"><label>&nbsp;</label><div class="field"><button data-act="faults-apply">apply</button><button data-act="faults-reset">reset</button></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>actions</h2>
+    <div class="controls">
+      <div class="ctl"><label>caches</label><button data-act="rebuild">rebuild cache</button></div>
+      <div class="ctl"><label>inventory</label><button class="warn" data-act="clear">clear inventory</button></div>
+    </div>
+  </section>
+
+  <section class="spark">
+    <h2>output</h2>
+    <pre id="log">ready.</pre>
+  </section>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => (n ?? 0).toLocaleString();
+  function ago(s) {
+    if (s == null) return "—";
+    if (s < 60) return s + "s"; if (s < 3600) return Math.floor(s / 60) + "m";
+    return Math.floor(s / 3600) + "h";
+  }
+  function drawSpark(vals) {
+    const c = $("latcanvas"); const dpr = window.devicePixelRatio || 1;
+    const w = c.clientWidth, h = c.clientHeight;
+    c.width = w * dpr; c.height = h * dpr;
+    const ctx = c.getContext("2d"); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, w, h);
+    if (!vals || vals.length === 0) return;
+    const max = Math.max(...vals, 1);
+    ctx.strokeStyle = "#7aa2f7"; ctx.lineWidth = 1.5; ctx.beginPath();
+    vals.forEach((v, i) => {
+      const x = (i / Math.max(vals.length - 1, 1)) * w;
+      const y = h - (v / max) * (h - 4) - 2;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    ctx.stroke();
+    ctx.fillStyle = "#5c626c"; ctx.font = "10px ui-monospace, monospace";
+    ctx.fillText(max + "ms", 2, 10);
+  }
+  function apply(m) {
+    $("uptime").textContent = ago(m.uptime_s);
+    $("reqps").textContent = m.market_req_per_s;
+    $("reqs").textContent = fmt(m.market_requests);
+    const r429 = $("r429"); r429.textContent = fmt(m.market_429);
+    r429.className = "v" + (m.market_429 > 0 ? " warn" : "");
+    const errs = $("errs"); errs.textContent = fmt(m.market_errors);
+    errs.className = "v" + (m.market_errors > 0 ? " bad" : "");
+    $("errrate").textContent = (m.market_err_rate * 100).toFixed(0) + "% of recent";
+    $("p50").innerHTML = m.lat_p50_ms + '<span class="u">ms</span>';
+    $("p95").innerHTML = m.lat_p95_ms + '<span class="u">ms</span>';
+    $("lmax").innerHTML = m.lat_max_ms + '<span class="u">ms</span>';
+    drawSpark(m.recent_latencies);
+    $("hbage").textContent = ago(m.hb_age_s);
+    $("hbticks").textContent = fmt(m.hb_ticks);
+    $("hbchanged").textContent = fmt(m.hb_changed_total);
+    const cov = $("cov"); cov.innerHTML = m.pricing_coverage_pct + '<span class="u">%</span>';
+    cov.className = "v" + (m.pricing_coverage_pct >= 90 ? " good" : m.pricing_coverage_pct < 50 ? " warn" : "");
+    $("covx").textContent = fmt(m.pricing_owned_priced) + " / " + fmt(m.pricing_owned_total) + " owned";
+    $("wops").textContent = fmt(m.db_writer_ops);
+    $("wwait").innerHTML = fmt(m.db_writer_wait_avg_us) + '<span class="u">µs</span>';
+    $("wheld").innerHTML = fmt(m.db_writer_held_avg_us) + '<span class="u">µs</span>';
+    $("rops").textContent = fmt(m.db_read_ops);
+    $("rwait").innerHTML = fmt(m.db_read_wait_avg_us) + '<span class="u">µs</span>';
+    $("rquery").innerHTML = fmt(m.db_read_query_avg_us) + '<span class="u">µs</span>';
+    $("vruns").textContent = fmt(m.valuation_runs);
+    $("vlast").innerHTML = fmt(m.valuation_last_ms) + '<span class="u">ms</span>';
+    $("vavg").innerHTML = fmt(m.valuation_avg_ms) + '<span class="u">ms</span>';
+  }
+  function connect() {
+    const es = new EventSource("/api/stream");
+    es.onopen = () => { $("dot").className = "dot live"; $("connState").textContent = "live"; };
+    es.onmessage = (e) => { try { apply(JSON.parse(e.data)); } catch (_) {} };
+    es.onerror = () => {
+      $("dot").className = "dot"; $("connState").textContent = "reconnecting…";
+      es.close(); setTimeout(connect, 2000);
+    };
+  }
+  // --- Controls ---
+  const num = (id) => Number($(id).value) || 0;
+  function log(label, data) {
+    const ts = new Date().toLocaleTimeString();
+    const body = typeof data === "string" ? data : JSON.stringify(data);
+    $("log").textContent = `[${ts}] ${label}: ${body}\n` + $("log").textContent;
+  }
+  async function post(path, body, label) {
+    try {
+      const r = await fetch(path, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify(body || {}),
+      });
+      const txt = await r.text();
+      let parsed; try { parsed = JSON.parse(txt); } catch (_) { parsed = txt; }
+      log(label + (r.ok ? "" : ` (HTTP ${r.status})`), parsed);
+      return parsed;
+    } catch (e) { log(label + " FAILED", String(e)); }
+  }
+  function faultsBody() {
+    return {
+      enabled: $("fEnabled").checked,
+      p429_pct: num("fP429"), timeout_pct: num("fTimeout"),
+      extra_latency_ms: num("fLatency"), jitter_ms: num("fJitter"),
+      empty_book_pct: num("fEmpty"), malformed_price_pct: num("fMalformed"),
+      db_lock_hold_ms: num("fDbHold"),
+    };
+  }
+  function loadFaults(f) {
+    $("fEnabled").checked = !!f.enabled;
+    $("fP429").value = f.p429_pct; $("fTimeout").value = f.timeout_pct;
+    $("fLatency").value = f.extra_latency_ms; $("fJitter").value = f.jitter_ms;
+    $("fEmpty").value = f.empty_book_pct; $("fMalformed").value = f.malformed_price_pct;
+    $("fDbHold").value = f.db_lock_hold_ms;
+  }
+  const ACTS = {
+    sim: () => post("/api/stress/simulate", { fill: num("simFill") }, "simulate"),
+    burst: () => post("/api/stress/market-burst", { n: num("burstN"), kind: $("burstKind").value }, "burst"),
+    bench: () => post("/api/stress/valuation-bench", { n: num("benchN") }, "bench"),
+    sync: () => post("/api/stress/full-sync", {}, "full-sync"),
+    rebuild: () => post("/api/actions/rebuild-cache", {}, "rebuild"),
+    clear: () => post("/api/actions/clear", {}, "clear"),
+    "faults-apply": async () => loadFaults(await post("/api/faults", faultsBody(), "faults")),
+    "faults-reset": async () => {
+      const reset = { enabled: false, p429_pct: 0, timeout_pct: 0, extra_latency_ms: 0, jitter_ms: 0, empty_book_pct: 0, malformed_price_pct: 0, db_lock_hold_ms: 0 };
+      loadFaults(await post("/api/faults", reset, "faults reset"));
+    },
+  };
+  document.querySelectorAll("button[data-act]").forEach((b) => {
+    b.addEventListener("click", async () => {
+      const act = b.dataset.act; b.disabled = true;
+      try { await ACTS[act](); } finally { b.disabled = false; }
+    });
+  });
+
+  // Initial paint from the one-shot endpoint, then live stream.
+  fetch("/api/metrics").then((r) => r.json()).then(apply).catch(() => {});
+  fetch("/api/faults").then((r) => r.json()).then(loadFaults).catch(() => {});
+  connect();
+</script>
+</body>
+</html>

@@ -117,6 +117,11 @@ pub async fn update_game_data(
 /// touched. Prices repopulate via the background drain afterwards.
 #[tauri::command]
 pub async fn rebuild_cache(state: State<'_, Arc<AppState>>) -> AppResult<usize> {
+    rebuild_cache_impl(state.inner()).await
+}
+
+/// The rebuild logic, callable without Tauri's `State` (the dev dashboard reuses it).
+pub(crate) async fn rebuild_cache_impl(state: &Arc<AppState>) -> AppResult<usize> {
     state.db.with(|c| {
         c.execute_batch(
             "DELETE FROM price_history;
@@ -1817,6 +1822,34 @@ pub fn open_backups_dir(app: tauri::AppHandle) -> AppResult<()> {
         .arg(&dir)
         .spawn()
         .map_err(|e| AppError::Other(format!("open folder: {e}")))?;
+    Ok(())
+}
+
+/// The dev dashboard's URL when it's running (built with `--features dev-dashboard`
+/// and bound), else null. The Settings button uses this to show itself only when
+/// there's something to open.
+#[tauri::command]
+pub fn dev_dashboard_url() -> Option<String> {
+    crate::devtools::dashboard_url()
+}
+
+/// Open the running dev dashboard in the default browser. Errors if it isn't up.
+#[tauri::command]
+pub fn open_dev_dashboard() -> AppResult<()> {
+    let url = crate::devtools::dashboard_url().ok_or_else(|| {
+        AppError::Other("dev dashboard isn't running — launch with: npm run tauri:dev:dash".into())
+    })?;
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(target_os = "windows") {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(opener)
+        .arg(&url)
+        .spawn()
+        .map_err(|e| AppError::Other(format!("open dashboard: {e}")))?;
     Ok(())
 }
 

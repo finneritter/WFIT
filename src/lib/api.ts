@@ -58,6 +58,10 @@ export const backupNow = () => invoke<string>("backup_now");
 export const listBackups = () => invoke<BackupInfo[]>("list_backups");
 export const openBackupsDir = () => invoke<void>("open_backups_dir");
 
+// dev dashboard (only running when built with --features dev-dashboard)
+export const devDashboardUrl = () => invoke<string | null>("dev_dashboard_url");
+export const openDevDashboard = () => invoke<void>("open_dev_dashboard");
+
 // catalog
 export const catalogCount = () => invoke<number>("catalog_count");
 export const catalogRefresh = () => invoke<number>("catalog_refresh");

@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
+    "tauri:dev:dash": "WFIT_DASH_PORT=8848 tauri dev --features dev-dashboard",
     "lint": "biome check .",
     "format": "biome check --write .",
     "prepare": "git config core.hooksPath .githooks || true"

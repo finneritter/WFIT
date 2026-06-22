@@ -657,10 +657,11 @@ impl ExclusionRules {
     }
 }
 
-fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
+pub(crate) fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
+    let start = std::time::Instant::now();
     // The whole valuation — exclusion settings included — runs on a single
     // pooled read connection, so it never queues behind the writer mutex.
-    db.read(|c| {
+    let out = db.read(|c| {
         let rules = ExclusionRules::load(c)?;
 
         let owned = fetch_owned(c)?;
@@ -764,7 +765,9 @@ fn owned_holdings(db: &Db) -> AppResult<Vec<InventoryRow>> {
             }
         }
         Ok(out)
-    })
+    });
+    crate::devtools::rec_valuation(start.elapsed());
+    out
 }
 
 /// Owned slugs with qty > 0 — the priority set for price refresh.

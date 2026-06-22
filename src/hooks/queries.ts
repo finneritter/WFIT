@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo } from "react";
 import * as api from "../lib/api";
-import { pushToast } from "../lib/toast";
+import { errorMessage, pushToast } from "../lib/toast";
 import type { CatalogRow, NotificationPrefs, RepriceApply, ScanApply } from "../lib/types";
 
 type QC = ReturnType<typeof useQueryClient>;
@@ -545,6 +545,22 @@ export function useBackupNow() {
       pushToast(`Backup saved: ${path}`, "info");
       qc.invalidateQueries({ queryKey: keys.backups });
     },
+  });
+}
+
+// ---- developer: web dashboard ----
+// URL is non-null only when the app was built with `--features dev-dashboard`
+// and the server bound. Settings shows the "Open dashboard" button accordingly.
+export const useDevDashboardUrl = () =>
+  useQuery({
+    queryKey: ["devDashboardUrl"],
+    queryFn: api.devDashboardUrl,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+export function useOpenDevDashboard() {
+  return useMutation({
+    mutationFn: () => api.openDevDashboard(),
+    onError: (e) => pushToast(errorMessage(e), "error"),
   });
 }
 

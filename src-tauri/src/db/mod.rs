@@ -139,24 +139,68 @@ impl Db {
     /// Run a closure on the writer connection (shared read/write lock). Use for
     /// writes and the few legacy read paths that have not moved to `read`.
     pub fn with<R>(&self, f: impl FnOnce(&Connection) -> AppResult<R>) -> AppResult<R> {
-        let conn = self.inner.lock();
-        f(&conn)
+        #[cfg(feature = "dev-dashboard")]
+        {
+            let t0 = std::time::Instant::now();
+            let conn = self.inner.lock();
+            let waited = t0.elapsed();
+            let t1 = std::time::Instant::now();
+            let r = f(&conn);
+            crate::devtools::metrics::record_db_writer(waited, t1.elapsed());
+            r
+        }
+        #[cfg(not(feature = "dev-dashboard"))]
+        {
+            let conn = self.inner.lock();
+            f(&conn)
+        }
     }
 
     pub fn with_mut<R>(&self, f: impl FnOnce(&mut Connection) -> AppResult<R>) -> AppResult<R> {
-        let mut conn = self.inner.lock();
-        f(&mut conn)
+        #[cfg(feature = "dev-dashboard")]
+        {
+            let t0 = std::time::Instant::now();
+            let mut conn = self.inner.lock();
+            let waited = t0.elapsed();
+            // Dev-only artificial writer contention, if a fault is armed.
+            crate::devtools::faults::db_hold();
+            let t1 = std::time::Instant::now();
+            let r = f(&mut conn);
+            crate::devtools::metrics::record_db_writer(waited, t1.elapsed());
+            r
+        }
+        #[cfg(not(feature = "dev-dashboard"))]
+        {
+            let mut conn = self.inner.lock();
+            f(&mut conn)
+        }
     }
 
     /// Run a read-only closure on a pooled connection — never blocks on the
     /// writer mutex, so UI reads stay responsive during a market sync. The
     /// connection is `query_only`; do not attempt writes here.
     pub fn read<R>(&self, f: impl FnOnce(&Connection) -> AppResult<R>) -> AppResult<R> {
-        let conn = self
-            .readers
-            .get()
-            .map_err(|e| AppError::Other(format!("read pool: {e}")))?;
-        f(&conn)
+        #[cfg(feature = "dev-dashboard")]
+        {
+            let t0 = std::time::Instant::now();
+            let conn = self
+                .readers
+                .get()
+                .map_err(|e| AppError::Other(format!("read pool: {e}")))?;
+            let waited = t0.elapsed();
+            let t1 = std::time::Instant::now();
+            let r = f(&conn);
+            crate::devtools::metrics::record_db_read(waited, t1.elapsed());
+            r
+        }
+        #[cfg(not(feature = "dev-dashboard"))]
+        {
+            let conn = self
+                .readers
+                .get()
+                .map_err(|e| AppError::Other(format!("read pool: {e}")))?;
+            f(&conn)
+        }
     }
 }
 
