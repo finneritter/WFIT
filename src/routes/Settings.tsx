@@ -788,26 +788,14 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
       </section>
 
       {dev ? (
-        <>
-          <section className="tpanel">
-            <div className="tpanel-h">
-              <h3>Developer · tools</h3>
-            </div>
-            <DevDashboardRow />
-          </section>
-          <section className="tpanel">
-            <div className="tpanel-h">
-              <h3>Developer · simulation</h3>
-            </div>
-            <SimPanel />
-          </section>
-          <section className="tpanel danger">
-            <div className="tpanel-h">
-              <h3>Developer · danger zone</h3>
-            </div>
-            <DangerZone />
-          </section>
-        </>
+        <section className="tpanel">
+          <div className="tpanel-h">
+            <h3>Developer</h3>
+          </div>
+          <DevDashboardRow />
+          <SimPanel />
+          <DangerZone />
+        </section>
       ) : null}
     </div>
   );
