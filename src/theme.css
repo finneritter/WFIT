@@ -3167,8 +3167,30 @@ body.hide-scan-tag .src-tag.src-scan {
   min-width: 0;
 }
 .set-k {
+  display: inline-flex;
+  align-items: center;
   font-size: 12.5px;
   font-weight: 600;
+}
+/* hover-hint marker — the old .set-h sentence now lives in this ⓘ's title */
+.set-i {
+  display: inline-flex;
+  margin-left: 5px;
+  color: var(--faint);
+  cursor: help;
+  transition: color 0.12s ease;
+}
+.set-i:hover {
+  color: var(--soft);
+}
+.set-i svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .set-h {
   font-size: 10.5px;
@@ -4272,6 +4294,14 @@ button.fgroup-h:hover .fg-go {
 }
 
 /* per-category cheap-item floors (Settings → Portfolio valuation) */
+/* The category-floors row holds a tall stack of inputs; top-align so the label
+   heads the stack instead of floating in its vertical centre. */
+.set-row:has(.cat-mins) {
+  align-items: flex-start;
+}
+.set-row:has(.cat-mins) .set-k {
+  padding-top: 6px;
+}
 .cat-mins {
   display: flex;
   flex-direction: column;

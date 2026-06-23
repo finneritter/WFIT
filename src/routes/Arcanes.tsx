@@ -107,11 +107,9 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
 
       <div className="tpanel">
         <div className="tpanel-h">
-          <h3>Best collection to spend Vosfor on</h3>
-          <span className="meta">
-            realizable platinum per 200 Vosfor pull (liquidity-adjusted) · click a row for the
-            breakdown
-          </span>
+          <h3 title="Realizable platinum per 200 Vosfor pull (liquidity-adjusted). Click a row for the breakdown.">
+            Best collection to spend Vosfor on
+          </h3>
         </div>
         <table className="dtable">
           <thead>
@@ -178,10 +176,9 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
 
       <div className="tpanel">
         <div className="tpanel-h">
-          <h3>Your arcanes — sell or dissolve</h3>
-          <span className="meta">
-            sell unranked spares for plat, or dissolve into Vosfor — whichever's worth more
-          </span>
+          <h3 title="Sell unranked spares for plat, or dissolve into Vosfor — whichever's worth more.">
+            Your arcanes — sell or dissolve
+          </h3>
         </div>
         <div className="mkt-filters" style={{ margin: "0 0 10px" }}>
           <Chip active={sellOnly === "1"} onClick={() => setSellOnly(sellOnly === "1" ? "0" : "1")}>

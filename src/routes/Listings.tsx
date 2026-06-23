@@ -184,8 +184,7 @@ function SignInCard() {
       </div>
       <div className="content" style={{ padding: 14 }}>
         <p className="muted" style={{ marginTop: 0 }}>
-          Read-only. WFIT imports your <b>listings</b> (orders), not your in-game inventory —
-          there's no DE inventory API. This first step needs only your public username.
+          Imports your warframe.market <b>listings</b>, read-only. Enter your public username.
         </p>
         <div className="search" style={{ marginBottom: 8 }}>
           <input
@@ -233,28 +232,23 @@ function SessionCard({ onSkip }: { onSkip: () => void }) {
       </div>
       <div className="content" style={{ padding: 14 }}>
         <p className="muted" style={{ marginTop: 0 }}>
-          You're connected read-only. To see <b>invisible</b> orders and to create, edit, delete, or
-          set the status of orders, paste your warframe.market <b>JWT</b> cookie. No password is
-          ever entered — it's stored only in your OS keychain, never the database.
+          Optional. Paste your warframe.market <b>JWT</b> cookie to manage orders (create, edit,
+          delete, status) and see invisible ones. Stored in your OS keychain, never the database.
         </p>
         <div className="grp" style={{ paddingLeft: 0 }}>
           Where to find your JWT
         </div>
         <ol className="muted" style={{ margin: "4px 0 12px", paddingLeft: 18, lineHeight: 1.6 }}>
           <li>
-            Open <b>warframe.market</b> in your browser and log in.
+            Log in to <b>warframe.market</b> in your browser.
           </li>
           <li>
-            Open DevTools (<b>F12</b>, or <b>⌘⌥I</b>) → <b>Application</b> (Chrome) / <b>Storage</b>{" "}
-            (Firefox) tab.
+            DevTools (<b>F12</b>) → <b>Application</b> / <b>Storage</b> → <b>Cookies</b> →{" "}
+            <b>warframe.market</b>.
           </li>
           <li>
-            <b>Cookies</b> → <b>https://warframe.market</b>.
+            Copy the <b>JWT</b> cookie value (starts <code>eyJ…</code>), paste it below.
           </li>
-          <li>
-            Copy the value of the <b>JWT</b> cookie (a long string starting <code>eyJ…</code>).
-          </li>
-          <li>Paste it below.</li>
         </ol>
         <div className="search" style={{ marginBottom: 8 }}>
           <input

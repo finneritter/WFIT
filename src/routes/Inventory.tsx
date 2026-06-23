@@ -561,11 +561,11 @@ export function Inventory({ onOpen }: { onOpen: (slug: string) => void }) {
       {pricing && progress ? (
         <div className="pricing-note">
           <span className="spin" />
-          syncing prices from warframe.market…{" "}
+          syncing prices…{" "}
           <b className="num">
             {fmt(progress.priced)} / {fmt(progress.total)}
           </b>{" "}
-          priced — values update as this fills in.
+          priced
         </div>
       ) : null}
       <div className="statband">

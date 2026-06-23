@@ -172,7 +172,6 @@ function ArbitrationPanel({ block }: { block: ArbitrationBlock | null }) {
               ))}
             </>
           ) : null}
-          <div className="src-note">schedule + tiers via browse.wf · Arbitration Goons</div>
         </>
       )}
     </div>
@@ -548,10 +547,7 @@ function VendorsTab({ ws, onOpen }: { ws: Worldstate; onOpen: (slug: string) => 
           {baroRows.length > 0 ? (
             <VendorTable rows={baroRows} currency="ducats" onOpen={onOpen} />
           ) : (
-            <div className="baro-note">
-              Baro's stock is only known once he arrives — the worldstate doesn't expose it before
-              then, so the inventory appears here when he's active.
-            </div>
+            <div className="baro-note">Stock shows once Baro arrives.</div>
           )}
         </div>
         <div className="tpanel">

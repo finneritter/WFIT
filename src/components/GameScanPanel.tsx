@@ -139,10 +139,9 @@ export function GameScanPanel() {
         <div className="set-l">
           <div className="set-k">Read owned items from the running game</div>
           <div className="set-h">
-            Reads the live Warframe client's memory to import your <b>true owned counts</b> — the
-            one thing warframe.market can't give. This{" "}
-            <b>violates DE's Terms of Service and could get your account banned.</b> Opt-in, never
-            logs in. Supported on Linux &amp; Windows.
+            Reads the live game client's memory for your true owned counts.{" "}
+            <b>Violates DE's Terms of Service and could get your account banned.</b> Linux &amp;
+            Windows only.
           </div>
         </div>
         <div className="set-c">

@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import { GameScanPanel } from "../components/GameScanPanel";
+import { Icon } from "../components/Icon";
 import type { ScreenId } from "../components/Sidebar";
 import {
   useAppVersion,
@@ -55,14 +56,22 @@ function Row({
   children,
 }: {
   label: string;
-  hint: string;
+  // Detailed explanation, shown on hover behind a small ⓘ. Omit for
+  // self-evident controls so they stay clean.
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="set-row">
       <div className="set-l">
-        <div className="set-k">{label}</div>
-        <div className="set-h">{hint}</div>
+        <div className="set-k">
+          {label}
+          {hint ? (
+            <span className="set-i" title={hint}>
+              <Icon name="info" />
+            </span>
+          ) : null}
+        </div>
       </div>
       <div className="set-c">{children}</div>
     </div>
@@ -458,7 +467,7 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
         <div className="tpanel-h">
           <h3>Appearance</h3>
         </div>
-        <Row label="Theme" hint="Light or dark palette — applies instantly, remembered next launch">
+        <Row label="Theme">
           <Seg
             value={prefs.theme}
             options={[
@@ -481,7 +490,7 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
             onChange={(v) => update({ font: v as Font })}
           />
         </Row>
-        <Row label="Density" hint="Tile size in the inventory grid">
+        <Row label="Density">
           <Seg
             value={prefs.dense ? "dense" : "comfy"}
             options={[
@@ -501,7 +510,7 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
             onChange={(v) => update({ showScanTag: v === "on" })}
           />
         </Row>
-        <Row label="Price deltas" hint="Color gains/losses green & red, or keep them flat mono">
+        <Row label="Price deltas">
           <Seg
             value={prefs.flatDeltas ? "flat" : "color"}
             options={[
@@ -665,10 +674,7 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
               : "manifest unchanged"}
           </div>
         ) : null}
-        <Row
-          label="Refresh prices"
-          hint="Re-pull owned + watchlist prices from warframe.market now"
-        >
+        <Row label="Refresh prices">
           <button
             type="button"
             className="btn"
@@ -678,7 +684,7 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
             {prices.isPending ? "Refreshing…" : "Refresh"}
           </button>
         </Row>
-        <Row label="Refresh catalog" hint="Re-pull the full item list (~3.8k items, one call)">
+        <Row label="Refresh catalog">
           <button type="button" className="btn" disabled={busy} onClick={() => catalog.mutate()}>
             {catalog.isPending ? "Refreshing…" : "Refresh"}
           </button>
@@ -743,14 +749,12 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
         <div className="tpanel-h">
           <h3>warframe.market account</h3>
         </div>
-        <Row
-          label="Connection"
-          hint={
-            account?.connected
-              ? `Connected as ${account.username}${account.has_session ? " · session active" : ""}`
-              : "Not connected — read-only listings & import"
-          }
-        >
+        <Row label="Connection">
+          <span className="muted" style={{ marginRight: 10 }}>
+            {account?.connected
+              ? `${account.username}${account.has_session ? " · session active" : ""}`
+              : "Not connected"}
+          </span>
           <button type="button" className="btn" onClick={() => onNavigate("listings")}>
             Manage
           </button>
@@ -763,19 +767,16 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
         <div className="tpanel-h">
           <h3>About</h3>
         </div>
-        <Row label="Version" hint="WFIT — Warframe Item Tracker">
+        <Row label="Version">
           <span className="num">v{version ?? "…"}</span>
         </Row>
-        <Row
-          label="Data sources"
-          hint="Prices/items: warframe.market · World-state: warframestat.us"
-        >
-          <span />
+        <Row label="Data sources">
+          <span className="muted">warframe.market · warframestat.us</span>
         </Row>
-        <Row label="Database" hint="$APPDATA/dev.finn.wfit/wfit.sqlite — local, single user">
-          <span />
+        <Row label="Database">
+          <span className="muted">$APPDATA/dev.finn.wfit/wfit.sqlite</span>
         </Row>
-        <Row label="Developer mode" hint="Reveals testing tools, including a full app wipe">
+        <Row label="Developer mode" hint="Reveals testing tools, including a full app wipe.">
           <Seg
             value={dev ? "on" : "off"}
             options={[

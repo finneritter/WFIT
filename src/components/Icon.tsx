@@ -38,6 +38,8 @@ const PATHS: Record<string, string> = {
   home: "M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10",
   // feather "user" — Account screen
   user: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+  // feather "info" — hover-hint marker (Settings rows, etc.)
+  info: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 16v-4M12 8h.01",
 };
 
 export const Icon = memo(function Icon({ name }: { name: string }) {
