@@ -127,8 +127,15 @@ fn position_and_show(app: &tauri::AppHandle) {
         let _ = win.set_position(PhysicalPosition::new(x, y));
     }
 
-    // Click-through: pointer events pass to the game beneath. Re-applied each show
-    // (cheap, and robust if the window was ever recreated).
-    let _ = win.set_ignore_cursor_events(true);
+    // Show BEFORE enabling click-through. On Linux, set_ignore_cursor_events(true)
+    // calls `gdk_window().unwrap()` inside tao's event loop (tao
+    // platform_impl/linux/event_loop.rs ~457); the GDK window only exists once the
+    // widget is realized. Our overlay is created `visible:false` (never realized),
+    // so toggling click-through first would unwrap a None and abort the whole
+    // process (the panic is inside a C callback that can't unwind). show() posts
+    // Visible(true) → show_all() (synchronous realize) ahead of the click-through
+    // request on the same FIFO event-loop channel, so the GDK window is live by
+    // the time click-through is applied.
     let _ = win.show();
+    let _ = win.set_ignore_cursor_events(true);
 }
