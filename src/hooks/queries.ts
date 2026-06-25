@@ -5,7 +5,13 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo } from "react";
 import * as api from "../lib/api";
 import { errorMessage, pushToast } from "../lib/toast";
-import type { CatalogRow, NotificationPrefs, RepriceApply, ScanApply } from "../lib/types";
+import type {
+  CatalogRow,
+  NotificationPrefs,
+  OverlayPrefs,
+  RepriceApply,
+  ScanApply,
+} from "../lib/types";
 
 type QC = ReturnType<typeof useQueryClient>;
 
@@ -29,6 +35,7 @@ export const keys = {
   excludedMinPlat: ["excludedMinPlat"] as const,
   excludedMinPlatByCat: ["excludedMinPlatByCat"] as const,
   notificationPrefs: ["notificationPrefs"] as const,
+  overlayPrefs: ["overlayPrefs"] as const,
   sets: ["sets"] as const,
   ducats: ["ducats"] as const,
   arcanes: ["arcanes"] as const,
@@ -459,6 +466,18 @@ export function useSetNotificationPrefs() {
   return useMutation({
     mutationFn: (prefs: NotificationPrefs) => api.setNotificationPrefs(prefs),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.notificationPrefs }),
+  });
+}
+
+// ---- cascade overlay ----
+export const useOverlayPrefs = () =>
+  useQuery({ queryKey: keys.overlayPrefs, queryFn: api.getOverlayPrefs });
+export function useSetOverlayPrefs() {
+  const qc = useQueryClient();
+  return useMutation({
+    // The setter re-registers the global hotkey backend-side as a side effect.
+    mutationFn: (prefs: OverlayPrefs) => api.setOverlayPrefs(prefs),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.overlayPrefs }),
   });
 }
 

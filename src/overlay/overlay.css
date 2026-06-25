@@ -1,0 +1,183 @@
+/* Cascade HUD overlay — standalone styles. This window does NOT load the main
+   app's theme.css, so everything it needs is self-contained here: a transparent
+   page (the Tauri window is transparent) with one centered, rounded, semi-
+   transparent pill that tints to the active relic tier. */
+
+:root {
+  /* Relic-tier accents — mirrors theme.css so the pill matches the Rotation screen. */
+  --t-lith: #8a8f98;
+  --t-meso: #6f9bd1;
+  --t-neo: #c9a84a;
+  --t-axi: #9a83e0;
+  --t-requiem: #d0685c;
+  --t-omnia: #e0883c;
+  --t-none: #6b7079;
+
+  --ink: #f2f4f7;
+  --muted: #aab0ba;
+  --cd-warn: #e0b341;
+  --cd-soon: #e2705a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  /* The whole window is click-through (set Rust-side), but belt-and-suspenders. */
+  user-select: none;
+  cursor: default;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+
+/* The pill. `--accent` is set per-tier below; falls back to --t-none. */
+.ov {
+  --accent: var(--t-none);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 240px;
+  max-width: 100%;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: rgba(18, 20, 24, 0.72);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04) inset, 0 0 22px
+    -6px var(--accent);
+  color: var(--ink);
+  animation: ov-in 160ms ease-out;
+}
+
+@keyframes ov-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ov {
+    animation: none;
+  }
+}
+
+/* Per-tier accent. The miss state stays neutral. */
+.ov.t-lith {
+  --accent: var(--t-lith);
+}
+.ov.t-meso {
+  --accent: var(--t-meso);
+}
+.ov.t-neo {
+  --accent: var(--t-neo);
+}
+.ov.t-axi {
+  --accent: var(--t-axi);
+}
+.ov.t-requiem {
+  --accent: var(--t-requiem);
+}
+.ov.t-omnia {
+  --accent: var(--t-omnia);
+}
+
+.ov-led {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--accent);
+  box-shadow: 0 0 10px 1px var(--accent);
+}
+.ov-miss .ov-led {
+  box-shadow: none;
+  opacity: 0.55;
+}
+
+.ov-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ov-answer {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+.ov-hit .ov-answer {
+  color: var(--accent);
+}
+
+.ov-detail {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.ov-tier {
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ov-sp {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #d0685c;
+  border: 1px solid color-mix(in srgb, #d0685c 50%, transparent);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.ov-label {
+  color: var(--muted);
+}
+
+.ov-timer {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Countdown threshold colors (the component emits these classes). */
+.cd-warn {
+  color: var(--cd-warn);
+}
+.cd-soon {
+  color: var(--cd-soon);
+}

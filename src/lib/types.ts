@@ -739,6 +739,23 @@ export interface NotificationPrefs {
   weekly_reset: boolean;
 }
 
+/** Cascade HUD overlay prefs (mirrors db::settings::OverlayPrefs). */
+export interface OverlayPrefs {
+  enabled: boolean;
+  hotkey: string; // accelerator, e.g. "Alt+KeyC"
+  duration_secs: number;
+}
+
+/** Cascade overlay status (mirrors worldstate::CascadeStatus). */
+export interface CascadeStatus {
+  active: boolean;
+  tier: string | null;
+  node: string | null;
+  is_hard: boolean;
+  expiry: string | null; // RFC3339 — "time left" when active
+  omnia_reset: string | null; // RFC3339 — "time till reset" when inactive
+}
+
 export interface Worldstate {
   cycles: Cycle[];
   fissures: Fissure[];

@@ -3240,6 +3240,29 @@ body.hide-scan-tag .src-tag.src-scan {
   color: var(--faint);
   font-size: 11px;
 }
+/* Cascade-overlay keybind capture button — wider than a normal chip + monospace
+   so the captured combo reads clearly; the armed state borrows the soft accent. */
+.kb-capture {
+  min-width: 96px;
+  font-family: var(--mono);
+  justify-content: center;
+}
+.kb-capture[aria-pressed="true"] {
+  border-color: var(--soft);
+  color: var(--ink);
+}
+/* A full-width explanatory note inside a settings row (e.g. platform caveats). */
+.set-note {
+  max-width: 360px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--faint);
+  text-align: right;
+}
+.set-note b {
+  color: var(--soft);
+  font-weight: 600;
+}
 /* timezone picker — native select skinned to match the settings inputs.
    The popup list is OS-rendered: color-scheme (set on body) makes it dark,
    and the explicit option colors cover engines that ignore it. */

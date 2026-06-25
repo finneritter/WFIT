@@ -565,6 +565,35 @@ pub fn set_notification_prefs(
     Ok(())
 }
 
+#[tauri::command]
+pub fn get_overlay_prefs(state: State<'_, Arc<AppState>>) -> AppResult<settings::OverlayPrefs> {
+    settings::overlay_prefs(&state.db)
+}
+
+/// Persist the Cascade overlay prefs and re-register the global hotkey to match,
+/// so toggling the feature / rebinding the key takes effect immediately.
+#[tauri::command]
+pub fn set_overlay_prefs(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+    prefs: settings::OverlayPrefs,
+) -> AppResult<()> {
+    settings::set_overlay_prefs(&state.db, &prefs)?;
+    crate::overlay::apply_shortcut(&app, &prefs);
+    Ok(())
+}
+
+/// The Cascade overlay's answer, computed from the cached worldstate. Exposed as
+/// a command so the overlay webview can fetch on load (before its first
+/// `overlay-show` event); the hotkey path pushes the same payload via the event.
+#[tauri::command]
+pub async fn get_cascade_status(
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<crate::worldstate::CascadeStatus> {
+    let ws = state.worldstate.get().await?;
+    Ok(crate::worldstate::cascade_status(&ws.fissures))
+}
+
 /// Fire a notification immediately so the user can confirm OS toasts work (and
 /// grant the permission prompt on platforms that gate it).
 #[tauri::command]

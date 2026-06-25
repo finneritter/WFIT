@@ -27,5 +27,12 @@ export default defineConfig({
     target: "es2021",
     minify: process.env.TAURI_ENV_DEBUG ? false : "esbuild",
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    // Two HTML entries: the main app and the lightweight Cascade overlay window.
+    rollupOptions: {
+      input: {
+        main: "index.html",
+        overlay: "overlay.html",
+      },
+    },
   },
 });

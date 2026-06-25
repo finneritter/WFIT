@@ -9,13 +9,14 @@ mod error;
 mod gamescan;
 mod market;
 mod notify;
+mod overlay;
 mod types;
 mod wfm_account;
 mod wfm_socket;
 mod worldstate;
 
 use chrono::{DateTime, Duration, Utc};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::Manager;
 use tracing_subscriber::EnvFilter;
@@ -47,6 +48,11 @@ pub struct AppState {
     /// read inside the window event loop would be needless), and the set-prefs
     /// command keeps it in sync. Forced false when the tray icon couldn't be built.
     pub close_to_tray: AtomicBool,
+    /// Monotonic counter for the Cascade overlay: each hotkey press bumps it and
+    /// captures the new value; the press's auto-hide timer only hides the window
+    /// if the counter is unchanged when it fires. Lets a re-press cancel the
+    /// previous hide and restart the on-screen duration without tracking handles.
+    pub overlay_gen: AtomicU64,
 }
 
 /// Managed INSTEAD of AppState when startup fails (corrupt DB, failed
@@ -128,6 +134,19 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(
+            // The Cascade overlay's global hotkey. The actual key is registered
+            // dynamically from OverlayPrefs (overlay::apply_shortcut); this just
+            // installs the handler that fires on press. Fire on Pressed only —
+            // not the matching Released — so one keypress = one show.
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        overlay::trigger(app);
+                    }
+                })
+                .build(),
+        )
         .on_window_event(|window, event| {
             // Close-to-tray: hide the main window instead of quitting when the
             // pref is on (mirrored into AppState). `try_state` (not `state`) so
@@ -217,6 +236,10 @@ pub fn run() {
             commands::get_notification_prefs,
             commands::set_notification_prefs,
             commands::send_test_notification,
+            // cascade overlay
+            commands::get_overlay_prefs,
+            commands::set_overlay_prefs,
+            commands::get_cascade_status,
             commands::get_pricing_progress,
             // computed
             commands::get_sets,
@@ -385,8 +408,16 @@ fn init_app(
         presence,
         pricing_active: AtomicBool::new(false),
         close_to_tray: AtomicBool::new(close_to_tray),
+        overlay_gen: AtomicU64::new(0),
     });
     app.manage(state.clone());
+
+    // Register the Cascade overlay's global hotkey from the persisted prefs
+    // (no-op when the feature is off). Failures degrade gracefully inside.
+    overlay::apply_shortcut(
+        app.handle(),
+        &db::settings::overlay_prefs(&state.db).unwrap_or_default(),
+    );
 
     // Dev-only local stress/observability dashboard (feature `dev-dashboard`).
     // Loopback-only; `WFIT_DASH_PORT=0` disables. It does NOT auto-open — Settings ›

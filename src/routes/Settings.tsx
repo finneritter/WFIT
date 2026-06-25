@@ -2,6 +2,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import { GameScanPanel } from "../components/GameScanPanel";
 import { Icon } from "../components/Icon";
+import { KeybindCapture } from "../components/KeybindCapture";
 import type { ScreenId } from "../components/Sidebar";
 import {
   useAppVersion,
@@ -15,12 +16,14 @@ import {
   useExcludedRarities,
   useNotificationPrefs,
   useOpenDevDashboard,
+  useOverlayPrefs,
   usePricesRefresh,
   useRebuildCache,
   useSetExcludedMinPlat,
   useSetExcludedMinPlatByCat,
   useSetExcludedRarities,
   useSetNotificationPrefs,
+  useSetOverlayPrefs,
   useSetsRefresh,
   useSimulateInventory,
   useSummary,
@@ -48,7 +51,7 @@ import {
   systemTimezone,
   timezoneOptions,
 } from "../lib/prefs";
-import type { GameDataProgress, NotificationPrefs } from "../lib/types";
+import type { GameDataProgress, NotificationPrefs, OverlayPrefs } from "../lib/types";
 
 function Row({
   label,
@@ -187,6 +190,88 @@ function Notifications() {
           {testing ? "Sending…" : "Send test"}
         </button>
       </Row>
+    </section>
+  );
+}
+
+// Default while the pref query loads — matches the Rust `Default`.
+const OVERLAY_DEFAULTS: OverlayPrefs = {
+  enabled: false,
+  hotkey: "Alt+KeyC",
+  duration_secs: 6,
+};
+
+// Linux/WebKitGTK userAgent contains "Linux"; show the platform caveat only there.
+const IS_LINUX = typeof navigator !== "undefined" && /Linux/i.test(navigator.userAgent);
+
+function Overlay() {
+  const { data } = useOverlayPrefs();
+  const setPrefs = useSetOverlayPrefs();
+  const prefs = data ?? OVERLAY_DEFAULTS;
+  const [durInput, setDurInput] = useState("");
+  // Show the live pref unless the user is mid-edit on the duration field.
+  const durValue = durInput !== "" ? durInput : String(prefs.duration_secs);
+  // Always write the full blob (the backend stores one JSON object), merging the patch.
+  const save = (patch: Partial<OverlayPrefs>) => setPrefs.mutate({ ...prefs, ...patch });
+  const commitDuration = () => {
+    const n = Math.round(Number(durInput));
+    if (durInput !== "" && Number.isFinite(n)) {
+      save({ duration_secs: Math.min(30, Math.max(1, n)) });
+    }
+    setDurInput("");
+  };
+
+  return (
+    <section className="tpanel">
+      <div className="tpanel-h">
+        <h3>Cascade overlay</h3>
+      </div>
+      <Row
+        label="Enable overlay"
+        hint="A global hotkey pops up a small always-on-top pill showing whether a Void Cascade fissure is live (tinted by relic tier) or how long until the Omnia rotation resets — without leaving the game."
+      >
+        <Seg
+          value={prefs.enabled ? "on" : "off"}
+          options={OFF_ON}
+          onChange={(v) => save({ enabled: v === "on" })}
+        />
+      </Row>
+      <Row
+        label="Hotkey"
+        hint="Click, then press your shortcut. Needs at least one modifier (Ctrl/Alt/Shift/Super). Pick a combo your game doesn't already bind."
+      >
+        <div style={{ opacity: prefs.enabled ? 1 : 0.4 }}>
+          <KeybindCapture value={prefs.hotkey} onChange={(hotkey) => save({ hotkey })} />
+        </div>
+      </Row>
+      <Row
+        label="On-screen time"
+        hint="How long the overlay stays visible per press (1–30 seconds)."
+      >
+        <div className="set-num" style={{ opacity: prefs.enabled ? 1 : 0.4 }}>
+          <input
+            type="number"
+            min={1}
+            max={30}
+            value={durValue}
+            onChange={(e) => setDurInput(e.target.value)}
+            onBlur={commitDuration}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            }}
+          />
+          <span className="u">s</span>
+        </div>
+      </Row>
+      {IS_LINUX ? (
+        <Row label="Heads-up">
+          <div className="set-note">
+            Run Warframe in <b>Borderless/Windowed Fullscreen</b> so the overlay can draw over it —
+            nothing composites over true exclusive fullscreen. On native Wayland, global hotkeys are
+            unreliable; an X11 session is recommended.
+          </div>
+        </Row>
+      ) : null}
     </section>
   );
 }
@@ -540,6 +625,8 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
       </section>
 
       <Notifications />
+
+      <Overlay />
 
       <section className="tpanel">
         <div className="tpanel-h">

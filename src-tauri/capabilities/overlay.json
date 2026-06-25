@@ -1,0 +1,7 @@
+{
+  "identifier": "overlay",
+  "description": "Cascade HUD overlay window — read-only status display. It only listens for the push event and invokes the read-only status command; all window show/hide/position is done from Rust.",
+  "local": true,
+  "windows": ["overlay"],
+  "permissions": ["core:event:default"]
+}

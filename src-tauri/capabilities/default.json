@@ -14,6 +14,10 @@
     "core:webview:allow-create-webview-window",
     "core:window:allow-set-focus",
     "clipboard-manager:allow-write-text",
-    "notification:default"
+    "notification:default",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-unregister-all",
+    "global-shortcut:allow-is-registered"
   ]
 }

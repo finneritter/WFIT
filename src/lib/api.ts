@@ -8,6 +8,7 @@ import type {
   ArcaneDashboard,
   BackupInfo,
   BuyRow,
+  CascadeStatus,
   CatalogRow,
   CodexData,
   CrackNowRow,
@@ -23,6 +24,7 @@ import type {
   ItemSellers,
   ListingRow,
   NotificationPrefs,
+  OverlayPrefs,
   PricingProgress,
   RecommendationRow,
   RelicChoice,
@@ -137,6 +139,12 @@ export const getNotificationPrefs = () => invoke<NotificationPrefs>("get_notific
 export const setNotificationPrefs = (prefs: NotificationPrefs) =>
   invoke<void>("set_notification_prefs", { prefs });
 export const sendTestNotification = () => invoke<void>("send_test_notification");
+
+// cascade overlay
+export const getOverlayPrefs = () => invoke<OverlayPrefs>("get_overlay_prefs");
+export const setOverlayPrefs = (prefs: OverlayPrefs) =>
+  invoke<void>("set_overlay_prefs", { prefs });
+export const getCascadeStatus = () => invoke<CascadeStatus>("get_cascade_status");
 
 // computed
 export const getSets = () => invoke<SetRow[]>("get_sets");

@@ -126,6 +126,47 @@ pub fn set_notification_prefs(db: &Db, prefs: &NotificationPrefs) -> AppResult<(
     set(db, KEY_NOTIFICATION_PREFS, &json)
 }
 
+/// The Void Cascade HUD overlay: a global-hotkey-triggered, always-on-top pill
+/// that answers "is Cascade up?" without leaving the game. Stored as one JSON
+/// blob (same approach as `NotificationPrefs`). `hotkey` is an accelerator string
+/// in the `tauri-plugin-global-shortcut` grammar (e.g. "Alt+KeyC"). Read by the
+/// `overlay` module on startup and whenever the setter re-registers the shortcut.
+pub const KEY_OVERLAY_PREFS: &str = "overlay_prefs";
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(default)] // missing fields fill from Default — adding a field can't break a stored blob
+pub struct OverlayPrefs {
+    pub enabled: bool,
+    pub hotkey: String,
+    pub duration_secs: u32,
+}
+
+impl Default for OverlayPrefs {
+    fn default() -> Self {
+        Self {
+            // Off by default: a global key-grab is intrusive, so the user opts in.
+            enabled: false,
+            hotkey: "Alt+KeyC".into(), // C for Cascade; Alt rarely clashes with games
+            duration_secs: 6,
+        }
+    }
+}
+
+pub fn overlay_prefs_conn(c: &Connection) -> AppResult<OverlayPrefs> {
+    Ok(get_conn(c, KEY_OVERLAY_PREFS)?
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default())
+}
+
+pub fn overlay_prefs(db: &Db) -> AppResult<OverlayPrefs> {
+    db.read(overlay_prefs_conn)
+}
+
+pub fn set_overlay_prefs(db: &Db, prefs: &OverlayPrefs) -> AppResult<()> {
+    let json = serde_json::to_string(prefs)?;
+    set(db, KEY_OVERLAY_PREFS, &json)
+}
+
 /// Parsed list of excluded mod rarities (lowercase canonical slugs).
 pub fn excluded_rarities_conn(c: &Connection) -> AppResult<Vec<String>> {
     Ok(get_conn(c, KEY_EXCLUDED_RARITIES)?

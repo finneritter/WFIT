@@ -65,6 +65,72 @@ pub struct Fissure {
     pub is_storm: bool,
 }
 
+/// The Cascade HUD overlay's one answer, computed Rust-side from the live
+/// fissure list. Mirrors the Rotation screen's `FissureWatchHero`
+/// (src/routes/Rotation.tsx): is a Void Cascade fissure up right now? If so,
+/// `active` + its relic `tier` (colors the pill) + `expiry` (time left). If not,
+/// `omnia_reset` counts down the soonest Omnia-tier rotation.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CascadeStatus {
+    pub active: bool,
+    pub tier: Option<String>,
+    pub node: Option<String>,
+    pub is_hard: bool, // Steel Path
+    pub expiry: Option<String>,
+    pub omnia_reset: Option<String>,
+}
+
+/// Parse an RFC3339 expiry to a sortable unix-ms key; `None` when absent/unparseable.
+fn expiry_ms(f: &Fissure) -> Option<i64> {
+    f.expiry
+        .as_deref()
+        .and_then(|e| chrono::DateTime::parse_from_rfc3339(e).ok())
+        .map(|t| t.timestamp_millis())
+}
+
+/// Compute the Cascade overlay status from a fissure list. Ground (non-storm),
+/// not-yet-expired fissures only. Cascade = `mission_type` contains "cascade";
+/// if both Normal and Steel Path cascades are up, the longer-lived one wins
+/// (matches `FissureWatchHero`). When none is live, fall back to the
+/// soonest-expiring live Omnia-tier fissure as the rotation countdown.
+pub fn cascade_status(fissures: &[Fissure]) -> CascadeStatus {
+    let now = Utc::now().timestamp_millis();
+    let live: Vec<&Fissure> = fissures
+        .iter()
+        .filter(|f| !f.is_storm)
+        .filter(|f| expiry_ms(f).is_some_and(|ms| ms > now))
+        .collect();
+
+    if let Some(c) = live
+        .iter()
+        .copied()
+        .filter(|f| f.mission_type.to_lowercase().contains("cascade"))
+        .max_by_key(|f| expiry_ms(f).unwrap_or(i64::MIN))
+    {
+        return CascadeStatus {
+            active: true,
+            tier: Some(c.tier.clone()),
+            node: Some(c.node.clone()),
+            is_hard: c.is_hard,
+            expiry: c.expiry.clone(),
+            omnia_reset: None,
+        };
+    }
+
+    let omnia_reset = live
+        .iter()
+        .copied()
+        .filter(|f| f.tier.eq_ignore_ascii_case("omnia"))
+        .min_by_key(|f| expiry_ms(f).unwrap_or(i64::MAX))
+        .and_then(|f| f.expiry.clone());
+
+    CascadeStatus {
+        active: false,
+        omnia_reset,
+        ..Default::default()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Worldstate {
     pub cycles: Vec<Cycle>,
@@ -454,6 +520,59 @@ fn make_cycle(id: &str, name: &str, c: RawCycle) -> Cycle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn fissure(tier: &str, mission: &str, mins: i64, is_hard: bool, is_storm: bool) -> Fissure {
+        Fissure {
+            tier: tier.into(),
+            mission_type: mission.into(),
+            node: format!("{tier} {mission}"),
+            enemy: None,
+            expiry: Some((Utc::now() + chrono::Duration::minutes(mins)).to_rfc3339()),
+            eta: None,
+            is_hard,
+            is_storm,
+        }
+    }
+
+    #[test]
+    fn cascade_active_picks_longest_lived() {
+        let fs = vec![
+            fissure("Omnia", "Void Cascade", 10, false, false),
+            fissure("Omnia", "Void Cascade", 25, true, false), // Steel Path, longer-lived
+            fissure("Axi", "Survival", 30, false, false),
+        ];
+        let s = cascade_status(&fs);
+        assert!(s.active);
+        assert!(s.is_hard); // the 25-min Steel Path cascade wins
+        assert_eq!(s.tier.as_deref(), Some("Omnia"));
+        assert!(s.omnia_reset.is_none());
+    }
+
+    #[test]
+    fn no_cascade_falls_back_to_soonest_omnia() {
+        let fs = vec![
+            fissure("Omnia", "Survival", 40, false, false),
+            fissure("Omnia", "Defense", 12, false, false), // soonest Omnia
+            fissure("Axi", "Void Cascade", -5, false, false), // expired — ignored
+        ];
+        let s = cascade_status(&fs);
+        assert!(!s.active);
+        assert!(s.omnia_reset.is_some());
+        // The soonest-expiring Omnia (12 min) drives the reset countdown.
+        let reset =
+            chrono::DateTime::parse_from_rfc3339(s.omnia_reset.as_deref().unwrap()).unwrap();
+        let mins = (reset.timestamp() - Utc::now().timestamp()) / 60;
+        assert!((10..=13).contains(&mins), "expected ~12 min, got {mins}");
+    }
+
+    #[test]
+    fn void_storm_cascade_is_ignored() {
+        // A Void Storm (Railjack) cascade is a different game mode — not the HUD's answer.
+        let fs = vec![fissure("Omnia", "Void Cascade", 20, false, true)];
+        let s = cascade_status(&fs);
+        assert!(!s.active);
+        assert!(s.omnia_reset.is_none()); // the storm is excluded from the Omnia fallback too
+    }
 
     // Live diagnostic: hit the configured WS_URL via the app's exact client and
     // report what it actually gets. `cargo test --lib ws_probe -- --ignored --nocapture`

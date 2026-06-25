@@ -22,6 +22,24 @@
         "transparent": false,
         "fullscreen": false,
         "resizable": true
+      },
+      {
+        "label": "overlay",
+        "url": "overlay.html",
+        "title": "WFIT Cascade Overlay",
+        "width": 360,
+        "height": 120,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "shadow": false,
+        "resizable": false,
+        "visible": false,
+        "closable": false,
+        "minimizable": false,
+        "maximizable": false
       }
     ],
     "security": {
