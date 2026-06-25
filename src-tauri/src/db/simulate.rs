@@ -281,10 +281,11 @@ pub fn simulate(db: &Db, db_path: &Path, fill: i64) -> AppResult<SimSummary> {
 
         // Headline "how many items does this account hold" — the sum of owned qty
         // across every tradeable row (what the user sees as "~15k items").
-        let total_items: i64 =
-            tx.query_row("SELECT COALESCE(SUM(qty), 0) FROM inventory_items", [], |r| {
-                r.get(0)
-            })?;
+        let total_items: i64 = tx.query_row(
+            "SELECT COALESCE(SUM(qty), 0) FROM inventory_items",
+            [],
+            |r| r.get(0),
+        )?;
 
         tx.commit()?;
         Ok(SimSummary {

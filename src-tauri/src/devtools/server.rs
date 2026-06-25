@@ -137,10 +137,11 @@ async fn stress_simulate(
 ) -> Result<Json<crate::types::SimSummary>, ApiErr> {
     let app = st.app.clone();
     let path = st.db_path.clone();
-    let summary =
-        tokio::task::spawn_blocking(move || crate::db::simulate::simulate(&app.db, &path, req.fill))
-            .await
-            .map_err(|e| ApiErr(e.to_string()))??;
+    let summary = tokio::task::spawn_blocking(move || {
+        crate::db::simulate::simulate(&app.db, &path, req.fill)
+    })
+    .await
+    .map_err(|e| ApiErr(e.to_string()))??;
     Ok(Json(summary))
 }
 

@@ -753,8 +753,8 @@ mod tests {
         .unwrap();
         let maps = load_owned_price_maps(&c).unwrap();
         for (slug, rank, want) in [
-            ("troll", None, Some(145)), // 80000 >> 4×145 → median
-            ("legit", None, Some(160)), // 160 within band → live ask
+            ("troll", None, Some(145)),   // 80000 >> 4×145 → median
+            ("legit", None, Some(160)),   // 160 within band → live ask
             ("rankt", Some(0), Some(30)), // 9000 >> 4×30 → per-rank median
         ] {
             assert_eq!(effective_price(&c, slug, rank).unwrap(), want, "sql {slug}");

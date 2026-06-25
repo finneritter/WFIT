@@ -256,14 +256,26 @@ pub fn snapshot(db: &Db) -> MetricsSnapshot {
         hb_changed_total: m.hb_changed_total.load(Relaxed),
         hb_ticks: m.hb_ticks.load(Relaxed),
         db_writer_ops: m.db_writer_ops.load(Relaxed),
-        db_writer_wait_avg_us: avg_us(m.db_writer_wait_ns.load(Relaxed), m.db_writer_ops.load(Relaxed)),
-        db_writer_held_avg_us: avg_us(m.db_writer_held_ns.load(Relaxed), m.db_writer_ops.load(Relaxed)),
+        db_writer_wait_avg_us: avg_us(
+            m.db_writer_wait_ns.load(Relaxed),
+            m.db_writer_ops.load(Relaxed),
+        ),
+        db_writer_held_avg_us: avg_us(
+            m.db_writer_held_ns.load(Relaxed),
+            m.db_writer_ops.load(Relaxed),
+        ),
         db_read_ops: m.db_read_ops.load(Relaxed),
         db_read_wait_avg_us: avg_us(m.db_read_wait_ns.load(Relaxed), m.db_read_ops.load(Relaxed)),
-        db_read_query_avg_us: avg_us(m.db_read_query_ns.load(Relaxed), m.db_read_ops.load(Relaxed)),
+        db_read_query_avg_us: avg_us(
+            m.db_read_query_ns.load(Relaxed),
+            m.db_read_ops.load(Relaxed),
+        ),
         valuation_runs: m.valuation_runs.load(Relaxed),
         valuation_last_ms: m.valuation_last_ns.load(Relaxed) / 1_000_000,
-        valuation_avg_ms: avg_ms(m.valuation_total_ns.load(Relaxed), m.valuation_runs.load(Relaxed)),
+        valuation_avg_ms: avg_ms(
+            m.valuation_total_ns.load(Relaxed),
+            m.valuation_runs.load(Relaxed),
+        ),
         pricing_owned_priced: priced,
         pricing_owned_total: total,
         pricing_coverage_pct: if total > 0 {
@@ -322,7 +334,11 @@ mod tests {
     fn ring_overwrites_oldest_and_keeps_order() {
         let mut r = LatRing::default();
         for i in 0..(LAT_RING as i64 + 5) {
-            r.push(LatSample { at_ms: i, ms: i as u32, err: false });
+            r.push(LatSample {
+                at_ms: i,
+                ms: i as u32,
+                err: false,
+            });
         }
         let chrono = r.chronological();
         assert_eq!(chrono.len(), LAT_RING);

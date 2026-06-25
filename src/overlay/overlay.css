@@ -1,22 +1,29 @@
-/* Cascade HUD overlay — standalone styles. This window does NOT load the main
-   app's theme.css, so everything it needs is self-contained here: a transparent
-   page (the Tauri window is transparent) with one centered, rounded, semi-
-   transparent pill that tints to the active relic tier. */
+/* Cascade HUD overlay — styled to match the app (WFIT theme.css): dark, dense,
+   SHARP corners, 1px line border on the panel color. No rounded corners, no
+   blur, no colored outer glow — it reads like a detached .fwx fissure-watch
+   card floating over the game. The window itself is transparent, so the panel
+   is a clean sharp rectangle with see-through margins. */
 
 :root {
-  /* Relic-tier accents — mirrors theme.css so the pill matches the Rotation screen. */
+  /* Mirrored from theme.css — the overlay window doesn't load the app stylesheet. */
+  --panel: #15171b;
+  --line: #24262e;
+  --line-2: #31343d;
+  --ink: #e2e3e6;
+  --soft: #989ba2;
+  --faint: #62656d;
+  --hot: #f0a93e;
+  --neg: #e0685c;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+
+  /* Relic-tier accents (theme.css). */
   --t-lith: #8a8f98;
   --t-meso: #6f9bd1;
   --t-neo: #c9a84a;
   --t-axi: #9a83e0;
   --t-requiem: #d0685c;
   --t-omnia: #e0883c;
-  --t-none: #6b7079;
-
-  --ink: #f2f4f7;
-  --muted: #aab0ba;
-  --cd-warn: #e0b341;
-  --cd-soon: #e2705a;
 }
 
 * {
@@ -31,10 +38,10 @@ body {
   height: 100%;
   background: transparent;
   overflow: hidden;
-  /* The whole window is click-through (set Rust-side), but belt-and-suspenders. */
   user-select: none;
   cursor: default;
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--sans);
+  color: var(--ink);
 }
 
 #root {
@@ -43,33 +50,40 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 10px;
+  padding: 8px;
 }
 
-/* The pill. `--accent` is set per-tier below; falls back to --t-none. */
+/* The panel. `--accent` is set per-tier below; the miss state stays neutral. */
 .ov {
-  --accent: var(--t-none);
+  --accent: var(--soft);
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 240px;
-  max-width: 100%;
-  padding: 12px 16px;
-  border-radius: 16px;
-  background: rgba(18, 20, 24, 0.72);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04) inset, 0 0 22px
-    -6px var(--accent);
-  color: var(--ink);
-  animation: ov-in 160ms ease-out;
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  /* Neutral drop shadow only — lifts it off arbitrary game backgrounds without
+     the messy colored glow. No radius: sharp corners, app-style. */
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55);
+  animation: ov-in 130ms ease-out;
+}
+
+/* Active: tint the border + a faint top wash in the tier color (clone of the
+   app's .fwx.hit treatment — subtle, panel-based, not a glow). */
+.ov-hit {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line-2));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 9%, var(--panel)),
+    var(--panel)
+  );
 }
 
 @keyframes ov-in {
   from {
     opacity: 0;
-    transform: translateY(-6px) scale(0.98);
+    transform: translateY(-4px);
   }
   to {
     opacity: 1;
@@ -83,7 +97,7 @@ body {
   }
 }
 
-/* Per-tier accent. The miss state stays neutral. */
+/* Per-tier accent color. */
 .ov.t-lith {
   --accent: var(--t-lith);
 }
@@ -104,31 +118,28 @@ body {
 }
 
 .ov-led {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+  width: 8px;
+  height: 8px;
   flex: none;
-  background: var(--accent);
-  box-shadow: 0 0 10px 1px var(--accent);
+  background: var(--faint);
 }
-.ov-miss .ov-led {
-  box-shadow: none;
-  opacity: 0.55;
+.ov-hit .ov-led {
+  background: var(--accent);
 }
 
 .ov-main {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
   flex: 1;
 }
 
 .ov-answer {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 800;
   line-height: 1;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.01em;
 }
 .ov-hit .ov-answer {
   color: var(--accent);
@@ -138,46 +149,43 @@ body {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 11px;
-  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--faint);
   white-space: nowrap;
 }
 
 .ov-tier {
-  font-weight: 700;
   color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .ov-sp {
-  font-size: 9.5px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #d0685c;
-  border: 1px solid color-mix(in srgb, #d0685c 50%, transparent);
-  border-radius: 4px;
+  color: var(--neg);
+  border: 1px solid color-mix(in srgb, var(--neg) 45%, transparent);
   padding: 1px 4px;
 }
 
 .ov-label {
-  color: var(--muted);
+  color: var(--soft);
 }
 
 .ov-timer {
   flex: none;
+  font-family: var(--mono);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
-/* Countdown threshold colors (the component emits these classes). */
+/* Countdown threshold colors (the shared Countdown component emits these). */
 .cd-warn {
-  color: var(--cd-warn);
+  color: var(--hot);
 }
 .cd-soon {
-  color: var(--cd-soon);
+  color: var(--neg);
 }

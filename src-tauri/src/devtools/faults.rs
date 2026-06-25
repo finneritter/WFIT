@@ -163,7 +163,8 @@ pub fn set(v: FaultView) {
     f.extra_latency_ms.store(v.extra_latency_ms, Relaxed);
     f.jitter_ms.store(v.jitter_ms, Relaxed);
     f.empty_book_pct.store(v.empty_book_pct.min(100), Relaxed);
-    f.malformed_price_pct.store(v.malformed_price_pct.min(100), Relaxed);
+    f.malformed_price_pct
+        .store(v.malformed_price_pct.min(100), Relaxed);
     f.db_lock_hold_ms
         .store(v.db_lock_hold_ms.min(DB_HOLD_CAP_MS), Relaxed);
 }
