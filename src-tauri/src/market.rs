@@ -727,9 +727,13 @@ impl Market {
             order_type: &'a str,
             platinum: i64,
             quantity: i64,
-            // Required by warframe.market v2 (≥ v0.25.0) — units exchanged per
-            // in-game trade. Omitting it is a 400 `perTrade: app.field.required`.
-            per_trade: i64,
+            // `perTrade` (units exchanged per in-game trade) is accepted by
+            // warframe.market v2 ONLY for ranked goods (mods/arcanes). Sending it
+            // on a non-ranked item is a 400 `perTrade: app.field.notAllowed`;
+            // omitting it on a ranked one is `perTrade: app.field.required`. So it
+            // tracks `rank` exactly — present iff the item is ranked.
+            #[serde(skip_serializing_if = "Option::is_none")]
+            per_trade: Option<i64>,
             #[serde(skip_serializing_if = "Option::is_none")]
             rank: Option<i64>,
             visible: bool,
@@ -739,6 +743,7 @@ impl Market {
             data: RawOrder,
         }
 
+        let per_trade = rank.map(|_| per_trade);
         let url = format!("{API_V2}/order");
         let req = self
             .http
