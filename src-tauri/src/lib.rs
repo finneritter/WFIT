@@ -280,7 +280,6 @@ pub fn run() {
             commands::add_relic,
             commands::set_relic_qty,
             commands::remove_relic,
-            commands::get_crack_now,
             commands::get_crack_plan,
             commands::import_scanned_relics,
             // wfm account

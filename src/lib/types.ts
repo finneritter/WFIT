@@ -582,19 +582,6 @@ export interface RelicChoice {
   relic_name: string;
   display_name: string;
 }
-// An owned relic that can drop a wanted item — a watch/buy-list item or the missing
-// part of a near-complete set (Rotation "Crack" tab). crackable_now flags whether a
-// live fissure of its tier is up right now.
-export interface CrackNowRow {
-  tier: string;
-  relic_name: string;
-  refinement: string;
-  display_name: string;
-  qty: number;
-  ev_plat: number;
-  wanted_drops: string[];
-  crackable_now: boolean;
-}
 // Live progress tick for "Update game data" (game-data-progress event). total 0 =
 // indeterminate (sweeping bar); otherwise current/total is a fraction.
 export interface GameDataProgress {

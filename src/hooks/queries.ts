@@ -53,7 +53,6 @@ export const keys = {
   wantedNow: ["wantedNow"] as const,
   relics: ["relics"] as const,
   relicChoices: ["relicChoices"] as const,
-  crackNow: ["crackNow"] as const,
   crackPlan: ["crackPlan"] as const,
   pricingProgress: ["pricingProgress"] as const,
   wfmAccount: ["wfmAccount"] as const,
@@ -200,13 +199,6 @@ export const useRelicChoices = () =>
     queryFn: api.listRelicChoices,
     staleTime: Number.POSITIVE_INFINITY,
   });
-export const useCrackNow = () =>
-  useQuery({
-    queryKey: keys.crackNow,
-    queryFn: api.getCrackNow,
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: true,
-  });
 // The Relics "To crack" ranking — refreshes on the same cadence as crack-now (live
 // fissures flip crackable_now), and on any relic mutation via invalidateRelics.
 export const useCrackPlan = () =>
@@ -218,7 +210,6 @@ export const useCrackPlan = () =>
   });
 function invalidateRelics(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: keys.relics });
-  qc.invalidateQueries({ queryKey: keys.crackNow });
   qc.invalidateQueries({ queryKey: keys.crackPlan });
 }
 export function useAddRelic() {

@@ -11,7 +11,6 @@ import type {
   CascadeStatus,
   CatalogRow,
   CodexData,
-  CrackNowRow,
   CrackPlanRow,
   DucatRow,
   GameDataUpdate,
@@ -182,7 +181,6 @@ export const setRelicQty = (tier: string, name: string, refinement: string | nul
   invoke<void>("set_relic_qty", { tier, name, refinement, qty });
 export const removeRelic = (tier: string, name: string, refinement: string | null) =>
   invoke<void>("remove_relic", { tier, name, refinement });
-export const getCrackNow = () => invoke<CrackNowRow[]>("get_crack_now");
 export const getCrackPlan = () => invoke<CrackPlanRow[]>("get_crack_plan");
 export const importScannedRelics = () => invoke<number>("import_scanned_relics");
 

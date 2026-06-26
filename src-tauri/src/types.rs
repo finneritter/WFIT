@@ -135,22 +135,6 @@ pub struct RelicChoice {
     pub display_name: String, // "Lith A1"
 }
 
-/// An owned relic whose drops include at least one wanted item (a watch/buy-list
-/// item, or the missing part of a set you're 1–2 parts from completing), with those
-/// drops called out and a flag for whether a live fissure can crack it right now.
-/// Powers the Rotation "Crack" tab.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CrackNowRow {
-    pub tier: String,
-    pub relic_name: String,
-    pub refinement: String,
-    pub display_name: String,
-    pub qty: i64,
-    pub ev_plat: f64,
-    pub wanted_drops: Vec<String>, // wanted-set drop display names this relic can yield
-    pub crackable_now: bool,       // a live fissure of this relic's tier is up right now
-}
-
 /// Progress tick for the "Update game data" action, emitted on the
 /// `game-data-progress` Tauri event so the UI can show a live bar. `total` 0 means
 /// indeterminate (show a sweeping bar); otherwise `current`/`total` is a fraction.
