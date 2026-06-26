@@ -637,62 +637,37 @@ function SoldWidget({ w, h, onOpen }: WidgetProps) {
 function MarketPulseWidget({ w, h, onOpen }: WidgetProps) {
   const { data: trends, isLoading } = useTrends("30d");
   const up = (trends?.index_change ?? 0) >= 0;
-  const spark = trends?.index_spark ?? [];
+  // Hot movers double as the row list at every size with room for one (1×2 / 2×2).
   const hot = (trends?.unusual ?? []).slice(0, 6);
-  if (isLoading) {
-    return (
-      <div className="hw-b">
-        <div className="hw-msg">Loading…</div>
-      </div>
-    );
-  }
   return (
-    <div className="hw-b">
-      <div className="hw-head">
-        <div className={clsx("hw-big", up ? "pos" : "neg")}>
-          {trends ? pct(trends.index_change) : "—"}
-        </div>
-        <div className="hw-sub">market index · 30d</div>
-      </div>
-      {h >= 2 && spark.length >= 2 ? (
-        <div className="hw-area">
-          <MiniArea data={spark} w={260} h={48} accent={up ? "var(--pos)" : "var(--neg)"} />
-        </div>
-      ) : null}
-      {w >= 2 ? (
-        <div className="hw-cells">
-          <div className="hw-cell">
-            <div className="hw-cv pos">{fmt(trends?.advancing)}</div>
-            <div className="hw-ck">Advancing</div>
-          </div>
-          <div className="hw-cell">
-            <div className="hw-cv neg">{fmt(trends?.declining)}</div>
-            <div className="hw-ck">Declining</div>
-          </div>
-          <div className="hw-cell">
-            <div className="hw-cv">{fmt(trends?.sell_signal_count)}</div>
-            <div className="hw-ck">Sell sig</div>
-          </div>
-        </div>
-      ) : null}
-      {w >= 2 && h >= 2 && hot.length ? (
-        <div className="hw-rows">
-          {hot.map((r) => (
-            <HwRow
-              key={r.slug}
-              slug={r.slug}
-              name={r.display_name}
-              plat={r.median_plat}
-              thumb={r.thumbnail_url}
-              sub={r.part_type}
-              right={pct(r.delta)}
-              tone={toneOf(r.delta)}
-              onOpen={onOpen}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
+    <WidgetBody
+      w={w}
+      h={h}
+      loading={isLoading}
+      empty={!isLoading && !trends ? "No market data yet." : undefined}
+      big={trends ? pct(trends.index_change) : "—"}
+      bigTone={up ? "pos" : "neg"}
+      spark={trends?.index_spark}
+      sub="market index · 30d"
+      cells={[
+        { k: "Advancing", v: fmt(trends?.advancing), tone: "pos" },
+        { k: "Declining", v: fmt(trends?.declining), tone: "neg" },
+        { k: "Sell sig", v: fmt(trends?.sell_signal_count) },
+      ]}
+      rows={hot.map((r) => (
+        <HwRow
+          key={r.slug}
+          slug={r.slug}
+          name={r.display_name}
+          plat={r.median_plat}
+          thumb={r.thumbnail_url}
+          sub={r.part_type}
+          right={pct(r.delta)}
+          tone={toneOf(r.delta)}
+          onOpen={onOpen}
+        />
+      ))}
+    />
   );
 }
 

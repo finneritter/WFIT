@@ -1084,25 +1084,83 @@ body.flat-deltas .neg {
 .budget {
   display: inline-flex;
   align-items: center;
+  gap: 7px;
   border: 1px solid var(--line-2);
-  background: var(--panel);
-  padding: 2px 6px;
+  background: var(--bg);
+  padding: 4px 9px;
+  cursor: text;
+  transition: border-color 0.12s ease;
+}
+.budget .lbl {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+  user-select: none;
 }
 .budget input {
-  width: 56px;
+  width: 64px;
   border: none;
   outline: none;
   background: transparent;
   color: var(--ink);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 600;
   text-align: right;
 }
 .budget .u {
   font-family: var(--mono);
   font-size: 11px;
   color: var(--faint);
-  margin-left: 3px;
+  margin-left: -3px;
+}
+
+/* budget spend bar */
+.budget-bar {
+  position: relative;
+  height: 20px;
+  margin: 0 0 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  overflow: hidden;
+}
+.budget-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  opacity: 0.28;
+  transition: width 0.2s ease;
+}
+.budget-bar.near .budget-bar-fill {
+  background: var(--c-warm, #c9a35a);
+  opacity: 0.34;
+}
+.budget-bar.over .budget-bar-fill {
+  background: var(--neg);
+  opacity: 0.34;
+}
+.budget-bar-label {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+}
+.budget-bar.over .budget-bar-label {
+  color: var(--neg);
+}
+
+/* row flagged as past the budget line */
+tr.over-budget td:first-child {
+  box-shadow: inset 2px 0 0 var(--neg);
+}
+tr.over-budget td {
+  background: color-mix(in srgb, var(--neg) 7%, transparent);
 }
 .budget input::-webkit-outer-spin-button,
 .budget input::-webkit-inner-spin-button {

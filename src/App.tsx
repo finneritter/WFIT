@@ -240,7 +240,7 @@ export default function App() {
                 )}
                 {screen === "trends" && <Trends onOpen={open} />}
                 {screen === "watchlist" && <Watchlist onOpen={open} />}
-                {screen === "buy" && <BuyList onOpen={open} />}
+                {screen === "buy" && <BuyList onOpen={open} onNavigate={navigate} />}
                 {screen === "market" && (
                   <Market onOpen={open} initialSlug={marketSlug ?? undefined} />
                 )}

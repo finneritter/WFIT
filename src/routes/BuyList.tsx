@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ItemTags } from "../components/ItemTags";
+import type { ScreenId } from "../components/Sidebar";
 import { Chip, ItemName, SortTh, StatBox, TableStatus, rowAction } from "../components/ui";
 import {
   useBudget,
@@ -18,6 +19,8 @@ import { compileQuery } from "../lib/searchQuery";
 import { buySchema } from "../lib/searchSchemas";
 import type { BuyRow } from "../lib/types";
 
+type NavFn = (s: ScreenId, opts?: { marketSlug?: string }) => void;
+
 const buyTotal = (r: BuyRow): number => lineTotal(r.median_plat, r.buy_qty);
 
 type BuyCol = "name" | "unit" | "qty" | "total" | "added";
@@ -29,7 +32,13 @@ const BUY_CMP: Record<BuyCol, (a: BuyRow, b: BuyRow) => number> = {
   added: (a, b) => new Date(a.added_at).getTime() - new Date(b.added_at).getTime(),
 };
 
-export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
+export function BuyList({
+  onOpen,
+  onNavigate,
+}: {
+  onOpen: (slug: string) => void;
+  onNavigate: NavFn;
+}) {
   const { data: rows = [], isLoading, isError } = useBuyList();
   const listed = useListedSlugs();
   const { data: budget } = useBudget();
@@ -65,6 +74,26 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
     });
     return apply(filtered);
   }, [rows, vaulted, falling, rising, test, apply]);
+
+  // Cumulative-fit over the displayed order: walk top-to-bottom, accumulating line
+  // cost; rows past the point where the running total exceeds the budget are flagged.
+  const fit = useMemo(() => {
+    const b = budget ?? 0;
+    if (b <= 0) return { active: false, fitsCount: 0, overSlugs: new Set<string>() };
+    let running = 0;
+    let fitsCount = 0;
+    const overSlugs = new Set<string>();
+    for (const r of view) {
+      running += buyTotal(r);
+      if (running <= b) fitsCount += 1;
+      else overSlugs.add(r.slug);
+    }
+    return { active: true, fitsCount, overSlugs };
+  }, [view, budget]);
+
+  const budgetVal = budget ?? 0;
+  const spendPct = budgetVal > 0 ? stats.total / budgetVal : 0;
+  const spendLevel = spendPct > 1 ? "over" : spendPct >= 0.8 ? "near" : "under";
   const { visible, hasMore, shown, total, more } = usePaged(
     view,
     60,
@@ -88,6 +117,11 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
           unit="p"
           dcls={stats.remaining < 0 ? "neg" : "muted"}
         />
+        <StatBox
+          k="Fits budget"
+          v={fit.active ? fmt(fit.fitsCount) : "—"}
+          unit={fit.active ? "items" : undefined}
+        />
       </div>
 
       <div className="mkt-filters">
@@ -106,27 +140,32 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
         <div className="tpanel-h">
           <h3>Buy list</h3>
           <span className="sp" style={{ flex: 1 }} />
-          <span className="budget">
+          <label className="budget">
+            <span className="lbl">Budget</span>
             <input
               type="number"
               value={budgetInput}
               onChange={(e) => setBudgetInput(e.target.value)}
               onBlur={commitBudget}
-              placeholder="budget"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  commitBudget();
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              placeholder="0"
             />
             <span className="u">p</span>
-          </span>
-          <button
-            type="button"
-            className="btn sm"
-            style={{ marginLeft: 8 }}
-            onClick={() => {
-              for (const r of rows) purchase.mutate(r.slug);
-            }}
-          >
-            Purchase all → inventory
-          </button>
+          </label>
         </div>
+        {fit.active ? (
+          <div className={`budget-bar ${spendLevel}`}>
+            <div className="budget-bar-fill" style={{ width: `${Math.min(spendPct, 1) * 100}%` }} />
+            <span className="budget-bar-label">
+              {fmt(stats.total)} / {fmt(budgetVal)}p ({Math.round(spendPct * 100)}%)
+            </span>
+          </div>
+        ) : null}
         <table className="dtable">
           <thead>
             <tr>
@@ -148,7 +187,11 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
               />
             ) : (
               visible.map((r) => (
-                <tr key={r.slug} {...rowAction(() => onOpen(r.slug))}>
+                <tr
+                  key={r.slug}
+                  className={fit.overSlugs.has(r.slug) ? "over-budget" : undefined}
+                  {...rowAction(() => onOpen(r.slug))}
+                >
                   <td>
                     <ItemName
                       name={r.display_name}
@@ -193,6 +236,14 @@ export function BuyList({ onOpen }: { onOpen: (slug: string) => void }) {
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                   >
+                    <button
+                      type="button"
+                      className="btn sm"
+                      title="View this item in the Market screen"
+                      onClick={() => onNavigate("market", { marketSlug: r.slug })}
+                    >
+                      Market
+                    </button>{" "}
                     <button
                       type="button"
                       className="btn sm"
