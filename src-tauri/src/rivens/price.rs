@@ -153,6 +153,51 @@ pub(crate) fn band(comps: &[&RivenResult], now: DateTime<Utc>) -> Option<(i64, i
     ))
 }
 
+/// Confidence from strong-comp count, downgraded one notch when comps are stale.
+#[allow(dead_code)] // used by later tasks
+pub(crate) fn level(n: usize, max_stale_days: i64) -> Confidence {
+    let base = match n {
+        0..=2 => Confidence::Low,
+        3..=5 => Confidence::Medium,
+        _ => Confidence::High,
+    };
+    if max_stale_days > STALE_OLD_DAYS {
+        match base {
+            Confidence::High => Confidence::Medium,
+            Confidence::Medium => Confidence::Low,
+            Confidence::Low => Confidence::Low,
+        }
+    } else {
+        base
+    }
+}
+
+/// Estimate the searched roll's value from the comparable (tier ≤ 1) listings.
+/// None when there are no comparable rolls to anchor on.
+pub fn estimate_target(results: &[RivenResult], now: DateTime<Utc>) -> Option<Estimate> {
+    let comps: Vec<&RivenResult> = results.iter().filter(|r| r.match_tier <= 1).collect();
+    let (point, low, high) = band(&comps, now)?;
+    let n = comps.len();
+    let max_stale = comps
+        .iter()
+        .map(|r| age_days(&r.updated, now))
+        .max()
+        .unwrap_or(0);
+    let confidence = level(n, max_stale);
+    let rationale = match confidence {
+        Confidence::Low => format!("{n} comparable listing(s) — thin market, positional estimate"),
+        _ => format!("{n} comparable listings"),
+    };
+    Some(Estimate {
+        point,
+        low,
+        high,
+        confidence,
+        comps_used: n as i64,
+        rationale,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,5 +296,32 @@ mod tests {
     #[test]
     fn band_empty_is_none() {
         assert!(band(&[], now()).is_none());
+    }
+
+    #[test]
+    fn estimate_needs_comps_and_scales_confidence() {
+        // Two tier-0 comps → Low confidence.
+        let cs: Vec<RivenResult> = (0..2)
+            .map(|i| comp(&format!("c{i}"), 100 + i as i64, 0, 80.0, 0, "ingame"))
+            .collect();
+        let e = estimate_target(&cs, now()).unwrap();
+        assert_eq!(e.confidence, Confidence::Low);
+        assert_eq!(e.comps_used, 2);
+
+        // Six fresh tier-0 comps → High confidence.
+        let many: Vec<RivenResult> = (0..6)
+            .map(|i| comp(&format!("m{i}"), 100 + i as i64, 0, 80.0, 0, "ingame"))
+            .collect();
+        assert_eq!(
+            estimate_target(&many, now()).unwrap().confidence,
+            Confidence::High
+        );
+    }
+
+    #[test]
+    fn estimate_none_without_comparable_rolls() {
+        // Only tier-3 results (not comparable) → no estimate.
+        let cs = vec![comp("a", 100, 3, 50.0, 0, "ingame")];
+        assert!(estimate_target(&cs, now()).is_none());
     }
 }
