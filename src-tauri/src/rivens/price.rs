@@ -2,27 +2,40 @@
 //! ranked `RivenResult`s — no network. Shrinks each comparable ask toward a likely
 //! sale price, aggregates a winsorized low-percentile band, grade-positions a single
 //! listing within it, and gates on confidence. See the spec under docs/superpowers.
-#![allow(dead_code)] // constants + types used by aggregation tasks (Tasks 2+)
 use crate::rivens::RivenResult;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
 // ---- tunable constants (the spec's "calibrate later" knobs) ----------------
-const POINT_PCTL: f64 = 0.30; // cheapest non-outlier realistic listing is what sells
-const HIGH_PCTL: f64 = 0.60;
-const DEAL_BAND_PCT: f64 = 15.0; // ±% for great / overpriced
-const GRADE_CONVEX: f64 = 1.5; // near-god rolls command outsized premiums
-const GRADE_MULT_MIN: f64 = 0.6;
-const GRADE_MULT_MAX: f64 = 1.8;
-const STALE_FRESH_DAYS: i64 = 2;
-const STALE_OLD_DAYS: i64 = 7;
-const STALE_OLD_FACTOR: f64 = 0.70;
-const STALE_MID_FACTOR: f64 = 0.85; // factor reached at STALE_OLD_DAYS via lerp
-const SELLER_OFFLINE_FACTOR: f64 = 0.90;
+// Some are consumed only by the aggregation/grade-positioning added in later tasks.
+#[allow(dead_code)] // used by later tasks
+pub(crate) const POINT_PCTL: f64 = 0.30; // cheapest non-outlier realistic listing is what sells
+#[allow(dead_code)] // used by later tasks
+pub(crate) const HIGH_PCTL: f64 = 0.60;
+#[allow(dead_code)] // used by later tasks
+pub(crate) const DEAL_BAND_PCT: f64 = 15.0; // ±% for great / overpriced
+#[allow(dead_code)] // used by later tasks
+pub(crate) const GRADE_CONVEX: f64 = 1.5; // near-god rolls command outsized premiums
+#[allow(dead_code)] // used by later tasks
+pub(crate) const GRADE_MULT_MIN: f64 = 0.6;
+#[allow(dead_code)] // used by later tasks
+pub(crate) const GRADE_MULT_MAX: f64 = 1.8;
+#[allow(dead_code)] // used by later tasks
+pub(crate) const STALE_FRESH_DAYS: i64 = 2;
+#[allow(dead_code)] // used by later tasks
+pub(crate) const STALE_OLD_DAYS: i64 = 7;
+#[allow(dead_code)] // used by later tasks
+pub(crate) const STALE_OLD_FACTOR: f64 = 0.70;
+// factor at STALE_OLD_DAYS (end of lerp); beyond it → STALE_OLD_FACTOR
+#[allow(dead_code)] // used by later tasks
+pub(crate) const STALE_MID_FACTOR: f64 = 0.85;
+#[allow(dead_code)] // used by later tasks
+pub(crate) const SELLER_OFFLINE_FACTOR: f64 = 0.90;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Confidence {
+#[allow(dead_code)] // used by later tasks
+pub(crate) enum Confidence {
     Low,
     Medium,
     High,
@@ -30,7 +43,8 @@ pub enum Confidence {
 
 /// A platinum value estimate for the searched roll.
 #[derive(Debug, Clone, Serialize)]
-pub struct Estimate {
+#[allow(dead_code)] // used by later tasks
+pub(crate) struct Estimate {
     pub point: i64,
     pub low: i64,
     pub high: i64,
@@ -41,17 +55,20 @@ pub struct Estimate {
 
 /// A deal verdict for one listing vs its grade-positioned expected price.
 #[derive(Debug, Clone, Serialize)]
-pub struct Deal {
+#[allow(dead_code)] // used by later tasks
+pub(crate) struct Deal {
     pub kind: String,   // "great" | "fair" | "overpriced"
     pub delta_pct: i64, // + above expected, - below
     pub expected: i64,
 }
 
 /// Listed ask: buyout, else starting price.
-fn ask_of(r: &RivenResult) -> Option<i64> {
+#[allow(dead_code)] // used by later tasks
+pub(crate) fn ask_of(r: &RivenResult) -> Option<i64> {
     r.buyout_price.or(r.starting_price)
 }
 
+#[allow(dead_code)] // used by later tasks
 fn age_days(updated: &str, now: DateTime<Utc>) -> i64 {
     DateTime::parse_from_rfc3339(updated)
         .ok()
@@ -59,12 +76,16 @@ fn age_days(updated: &str, now: DateTime<Utc>) -> i64 {
         .unwrap_or(0) // unknown timestamp → treat as fresh, never over-shrink
 }
 
-/// A listing sitting unsold is overpriced; discount with age. 0..fresh, 7d+..old.
-fn staleness_factor(updated: &str, now: DateTime<Utc>) -> f64 {
+/// A listing sitting unsold is overpriced; discount with age. The factor ramps
+/// linearly from 1.0 at `STALE_FRESH_DAYS` down to `STALE_MID_FACTOR` at
+/// `STALE_OLD_DAYS` (inclusive), then drops to `STALE_OLD_FACTOR` beyond that — a
+/// continuous curve through the midpoint with a final step for very old listings.
+#[allow(dead_code)] // used by later tasks
+pub(crate) fn staleness_factor(updated: &str, now: DateTime<Utc>) -> f64 {
     let d = age_days(updated, now);
     if d <= STALE_FRESH_DAYS {
         1.0
-    } else if d >= STALE_OLD_DAYS {
+    } else if d > STALE_OLD_DAYS {
         STALE_OLD_FACTOR
     } else {
         let t = (d - STALE_FRESH_DAYS) as f64 / (STALE_OLD_DAYS - STALE_FRESH_DAYS) as f64;
@@ -72,7 +93,8 @@ fn staleness_factor(updated: &str, now: DateTime<Utc>) -> f64 {
     }
 }
 
-fn seller_factor(r: &RivenResult) -> f64 {
+#[allow(dead_code)] // used by later tasks
+pub(crate) fn seller_factor(r: &RivenResult) -> f64 {
     match r.owner_status.as_str() {
         "ingame" | "online" => 1.0,
         _ => SELLER_OFFLINE_FACTOR,
@@ -82,7 +104,8 @@ fn seller_factor(r: &RivenResult) -> f64 {
 /// One comp's likely-sale price (shrunk ask). For a bid auction the realistic price
 /// sits between the top bid (a real willingness-to-pay floor) and the ask. None when
 /// the listing has no price at all.
-pub fn shrunk_price(r: &RivenResult, now: DateTime<Utc>) -> Option<f64> {
+#[allow(dead_code)] // used by later tasks
+pub(crate) fn shrunk_price(r: &RivenResult, now: DateTime<Utc>) -> Option<f64> {
     let realistic = if !r.is_direct_sell {
         match (r.top_bid, ask_of(r)) {
             (Some(b), Some(a)) => (b as f64 + a as f64) / 2.0,
@@ -146,6 +169,14 @@ mod tests {
         let fresh = comp("a", 100, 0, 80.0, 0, "ingame");
         let old = comp("b", 100, 0, 80.0, 30, "ingame");
         assert!(shrunk_price(&old, now()).unwrap() < shrunk_price(&fresh, now()).unwrap());
+    }
+
+    #[test]
+    fn staleness_lerp_mid_zone() {
+        let day4 = comp("a", 100, 0, 80.0, 4, "ingame");
+        // t = (4-2)/(7-2) = 0.4 → factor = 1 - 0.4*0.15 = 0.94
+        let p = shrunk_price(&day4, now()).unwrap();
+        assert!((p - 94.0).abs() < 0.5, "expected ~94 at day 4, got {p}");
     }
 
     #[test]
