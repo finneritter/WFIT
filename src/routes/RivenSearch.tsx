@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
-import { Chip, SortTh, StatBox, TableStatus } from "../components/ui";
+import { SortTh, StatBox, TableStatus } from "../components/ui";
 import {
   useCreateRivenSearch,
   useDeleteRivenSearch,
@@ -29,6 +29,9 @@ interface RivenPrefs {
   weapon: string;
   positives: string[];
   negative: string | null;
+  // slug → raw value threshold string (positive = min %, negative = max magnitude);
+  // empty/absent = no threshold. A client-side filter; never sent to the API.
+  minValues: Record<string, string>;
   polarity: string | null;
   reRollsMax: string;
   masteryMax: string;
@@ -40,6 +43,7 @@ const DEFAULT_PREFS: RivenPrefs = {
   weapon: "",
   positives: [],
   negative: null,
+  minValues: {},
   polarity: null,
   reRollsMax: "",
   masteryMax: "",
@@ -119,29 +123,49 @@ export function RivenSearch({ onOpen }: { onOpen: (slug: string) => void }) {
   }, [prefs]);
   const search = useRivenSearch(query);
 
-  const togglePositive = (slug: string) =>
-    patch({
-      positives: prefs.positives.includes(slug)
-        ? prefs.positives.filter((s) => s !== slug)
-        : prefs.positives.length < MAX_POSITIVES
-          ? [...prefs.positives, slug]
-          : prefs.positives,
+  const addPositive = (slug: string) =>
+    setPrefs((cur) =>
+      cur.positives.includes(slug) || cur.positives.length >= MAX_POSITIVES
+        ? cur
+        : { ...cur, positives: [...cur.positives, slug] },
+    );
+  const removePositive = (slug: string) =>
+    setPrefs((cur) => {
+      const minValues = { ...cur.minValues };
+      delete minValues[slug];
+      return { ...cur, positives: cur.positives.filter((s) => s !== slug), minValues };
+    });
+  // Set or clear the single negative; drop the old negative's threshold when it changes.
+  const setNegative = (slug: string | null) =>
+    setPrefs((cur) => {
+      const minValues = { ...cur.minValues };
+      if (cur.negative && cur.negative !== slug) delete minValues[cur.negative];
+      return { ...cur, negative: slug, minValues };
+    });
+  // A blank box means "no threshold" — drop the key so saves/filters stay clean.
+  const setMin = (slug: string, value: string) =>
+    setPrefs((cur) => {
+      const minValues = { ...cur.minValues };
+      if (value.trim() === "") delete minValues[slug];
+      else minValues[slug] = value;
+      return { ...cur, minValues };
     });
 
   const pickWeapon = (slug: string) =>
-    // New weapon → drop stats that no longer apply.
+    // New weapon → drop stats (and their thresholds) that no longer apply.
     setPrefs((cur) => {
       const w = (weapons.data ?? []).find((x) => x.slug === slug);
       const ok = (s: string) => {
         const a = (attributes.data ?? []).find((x) => x.slug === s);
         return !a || !a.exclusive_to || (w ? a.exclusive_to.includes(w.riven_type) : true);
       };
-      return {
-        ...cur,
-        weapon: slug,
-        positives: cur.positives.filter(ok),
-        negative: cur.negative && ok(cur.negative) ? cur.negative : null,
-      };
+      const positives = cur.positives.filter(ok);
+      const negative = cur.negative && ok(cur.negative) ? cur.negative : null;
+      const kept = new Set([...positives, ...(negative ? [negative] : [])]);
+      const minValues = Object.fromEntries(
+        Object.entries(cur.minValues).filter(([s]) => kept.has(s)),
+      );
+      return { ...cur, weapon: slug, positives, negative, minValues };
     });
 
   const loadSaved = (id: number) => {
@@ -154,12 +178,20 @@ export function RivenSearch({ onOpen }: { onOpen: (slug: string) => void }) {
       polarity: s.polarity,
       reRollsMax: s.re_rolls_max == null ? "" : String(s.re_rolls_max),
       masteryMax: s.mastery_rank_max == null ? "" : String(s.mastery_rank_max),
+      minValues: Object.fromEntries(
+        Object.entries(s.min_values ?? {}).map(([k, v]) => [k, String(v)]),
+      ),
     });
   };
   const saveCurrent = () => {
     if (!query || !weapon) return;
     const label = `${weapon.name}${prefs.positives.length ? ` · ${prefs.positives.map((p) => attrName.get(p) ?? p).join("/")}` : ""}`;
-    createSaved.mutate({ label, query });
+    const minValues: Record<string, number> = {};
+    for (const [slug, raw] of Object.entries(prefs.minValues)) {
+      const v = Number.parseFloat(raw);
+      if (Number.isFinite(v)) minValues[slug] = v;
+    }
+    createSaved.mutate({ label, query, minValues });
   };
 
   return (
@@ -204,8 +236,11 @@ export function RivenSearch({ onOpen }: { onOpen: (slug: string) => void }) {
           attrs={validAttrs}
           positives={prefs.positives}
           negative={prefs.negative}
-          onTogglePositive={togglePositive}
-          onNegative={(s) => patch({ negative: s })}
+          minValues={prefs.minValues}
+          onAddPositive={addPositive}
+          onRemovePositive={removePositive}
+          onSetNegative={setNegative}
+          onSetMin={setMin}
         />
       ) : null}
 
@@ -344,54 +379,167 @@ function WeaponPicker({
   );
 }
 
+/** Unit suffix shown next to a stat's value field / row. */
+const unitSuffix = (a?: RivenAttribute): string =>
+  a?.unit === "percent" ? "%" : a?.unit === "seconds" ? "s" : "";
+
 // ---------------------------------------------------------------------------
-// Stat picker: positives (toggle chips, max 3) + a negative selector.
+// Stat picker: positives (≤3) and the negative (≤1) both built the same way —
+// an "Add stat" menu plus a list of rows, each carrying a value threshold.
+// Positives use a minimum (roll must be at least this); the negative uses a
+// maximum magnitude (downside no worse than this). Thresholds filter results
+// client-side — the warframe.market query only knows which slugs are wanted.
 // ---------------------------------------------------------------------------
 function StatPicker({
   attrs,
   positives,
   negative,
-  onTogglePositive,
-  onNegative,
+  minValues,
+  onAddPositive,
+  onRemovePositive,
+  onSetNegative,
+  onSetMin,
 }: {
   attrs: RivenAttribute[];
   positives: string[];
   negative: string | null;
-  onTogglePositive: (slug: string) => void;
-  onNegative: (slug: string | null) => void;
+  minValues: Record<string, string>;
+  onAddPositive: (slug: string) => void;
+  onRemovePositive: (slug: string) => void;
+  onSetNegative: (slug: string | null) => void;
+  onSetMin: (slug: string, value: string) => void;
 }) {
+  const bySlug = useMemo(() => {
+    const m = new Map<string, RivenAttribute>();
+    for (const a of attrs) m.set(a.slug, a);
+    return m;
+  }, [attrs]);
+  // A stat can't be in two roles at once — hide already-picked ones from both menus.
+  const taken = useMemo(
+    () => new Set([...positives, ...(negative ? [negative] : [])]),
+    [positives, negative],
+  );
+  const available = useMemo(() => attrs.filter((a) => !taken.has(a.slug)), [attrs, taken]);
+
+  const row = (slug: string, kind: "min" | "max", onRemove: () => void) => {
+    const a = bySlug.get(slug);
+    return (
+      <div key={slug} className="mkt-filters riven-statrow">
+        <span className={clsx("chip", kind === "min" ? "pos" : "neg")}>
+          {kind === "min" ? "+" : "−"} {a?.name ?? slug}
+        </span>
+        <span className="mkt-field">
+          <span className="muted">{kind}</span>
+          <input
+            className="lf-qty"
+            type="number"
+            min={0}
+            placeholder="any"
+            value={minValues[slug] ?? ""}
+            onChange={(e) => onSetMin(slug, e.target.value)}
+          />
+          <span className="muted">{unitSuffix(a)}</span>
+        </span>
+        <button type="button" className="th-sort" title="Remove" onClick={onRemove}>
+          ✕
+        </button>
+      </div>
+    );
+  };
+
   return (
     <>
       <div className="mkt-filters">
         <span className="muted">
-          Positives ({positives.length}/{MAX_POSITIVES}):
+          Positives ({positives.length}/{MAX_POSITIVES})
         </span>
-        {attrs.map((a) => (
-          <Chip
-            key={a.slug}
-            active={positives.includes(a.slug)}
-            onClick={() => onTogglePositive(a.slug)}
-          >
-            {a.name}
-          </Chip>
-        ))}
+        <AddStatMenu
+          options={available}
+          disabled={positives.length >= MAX_POSITIVES}
+          onPick={onAddPositive}
+        />
       </div>
+      {positives.map((slug) => row(slug, "min", () => onRemovePositive(slug)))}
+
       <div className="mkt-filters">
-        <span className="muted">Negative:</span>
-        <select
-          className="lf-select"
-          value={negative ?? ""}
-          onChange={(e) => onNegative(e.target.value || null)}
-        >
-          <option value="">any / none</option>
-          {attrs.map((a) => (
-            <option key={a.slug} value={a.slug}>
-              {a.name}
-            </option>
-          ))}
-        </select>
+        <span className="muted">Negative ({negative ? 1 : 0}/1)</span>
+        <AddStatMenu
+          options={available}
+          disabled={!!negative}
+          onPick={(slug) => onSetNegative(slug)}
+        />
       </div>
+      {negative ? row(negative, "max", () => onSetNegative(null)) : null}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// "Add stat" dropdown: a filterable list of the weapon's remaining stats. Mirrors
+// the WeaponPicker pattern (autofocused filter input, blur-to-close, options pick
+// on mousedown so they fire before the blur).
+// ---------------------------------------------------------------------------
+function AddStatMenu({
+  options,
+  disabled,
+  onPick,
+}: {
+  options: RivenAttribute[];
+  disabled: boolean;
+  onPick: (slug: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const matches = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return t ? options.filter((a) => a.name.toLowerCase().includes(t)) : options;
+  }, [options, q]);
+
+  return (
+    <div className="riven-addmenu" style={{ position: "relative", display: "inline-block" }}>
+      <button
+        type="button"
+        className="btn sm"
+        disabled={disabled}
+        onClick={() => {
+          setQ("");
+          setOpen((o) => !o);
+        }}
+      >
+        + Add stat ▾
+      </button>
+      {open && !disabled ? (
+        <div
+          className="viewmenu"
+          style={{ left: 0, minWidth: 220, maxHeight: 300, overflowY: "auto" }}
+        >
+          <div className="search" style={{ margin: 4 }}>
+            <Icon name="search" />
+            <input
+              autoFocus
+              placeholder="Filter stats…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onBlur={() => setTimeout(() => setOpen(false), 150)}
+            />
+          </div>
+          {matches.map((a) => (
+            <button
+              key={a.slug}
+              type="button"
+              className="viewopt"
+              onMouseDown={() => {
+                onPick(a.slug);
+                setOpen(false);
+              }}
+            >
+              {a.name}
+            </button>
+          ))}
+          {matches.length === 0 ? <div className="viewopt muted">No matching stats</div> : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -413,9 +561,31 @@ function Results({
   const { test } = useMemo(() => compileQuery(topbar, rivensSchema), [topbar]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Per-stat value thresholds (client-side): a positive must roll at or above its
+  // min; the negative's magnitude must be at or below its max (absent negative = ok).
+  const passesThresholds = useMemo(() => {
+    const entries = Object.entries(prefs.minValues)
+      .map(([slug, raw]) => [slug, Number.parseFloat(raw)] as const)
+      .filter(([, v]) => Number.isFinite(v));
+    if (entries.length === 0) return () => true;
+    const negSlug = prefs.negative;
+    return (r: RivenResult) => {
+      for (const [slug, threshold] of entries) {
+        if (slug === negSlug) {
+          const attr = r.attributes.find((a) => a.slug === slug && !a.positive);
+          if (attr && Math.abs(attr.value) > threshold) return false;
+        } else {
+          const attr = r.attributes.find((a) => a.slug === slug && a.positive);
+          if (!attr || attr.value < threshold) return false;
+        }
+      }
+      return true;
+    };
+  }, [prefs.minValues, prefs.negative]);
+
   const data = search.data;
   const rows = useMemo(() => {
-    let rs = (data?.results ?? []).filter(test);
+    let rs = (data?.results ?? []).filter(test).filter(passesThresholds);
     const dir = prefs.sortDir === "asc" ? 1 : -1;
     const num = (v: number | null | undefined) =>
       v == null
@@ -443,7 +613,7 @@ function Results({
       }
     });
     return rs;
-  }, [data, test, prefs.sortKey, prefs.sortDir]);
+  }, [data, test, passesThresholds, prefs.sortKey, prefs.sortDir]);
 
   const setSort = (key: SortKey) =>
     patch(

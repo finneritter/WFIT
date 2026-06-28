@@ -86,7 +86,9 @@ pub struct RivenQuery {
     pub mastery_rank_max: Option<i64>,
 }
 
-/// A persisted riven search (the user's saved roll watch).
+/// A persisted riven search (the user's saved roll watch). `min_values` maps an
+/// attribute slug to a value threshold (positive = minimum %, negative = maximum
+/// magnitude) — a client-side filter, not part of the API query.
 #[derive(Debug, Clone, Serialize)]
 pub struct SavedSearch {
     pub id: i64,
@@ -97,6 +99,7 @@ pub struct SavedSearch {
     pub polarity: Option<String>,
     pub re_rolls_max: Option<i64>,
     pub mastery_rank_max: Option<i64>,
+    pub min_values: std::collections::HashMap<String, f64>,
     pub created_at: String,
 }
 

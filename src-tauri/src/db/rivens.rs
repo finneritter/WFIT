@@ -152,6 +152,7 @@ pub fn weapons_empty(db: &Db) -> AppResult<bool> {
 
 fn map_saved(r: &rusqlite::Row) -> rusqlite::Result<SavedSearch> {
     let positives: String = r.get(3)?;
+    let min_values_json: String = r.get(8)?;
     Ok(SavedSearch {
         id: r.get(0)?,
         label: r.get(1)?,
@@ -165,7 +166,9 @@ fn map_saved(r: &rusqlite::Row) -> rusqlite::Result<SavedSearch> {
         polarity: r.get(5)?,
         re_rolls_max: r.get(6)?,
         mastery_rank_max: r.get(7)?,
-        created_at: r.get(8)?,
+        // Stored as a JSON object; tolerate empty/garbage by falling back to {}.
+        min_values: serde_json::from_str(&min_values_json).unwrap_or_default(),
+        created_at: r.get(9)?,
     })
 }
 
@@ -173,7 +176,7 @@ pub fn list_saved(db: &Db) -> AppResult<Vec<SavedSearch>> {
     db.read(|c| {
         let mut stmt = c.prepare(
             "SELECT id, label, weapon, positives, negative, polarity,
-                    re_rolls_max, mastery_rank_max, created_at
+                    re_rolls_max, mastery_rank_max, min_values, created_at
              FROM riven_saved_searches ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map([], map_saved)?;
@@ -195,13 +198,15 @@ pub fn create_saved(
     polarity: Option<&str>,
     re_rolls_max: Option<i64>,
     mastery_rank_max: Option<i64>,
+    min_values: &HashMap<String, f64>,
 ) -> AppResult<i64> {
+    let min_values_json = serde_json::to_string(min_values).unwrap_or_else(|_| "{}".into());
     db.with(|c| {
         let now = Utc::now().to_rfc3339();
         c.execute(
             "INSERT INTO riven_saved_searches
-                (label, weapon, positives, negative, polarity, re_rolls_max, mastery_rank_max, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                (label, weapon, positives, negative, polarity, re_rolls_max, mastery_rank_max, min_values, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 label,
                 weapon,
@@ -210,6 +215,7 @@ pub fn create_saved(
                 polarity,
                 re_rolls_max,
                 mastery_rank_max,
+                min_values_json,
                 now
             ],
         )?;
@@ -259,6 +265,10 @@ mod tests {
     #[test]
     fn saved_search_crud() {
         let db = test_db("riven-saved");
+        let min_values = HashMap::from([
+            ("critical_chance".to_string(), 90.0),
+            ("zoom".to_string(), 60.0),
+        ]);
         let id = create_saved(
             &db,
             "crit/ms torid",
@@ -268,12 +278,15 @@ mod tests {
             Some("madurai"),
             Some(5),
             None,
+            &min_values,
         )
         .unwrap();
         let rows = list_saved(&db).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].positives, vec!["critical_chance", "multishot"]);
         assert_eq!(rows[0].negative.as_deref(), Some("zoom"));
+        assert_eq!(rows[0].min_values.get("critical_chance"), Some(&90.0));
+        assert_eq!(rows[0].min_values.get("zoom"), Some(&60.0));
         delete_saved(&db, id).unwrap();
         assert!(list_saved(&db).unwrap().is_empty());
     }

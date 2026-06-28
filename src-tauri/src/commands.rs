@@ -2007,6 +2007,9 @@ pub fn create_riven_search(
     state: State<'_, Arc<AppState>>,
     label: String,
     query: crate::rivens::RivenQuery,
+    // Client-side value thresholds (slug → min %/max magnitude); kept separate from
+    // `query` because they never reach the API and must not perturb its cache key.
+    min_values: std::collections::HashMap<String, f64>,
 ) -> AppResult<i64> {
     crate::db::rivens::create_saved(
         &state.db,
@@ -2017,6 +2020,7 @@ pub fn create_riven_search(
         query.polarity.as_deref(),
         query.re_rolls_max,
         query.mastery_rank_max,
+        &min_values,
     )
 }
 

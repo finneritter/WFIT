@@ -241,6 +241,9 @@ export const listRivenAttributes = () => invoke<RivenAttribute[]>("list_riven_at
 export const searchRivens = (query: RivenQuery, limit?: number) =>
   invoke<RivenSearchResponse>("search_rivens", { query, limit: limit ?? null });
 export const listRivenSearches = () => invoke<RivenSavedSearch[]>("list_riven_searches");
-export const createRivenSearch = (label: string, query: RivenQuery) =>
-  invoke<number>("create_riven_search", { label, query });
+export const createRivenSearch = (
+  label: string,
+  query: RivenQuery,
+  minValues: Record<string, number>,
+) => invoke<number>("create_riven_search", { label, query, minValues });
 export const deleteRivenSearch = (id: number) => invoke<void>("delete_riven_search", { id });

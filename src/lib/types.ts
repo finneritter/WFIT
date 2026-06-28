@@ -843,5 +843,7 @@ export interface RivenSavedSearch {
   polarity: string | null;
   re_rolls_max: number | null;
   mastery_rank_max: number | null;
+  // slug → value threshold (positive = min %, negative = max magnitude).
+  min_values: Record<string, number>;
   created_at: string;
 }

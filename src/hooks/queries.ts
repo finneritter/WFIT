@@ -815,8 +815,8 @@ export const useRivenSearches = () =>
 export function useCreateRivenSearch() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (a: { label: string; query: RivenQuery }) =>
-      api.createRivenSearch(a.label, a.query),
+    mutationFn: (a: { label: string; query: RivenQuery; minValues: Record<string, number> }) =>
+      api.createRivenSearch(a.label, a.query, a.minValues),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.rivenSearches }),
   });
 }
