@@ -5808,6 +5808,27 @@ button.rsetbar:hover .rsetbox.hit-sp {
 .dtable td:has(.riven-stats) {
   vertical-align: middle;
 }
+/* Riven results read denser than other tables — bump the whole table up a notch
+   (grade, price, seller, MR, stats, button) for legibility. Scoped to this table
+   so other screens' .dtable sizing is untouched. */
+.riven-rtable th {
+  font-size: 11px;
+}
+.riven-rtable td {
+  font-size: 13.5px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.riven-rtable .riven-stat {
+  font-size: 13px;
+}
+.riven-rtable .riven-stat b {
+  font-size: 12px;
+}
+.riven-rtable .btn.sm {
+  font-size: 12px;
+  padding: 5px 11px;
+}
 
 .mkt-table .rowlink {
   cursor: pointer;

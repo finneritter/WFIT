@@ -686,7 +686,7 @@ function Results({
       ) : null}
 
       <div className="tpanel">
-        <table className="dtable">
+        <table className="dtable riven-rtable">
           <thead>
             <tr>
               <SortTh<SortKey> label="Match" col="match" sort={colSort} onSort={setSort} />
