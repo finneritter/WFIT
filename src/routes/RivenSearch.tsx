@@ -384,11 +384,12 @@ const unitSuffix = (a?: RivenAttribute): string =>
   a?.unit === "percent" ? "%" : a?.unit === "seconds" ? "s" : "";
 
 // ---------------------------------------------------------------------------
-// Stat picker: positives (≤3) and the negative (≤1) both built the same way —
-// an "Add stat" menu plus a list of rows, each carrying a value threshold.
-// Positives use a minimum (roll must be at least this); the negative uses a
-// maximum magnitude (downside no worse than this). Thresholds filter results
-// client-side — the warframe.market query only knows which slugs are wanted.
+// Stat picker: positives (≤3) and the negative (≤1) are built the same way — a
+// titled section panel with an "Add stat" menu and grid-aligned rows. Each row
+// carries a value threshold: positives a minimum (roll at least this), the
+// negative a maximum magnitude (downside no worse than this). Thresholds filter
+// results client-side — the warframe.market query only knows which slugs are
+// wanted. Rows take a green/red hover tint to telegraph the +/- role.
 // ---------------------------------------------------------------------------
 function StatPicker({
   attrs,
@@ -423,13 +424,15 @@ function StatPicker({
 
   const row = (slug: string, kind: "min" | "max", onRemove: () => void) => {
     const a = bySlug.get(slug);
+    const isPos = kind === "min";
     return (
-      <div key={slug} className="mkt-filters riven-statrow">
-        <span className={clsx("chip", kind === "min" ? "pos" : "neg")}>
-          {kind === "min" ? "+" : "−"} {a?.name ?? slug}
+      <div key={slug} className={clsx("riven-statrow", isPos ? "pos" : "neg")}>
+        <span className="rsr-name">
+          <span className="rsr-sign">{isPos ? "+" : "−"}</span>
+          {a?.name ?? slug}
         </span>
-        <span className="mkt-field">
-          <span className="muted">{kind}</span>
+        <label className="riven-val">
+          {kind}
           <input
             className="lf-qty"
             type="number"
@@ -438,9 +441,9 @@ function StatPicker({
             value={minValues[slug] ?? ""}
             onChange={(e) => onSetMin(slug, e.target.value)}
           />
-          <span className="muted">{unitSuffix(a)}</span>
-        </span>
-        <button type="button" className="th-sort" title="Remove" onClick={onRemove}>
+          <span className="rv-unit">{unitSuffix(a)}</span>
+        </label>
+        <button type="button" className="rm" title="Remove stat" onClick={onRemove}>
           ✕
         </button>
       </div>
@@ -448,36 +451,52 @@ function StatPicker({
   };
 
   return (
-    <>
-      <div className="mkt-filters">
-        <span className="muted">
-          Positives ({positives.length}/{MAX_POSITIVES})
-        </span>
-        <AddStatMenu
-          options={available}
-          disabled={positives.length >= MAX_POSITIVES}
-          onPick={onAddPositive}
-        />
+    <div className="riven-picker">
+      <div className="riven-statsec">
+        <div className="riven-sechead">
+          <span className="rsh-label">Positives</span>
+          <span className="rsh-count">
+            {positives.length}/{MAX_POSITIVES}
+          </span>
+          <span className="rsh-spacer" />
+          <AddStatMenu
+            options={available}
+            disabled={positives.length >= MAX_POSITIVES}
+            onPick={onAddPositive}
+          />
+        </div>
+        {positives.length === 0 ? (
+          <div className="riven-empty">Add up to {MAX_POSITIVES} stats the roll must have.</div>
+        ) : (
+          positives.map((slug) => row(slug, "min", () => onRemovePositive(slug)))
+        )}
       </div>
-      {positives.map((slug) => row(slug, "min", () => onRemovePositive(slug)))}
 
-      <div className="mkt-filters">
-        <span className="muted">Negative ({negative ? 1 : 0}/1)</span>
-        <AddStatMenu
-          options={available}
-          disabled={!!negative}
-          onPick={(slug) => onSetNegative(slug)}
-        />
+      <div className="riven-statsec">
+        <div className="riven-sechead">
+          <span className="rsh-label">Negative</span>
+          <span className="rsh-count">{negative ? 1 : 0}/1</span>
+          <span className="rsh-spacer" />
+          <AddStatMenu
+            options={available}
+            disabled={!!negative}
+            onPick={(slug) => onSetNegative(slug)}
+          />
+        </div>
+        {negative ? (
+          row(negative, "max", () => onSetNegative(null))
+        ) : (
+          <div className="riven-empty">Optional — leave empty to allow any downside.</div>
+        )}
       </div>
-      {negative ? row(negative, "max", () => onSetNegative(null)) : null}
-    </>
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// "Add stat" dropdown: a filterable list of the weapon's remaining stats. Mirrors
-// the WeaponPicker pattern (autofocused filter input, blur-to-close, options pick
-// on mousedown so they fire before the blur).
+// "Add stat" popover: a filtered list of the weapon's remaining stats. A sticky
+// search header sits over a scrolling list; it closes on outside-click or Escape
+// (not input blur — that swallowed scroll gestures and made the list un-scrollable).
 // ---------------------------------------------------------------------------
 function AddStatMenu({
   options,
@@ -490,53 +509,76 @@ function AddStatMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const matches = useMemo(() => {
     const t = q.trim().toLowerCase();
     return t ? options.filter((a) => a.name.toLowerCase().includes(t)) : options;
   }, [options, q]);
 
+  useEffect(() => {
+    if (!open) return;
+    inputRef.current?.focus();
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   return (
-    <div className="riven-addmenu" style={{ position: "relative", display: "inline-block" }}>
+    <div className="riven-addmenu" ref={wrapRef}>
       <button
         type="button"
-        className="btn sm"
+        className="btn sm riven-addbtn"
         disabled={disabled}
         onClick={() => {
           setQ("");
           setOpen((o) => !o);
         }}
       >
-        + Add stat ▾
+        <Icon name="plus" />
+        Add stat
       </button>
       {open && !disabled ? (
-        <div
-          className="viewmenu"
-          style={{ left: 0, minWidth: 220, maxHeight: 300, overflowY: "auto" }}
-        >
-          <div className="search" style={{ margin: 4 }}>
-            <Icon name="search" />
-            <input
-              autoFocus
-              placeholder="Filter stats…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onBlur={() => setTimeout(() => setOpen(false), 150)}
-            />
+        <div className="riven-menu">
+          <div className="riven-menu-head">
+            <div className="search">
+              <Icon name="search" />
+              <input
+                ref={inputRef}
+                placeholder="Filter stats…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </div>
           </div>
-          {matches.map((a) => (
-            <button
-              key={a.slug}
-              type="button"
-              className="viewopt"
-              onMouseDown={() => {
-                onPick(a.slug);
-                setOpen(false);
-              }}
-            >
-              {a.name}
-            </button>
-          ))}
-          {matches.length === 0 ? <div className="viewopt muted">No matching stats</div> : null}
+          <div className="riven-menu-list">
+            {matches.map((a) => (
+              <button
+                key={a.slug}
+                type="button"
+                className="riven-menu-opt"
+                onClick={() => {
+                  onPick(a.slug);
+                  setOpen(false);
+                }}
+              >
+                {a.name}
+                {unitSuffix(a) ? <span className="rmo-unit">{unitSuffix(a)}</span> : null}
+              </button>
+            ))}
+            {matches.length === 0 ? (
+              <div className="riven-menu-empty">No matching stats</div>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>

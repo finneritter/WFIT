@@ -74,8 +74,13 @@ export function TopbarSearch({
               keysRef.current?.(e);
               return;
             }
-            // 3) Escape clears (after the dropdown has had its close-press)
-            if (e.key === "Escape") setSearch("");
+            // 3) Escape clears and dismisses the bar — closing both dropdowns
+            //    (empty query) and dropping focus. The suggest dropdown gets its
+            //    own close-press first (step 1), so this fires once it's closed.
+            if (e.key === "Escape") {
+              setSearch("");
+              inputRef.current?.blur();
+            }
           }}
         />
       </div>
