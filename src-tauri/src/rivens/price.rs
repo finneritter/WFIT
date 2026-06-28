@@ -7,34 +7,21 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 
 // ---- tunable constants (the spec's "calibrate later" knobs) ----------------
-// Some are consumed only by the aggregation/grade-positioning added in later tasks.
-#[allow(dead_code)] // used by later tasks
 pub(crate) const POINT_PCTL: f64 = 0.30; // cheapest non-outlier realistic listing is what sells
-#[allow(dead_code)] // used by later tasks
 pub(crate) const HIGH_PCTL: f64 = 0.60;
-#[allow(dead_code)] // used by later tasks
 pub(crate) const DEAL_BAND_PCT: f64 = 15.0; // ±% for great / overpriced
-#[allow(dead_code)] // used by later tasks
 pub(crate) const GRADE_CONVEX: f64 = 1.5; // near-god rolls command outsized premiums
-#[allow(dead_code)] // used by later tasks
 pub(crate) const GRADE_MULT_MIN: f64 = 0.6;
-#[allow(dead_code)] // used by later tasks
 pub(crate) const GRADE_MULT_MAX: f64 = 1.8;
-#[allow(dead_code)] // used by later tasks
 pub(crate) const STALE_FRESH_DAYS: i64 = 2;
-#[allow(dead_code)] // used by later tasks
 pub(crate) const STALE_OLD_DAYS: i64 = 7;
-#[allow(dead_code)] // used by later tasks
 pub(crate) const STALE_OLD_FACTOR: f64 = 0.70;
 // factor at STALE_OLD_DAYS (end of lerp); beyond it → STALE_OLD_FACTOR
-#[allow(dead_code)] // used by later tasks
 pub(crate) const STALE_MID_FACTOR: f64 = 0.85;
-#[allow(dead_code)] // used by later tasks
 pub(crate) const SELLER_OFFLINE_FACTOR: f64 = 0.90;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
-#[allow(dead_code)] // used by later tasks
 pub(crate) enum Confidence {
     Low,
     Medium,
@@ -43,7 +30,6 @@ pub(crate) enum Confidence {
 
 /// A platinum value estimate for the searched roll.
 #[derive(Debug, Clone, Serialize)]
-#[allow(dead_code)] // used by later tasks
 pub(crate) struct Estimate {
     pub point: i64,
     pub low: i64,
@@ -66,7 +52,6 @@ pub(crate) fn ask_of(r: &RivenResult) -> Option<i64> {
     r.buyout_price.or(r.starting_price)
 }
 
-#[allow(dead_code)] // used by later tasks
 fn age_days(updated: &str, now: DateTime<Utc>) -> i64 {
     DateTime::parse_from_rfc3339(updated)
         .ok()
@@ -78,7 +63,6 @@ fn age_days(updated: &str, now: DateTime<Utc>) -> i64 {
 /// linearly from 1.0 at `STALE_FRESH_DAYS` down to `STALE_MID_FACTOR` at
 /// `STALE_OLD_DAYS` (inclusive), then drops to `STALE_OLD_FACTOR` beyond that — a
 /// continuous curve through the midpoint with a final step for very old listings.
-#[allow(dead_code)] // used by later tasks
 pub(crate) fn staleness_factor(updated: &str, now: DateTime<Utc>) -> f64 {
     let d = age_days(updated, now);
     if d <= STALE_FRESH_DAYS {
@@ -91,7 +75,6 @@ pub(crate) fn staleness_factor(updated: &str, now: DateTime<Utc>) -> f64 {
     }
 }
 
-#[allow(dead_code)] // used by later tasks
 pub(crate) fn seller_factor(r: &RivenResult) -> f64 {
     match r.owner_status.as_str() {
         "ingame" | "online" => 1.0,
@@ -102,7 +85,6 @@ pub(crate) fn seller_factor(r: &RivenResult) -> f64 {
 /// One comp's likely-sale price (shrunk ask). For a bid auction the realistic price
 /// sits between the top bid (a real willingness-to-pay floor) and the ask. None when
 /// the listing has no price at all.
-#[allow(dead_code)] // used by later tasks
 pub(crate) fn shrunk_price(r: &RivenResult, now: DateTime<Utc>) -> Option<f64> {
     let realistic = if !r.is_direct_sell {
         match (r.top_bid, ask_of(r)) {
@@ -118,7 +100,6 @@ pub(crate) fn shrunk_price(r: &RivenResult, now: DateTime<Utc>) -> Option<f64> {
 }
 
 /// Value at percentile `p` (0..1) of a sorted slice (nearest-rank).
-#[allow(dead_code)] // used by later tasks
 fn pctl(sorted: &[f64], p: f64) -> f64 {
     if sorted.is_empty() {
         return 0.0;
@@ -128,7 +109,6 @@ fn pctl(sorted: &[f64], p: f64) -> f64 {
 }
 
 /// Winsorized low-percentile band over comps' shrunk prices → (point, low, high).
-#[allow(dead_code)] // used by later tasks
 pub(crate) fn band(comps: &[&RivenResult], now: DateTime<Utc>) -> Option<(i64, i64, i64)> {
     let mut prices: Vec<f64> = comps.iter().filter_map(|r| shrunk_price(r, now)).collect();
     if prices.is_empty() {
@@ -171,7 +151,6 @@ pub(crate) fn level(n: usize, max_stale_days: i64) -> Confidence {
 
 /// Multiplier on the band point for a roll's grade vs the comps' median grade.
 /// Convex so near-max rolls command a premium; clamped. 1.0 when grades unknown.
-#[allow(dead_code)] // used by later tasks
 fn grade_mult(g: Option<f64>, comps: &[&RivenResult]) -> f64 {
     let gl = match g {
         Some(x) if x > 0.0 => x,
@@ -194,7 +173,6 @@ fn grade_mult(g: Option<f64>, comps: &[&RivenResult]) -> f64 {
 /// Score a single listing against its peers (same/looser-tier rolls, self-excluded),
 /// grade-positioned. None for non-matching rolls (tier ≥ 2), thin peer sets, or when
 /// peer confidence is Low (don't claim a deal on noise).
-#[allow(dead_code)] // used by later tasks
 pub fn deal_for(
     listing: &RivenResult,
     results: &[RivenResult],
@@ -304,6 +282,7 @@ mod tests {
             matched_positives: 2,
             created: updated.clone(),
             updated,
+            deal: None,
         }
     }
 

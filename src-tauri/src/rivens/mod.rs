@@ -20,6 +20,7 @@ pub mod watch;
 use crate::db::rivens as db_rivens;
 use crate::error::AppResult;
 use crate::AppState;
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -148,6 +149,8 @@ pub struct RivenResult {
     pub matched_positives: i64,
     pub created: String,
     pub updated: String,
+    /// Deal verdict vs comparable listings (tier ≤ 1 rolls only; None otherwise).
+    pub deal: Option<price::Deal>,
 }
 
 /// Min / median buyout and listing count over the good (tier ≤ 1) matches — the
@@ -165,6 +168,8 @@ pub struct RivenSearchResponse {
     pub summary: PriceSummary,
     /// True when grading was possible (disposition known for the weapon).
     pub graded: bool,
+    /// Asks-anchored value estimate for the searched roll (None when no comps).
+    pub estimate: Option<price::Estimate>,
 }
 
 /// Effective price for ranking/summary: buyout, else starting price.
@@ -358,6 +363,7 @@ fn build_result(
         matched_positives: matched,
         created: a.created,
         updated: a.updated,
+        deal: None,
     }
 }
 
@@ -442,10 +448,22 @@ pub async fn search(
     // Stable id ordering already by rank; trim any duplicate ids defensively.
     results.dedup_by(|a, b| a.id == b.id);
 
+    // Asks-anchored value estimate for the searched roll + per-listing deal score.
+    let now = Utc::now();
+    let estimate = price::estimate_target(&results, now);
+    let deals: Vec<Option<price::Deal>> = results
+        .iter()
+        .map(|r| price::deal_for(r, &results, now))
+        .collect();
+    for (r, d) in results.iter_mut().zip(deals) {
+        r.deal = d;
+    }
+
     Ok(RivenSearchResponse {
         results,
         summary,
         graded: disposition.is_some(),
+        estimate,
     })
 }
 
