@@ -708,6 +708,23 @@ function Results({
         <StatBox k="Disposition" v={weapon.disposition.toFixed(2)} />
         <StatBox k="Results" v={fmt(rows.length)} />
       </div>
+      {data?.estimate ? (
+        <div className="riven-estimate">
+          <span className="re-label">Est. value</span>
+          <span className="re-point">{fmt(data.estimate.point)}p</span>
+          <span className="re-range">
+            {fmt(data.estimate.low)}–{fmt(data.estimate.high)}
+          </span>
+          <span className={clsx("re-conf", data.estimate.confidence)}>
+            {data.estimate.confidence}
+          </span>
+          <span className="re-note muted">{data.estimate.rationale}</span>
+        </div>
+      ) : data ? (
+        <div className="riven-estimate muted">
+          Not enough comparable listings to estimate a value.
+        </div>
+      ) : null}
       {data && !data.graded ? (
         <div className="muted" style={{ padding: "4px 2px" }}>
           Grades unavailable for this weapon (no disposition/base data) — shown as “—”.
@@ -722,6 +739,7 @@ function Results({
               <th>Stats</th>
               <SortTh<SortKey> label="Grade" col="grade" sort={colSort} onSort={setSort} right />
               <SortTh<SortKey> label="Price" col="price" sort={colSort} onSort={setSort} right />
+              <th className="r">Deal</th>
               <th>Seller</th>
               <th>Status</th>
               <th className="r">MR</th>
@@ -731,7 +749,7 @@ function Results({
           <tbody>
             {search.isLoading || search.isError || rows.length === 0 ? (
               <TableStatus
-                span={8}
+                span={9}
                 loading={search.isLoading}
                 error={search.isError}
                 loadingText="Searching auctions…"
@@ -776,6 +794,24 @@ function Results({
                     <td className="r num">
                       {price == null ? "—" : `${fmt(price)}p`}
                       {r.is_direct_sell ? null : <span className="muted"> bid</span>}
+                    </td>
+                    <td className="r">
+                      {r.deal ? (
+                        <span className={clsx("deal", r.deal.kind)}>
+                          {r.deal.kind === "great"
+                            ? "Great deal"
+                            : r.deal.kind === "overpriced"
+                              ? "Overpriced"
+                              : "Fair"}
+                          <b>
+                            {" "}
+                            {r.deal.delta_pct > 0 ? "+" : ""}
+                            {r.deal.delta_pct}%
+                          </b>
+                        </span>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
                     </td>
                     <td>{r.owner_name}</td>
                     <td>
