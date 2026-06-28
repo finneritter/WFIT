@@ -797,7 +797,7 @@ function Results({
                     </td>
                     <td className="r">
                       {r.deal ? (
-                        <span className={clsx("deal", r.deal.kind)}>
+                        <span className={clsx("riven-deal", r.deal.kind)}>
                           {r.deal.kind === "great"
                             ? "Great deal"
                             : r.deal.kind === "overpriced"

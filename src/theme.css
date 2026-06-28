@@ -5887,20 +5887,20 @@ button.rsetbar:hover .rsetbox.hit-sp {
 .re-note {
   font-size: 11px;
 }
-.deal {
+.riven-deal {
   font-size: 11.5px;
   white-space: nowrap;
 }
-.deal.great {
+.riven-deal.great {
   color: var(--pos);
 }
-.deal.overpriced {
+.riven-deal.overpriced {
   color: var(--neg);
 }
-.deal.fair {
+.riven-deal.fair {
   color: var(--soft);
 }
-.deal b {
+.riven-deal b {
   font-family: var(--mono);
   font-weight: 600;
 }
