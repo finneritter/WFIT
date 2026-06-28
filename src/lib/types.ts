@@ -770,6 +770,21 @@ export interface RivenWeapon {
   disposition: number;
 }
 
+export interface RivenEstimate {
+  point: number;
+  low: number;
+  high: number;
+  confidence: "low" | "medium" | "high";
+  comps_used: number;
+  rationale: string;
+}
+
+export interface RivenDeal {
+  kind: "great" | "fair" | "overpriced";
+  delta_pct: number; // + above expected, - below
+  expected: number;
+}
+
 export interface RivenAttribute {
   slug: string;
   name: string;
@@ -810,6 +825,7 @@ export interface RivenResult {
   matched_positives: number;
   created: string;
   updated: string;
+  deal: RivenDeal | null;
 }
 
 export interface RivenPriceSummary {
@@ -822,6 +838,7 @@ export interface RivenSearchResponse {
   results: RivenResult[];
   summary: RivenPriceSummary;
   graded: boolean; // false when disposition unknown → grades shown as "—"
+  estimate: RivenEstimate | null;
 }
 
 // Mirrors the Rust RivenQuery (snake_case fields, sent as the `query` arg).
