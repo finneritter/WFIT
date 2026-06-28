@@ -845,5 +845,20 @@ export interface RivenSavedSearch {
   mastery_rank_max: number | null;
   // slug → value threshold (positive = min %, negative = max magnitude).
   min_values: Record<string, number>;
+  // when true, the background watcher notifies on a matching auction.
+  notify: boolean;
   created_at: string;
+}
+
+// One entry in the in-app notification center (mirrors Rust db::notifications::Notification).
+export interface AppNotification {
+  id: number;
+  kind: string; // producer category, e.g. "riven"
+  title: string;
+  body: string;
+  nav_screen: string | null; // screen to open on click
+  nav_slug: string | null; // optional item slug to open in the Drawer
+  payload: string | null; // producer JSON (e.g. { saved_search_id })
+  created_at: string;
+  read_at: string | null; // null = unread
 }

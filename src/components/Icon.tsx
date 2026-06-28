@@ -40,6 +40,12 @@ const PATHS: Record<string, string> = {
   user: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
   // feather "info" — hover-hint marker (Settings rows, etc.)
   info: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 16v-4M12 8h.01",
+  // feather "bell" — notification center
+  bell: "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0",
+  // single chevron down — expand a saved-search quick peek (rotated when open)
+  "chevron-down": "M6 9l6 6 6-6",
+  // feather "bookmark" — saved-searches panel toggle
+  bookmark: "M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z",
 };
 
 export const Icon = memo(function Icon({ name }: { name: string }) {

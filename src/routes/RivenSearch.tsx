@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { SortTh, StatBox, TableStatus } from "../components/ui";
 import {
   useCreateRivenSearch,
-  useDeleteRivenSearch,
   useRivenAttributes,
   useRivenSearch,
   useRivenSearches,
@@ -71,7 +70,15 @@ function whisperLine(r: RivenResult): string {
 const priceOf = (r: RivenResult): number | null => r.buyout_price ?? r.starting_price;
 const TIER_LABEL = ["Exact", "All pos", "Close", "Partial", "Weapon"];
 
-export function RivenSearch({ onOpen }: { onOpen: (slug: string) => void }) {
+export function RivenSearch({
+  onOpen,
+  loadReq,
+}: {
+  onOpen: (slug: string) => void;
+  // A request from the saved-searches sidebar / a notification to load a saved
+  // search into the form. The nonce lets the same id re-fire.
+  loadReq?: { id: number; nonce: number } | null;
+}) {
   const [prefs, setPrefs] = useState<RivenPrefs>(loadPrefs);
   const patch = (p: Partial<RivenPrefs>) => setPrefs((cur) => ({ ...cur, ...p }));
   useEffect(() => {
@@ -86,7 +93,6 @@ export function RivenSearch({ onOpen }: { onOpen: (slug: string) => void }) {
   const attributes = useRivenAttributes();
   const saved = useRivenSearches();
   const createSaved = useCreateRivenSearch();
-  const deleteSaved = useDeleteRivenSearch();
 
   const weapon = useMemo(
     () => (weapons.data ?? []).find((w) => w.slug === prefs.weapon) ?? null,
@@ -168,21 +174,26 @@ export function RivenSearch({ onOpen }: { onOpen: (slug: string) => void }) {
       return { ...cur, weapon: slug, positives, negative, minValues };
     });
 
-  const loadSaved = (id: number) => {
-    const s = (saved.data ?? []).find((x) => x.id === id);
-    if (!s) return;
-    patch({
-      weapon: s.weapon,
-      positives: s.positives,
-      negative: s.negative,
-      polarity: s.polarity,
-      reRollsMax: s.re_rolls_max == null ? "" : String(s.re_rolls_max),
-      masteryMax: s.mastery_rank_max == null ? "" : String(s.mastery_rank_max),
-      minValues: Object.fromEntries(
-        Object.entries(s.min_values ?? {}).map(([k, v]) => [k, String(v)]),
-      ),
-    });
-  };
+  // Stable so the load-request effect can depend on it without re-running each render.
+  const loadSaved = useCallback(
+    (id: number) => {
+      const s = (saved.data ?? []).find((x) => x.id === id);
+      if (!s) return;
+      setPrefs((cur) => ({
+        ...cur,
+        weapon: s.weapon,
+        positives: s.positives,
+        negative: s.negative,
+        polarity: s.polarity,
+        reRollsMax: s.re_rolls_max == null ? "" : String(s.re_rolls_max),
+        masteryMax: s.mastery_rank_max == null ? "" : String(s.mastery_rank_max),
+        minValues: Object.fromEntries(
+          Object.entries(s.min_values ?? {}).map(([k, v]) => [k, String(v)]),
+        ),
+      }));
+    },
+    [saved.data],
+  );
   const saveCurrent = () => {
     if (!query || !weapon) return;
     const label = `${weapon.name}${prefs.positives.length ? ` · ${prefs.positives.map((p) => attrName.get(p) ?? p).join("/")}` : ""}`;
@@ -194,36 +205,18 @@ export function RivenSearch({ onOpen }: { onOpen: (slug: string) => void }) {
     createSaved.mutate({ label, query, minValues });
   };
 
+  // Apply a load request from the sidebar / a notification deep-link. Keyed on the
+  // nonce (so the same id re-fires) and on saved.data (retry once the list lands).
+  const appliedNonce = useRef<number | null>(null);
+  useEffect(() => {
+    if (!loadReq || appliedNonce.current === loadReq.nonce) return;
+    if (!(saved.data ?? []).some((x) => x.id === loadReq.id)) return;
+    appliedNonce.current = loadReq.nonce;
+    loadSaved(loadReq.id);
+  }, [loadReq, loadSaved, saved.data]);
+
   return (
     <div className="mkt-screener">
-      {/* Saved searches */}
-      {(saved.data ?? []).length > 0 ? (
-        <div className="mkt-filters">
-          <span className="muted">Saved:</span>
-          {(saved.data ?? []).map((s) => (
-            <span key={s.id} className="chip" style={{ paddingRight: 4 }}>
-              <button
-                type="button"
-                className="th-sort"
-                title="Load this search"
-                onClick={() => loadSaved(s.id)}
-              >
-                {s.label || s.weapon}
-              </button>
-              <button
-                type="button"
-                className="th-sort"
-                title="Delete"
-                style={{ opacity: 0.6, marginLeft: 4 }}
-                onClick={() => deleteSaved.mutate(s.id)}
-              >
-                ✕
-              </button>
-            </span>
-          ))}
-        </div>
-      ) : null}
-
       <WeaponPicker
         weapons={weapons.data ?? []}
         selected={weapon}

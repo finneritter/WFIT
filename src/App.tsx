@@ -4,7 +4,9 @@ import { Drawer } from "./components/Drawer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Icon } from "./components/Icon";
 import { LiveBadge } from "./components/LiveBadge";
+import { NotificationCenter } from "./components/NotificationCenter";
 import { ResizeGrips } from "./components/ResizeGrips";
+import { RivenSavedSidebar } from "./components/RivenSavedSidebar";
 import { type ScreenId, Sidebar } from "./components/Sidebar";
 import { SyncNow } from "./components/SyncNow";
 import { TitleBar } from "./components/TitleBar";
@@ -12,6 +14,7 @@ import { Toasts } from "./components/Toasts";
 import { GLOBAL_PREFIX, TopbarSearch } from "./components/TopbarSearch";
 import {
   useLivePriceEvents,
+  useNotificationEvents,
   usePricesRefresh,
   usePricingProgress,
   useSummary,
@@ -93,6 +96,17 @@ export default function App() {
   const [navCollapsed, setNavCollapsed] = useState(
     () => manualNav.current || window.matchMedia(NAV_NARROW).matches,
   );
+  // Right-side riven saved-searches panel (Riven screen only); collapse persisted.
+  const [rivenPanelOpen, setRivenPanelOpen] = useState(
+    () => localStorage.getItem("wfit.riven.panelOpen") === "1",
+  );
+  // A request to load a saved search into the Riven form, from the panel or a
+  // notification deep-link. The nonce lets the same id re-fire.
+  const [rivenLoadReq, setRivenLoadReq] = useState<{ id: number; nonce: number } | null>(null);
+  const requestRivenLoad = useCallback(
+    (id: number) => setRivenLoadReq({ id, nonce: Date.now() }),
+    [],
+  );
   const { data: summary } = useSummary();
   const refresh = usePricesRefresh();
   // On the Rotation screen the topbar refresh button repurposes itself as the
@@ -101,6 +115,8 @@ export default function App() {
   const { data: progress } = usePricingProgress();
   // Refetch value-bearing views the moment the backend heartbeat lands new data.
   useLivePriceEvents();
+  // Refetch the notification list when the backend files new entries.
+  useNotificationEvents();
 
   // A sync is "in flight" while the manual refresh mutation runs OR a background
   // drain is active — drives the spinning refresh icon + the topbar progress bar.
@@ -118,16 +134,31 @@ export default function App() {
   const navigate = useCallback(
     (
       s: ScreenId,
-      opts?: { listingsTab?: "mine" | "recommended"; marketSlug?: string; focusSetSlug?: string },
+      opts?: {
+        listingsTab?: "mine" | "recommended";
+        marketSlug?: string;
+        focusSetSlug?: string;
+        loadSearchId?: number;
+      },
     ) => {
       setScreen(s);
       setSearch("");
       setListingsTab(opts?.listingsTab ?? "mine");
       setMarketSlug(opts?.marketSlug ?? null);
       setFocusSetSlug(opts?.focusSetSlug ?? null);
+      // Deep-link into a saved riven search (from a notification).
+      if (s === "rivens" && opts?.loadSearchId != null) requestRivenLoad(opts.loadSearchId);
     },
-    [],
+    [requestRivenLoad],
   );
+
+  const toggleRivenPanel = useCallback(() => {
+    setRivenPanelOpen((o) => {
+      const next = !o;
+      localStorage.setItem("wfit.riven.panelOpen", next ? "1" : "0");
+      return next;
+    });
+  }, []);
 
   const toggleNav = useCallback(() => {
     setNavCollapsed((c) => {
@@ -163,7 +194,13 @@ export default function App() {
     <div className="win">
       <ResizeGrips />
       <TitleBar />
-      <div className={clsx("shell", navCollapsed && "nav-collapsed")}>
+      <div
+        className={clsx(
+          "shell",
+          navCollapsed && "nav-collapsed",
+          screen === "rivens" && !rivenPanelOpen && "rsidebar-collapsed",
+        )}
+      >
         <Sidebar
           screen={screen}
           onNavigate={navigate}
@@ -194,6 +231,17 @@ export default function App() {
               keysRef={searchKeysRef}
               onOpen={open}
             />
+            {screen === "rivens" ? (
+              <button
+                type="button"
+                className={clsx("icon-btn", rivenPanelOpen && "on")}
+                title={rivenPanelOpen ? "Hide saved searches" : "Saved searches"}
+                aria-pressed={rivenPanelOpen}
+                onClick={toggleRivenPanel}
+              >
+                <Icon name="bookmark" />
+              </button>
+            ) : null}
             <LiveBadge />
             <SyncNow />
             <button
@@ -212,6 +260,7 @@ export default function App() {
             >
               <Icon name="refresh" />
             </button>
+            <NotificationCenter onNavigate={navigate} />
             {syncing ? (
               <div className="topbar-prog">
                 <div
@@ -246,7 +295,7 @@ export default function App() {
                 {screen === "market" && (
                   <Market onOpen={open} initialSlug={marketSlug ?? undefined} />
                 )}
-                {screen === "rivens" && <RivenSearch onOpen={open} />}
+                {screen === "rivens" && <RivenSearch onOpen={open} loadReq={rivenLoadReq} />}
                 {screen === "listings" && <Listings onOpen={open} initialTab={listingsTab} />}
                 {screen === "ducats" && <Ducats onOpen={open} />}
                 {screen === "arcanes" && <Arcanes onOpen={open} />}
@@ -259,6 +308,8 @@ export default function App() {
             </SearchProvider>
           </div>
         </main>
+
+        {screen === "rivens" ? <RivenSavedSidebar onLoad={requestRivenLoad} /> : null}
 
         {drawer ? (
           <Drawer

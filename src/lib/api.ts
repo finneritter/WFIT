@@ -4,6 +4,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AccountProfile,
+  AppNotification,
   ArcaneBreakdown,
   ArcaneDashboard,
   BackupInfo,
@@ -247,3 +248,12 @@ export const createRivenSearch = (
   minValues: Record<string, number>,
 ) => invoke<number>("create_riven_search", { label, query, minValues });
 export const deleteRivenSearch = (id: number) => invoke<void>("delete_riven_search", { id });
+export const setRivenSearchNotify = (id: number, enabled: boolean) =>
+  invoke<void>("riven_search_set_notify", { id, enabled });
+
+// notification center
+export const listNotifications = () => invoke<AppNotification[]>("notifications_list");
+export const notificationsUnreadCount = () => invoke<number>("notifications_unread_count");
+export const markNotificationsRead = () => invoke<void>("notifications_mark_all_read");
+export const dismissNotification = (id: number) => invoke<void>("notifications_dismiss", { id });
+export const clearNotifications = () => invoke<void>("notifications_clear_all");

@@ -169,22 +169,52 @@ fn map_saved(r: &rusqlite::Row) -> rusqlite::Result<SavedSearch> {
         // Stored as a JSON object; tolerate empty/garbage by falling back to {}.
         min_values: serde_json::from_str(&min_values_json).unwrap_or_default(),
         created_at: r.get(9)?,
+        notify: r.get::<_, i64>(10)? != 0,
     })
 }
 
+/// Shared SELECT column list — keep `notify` last so the indices in `map_saved`
+/// (min_values=8, created_at=9, notify=10) stay put.
+const SAVED_COLS: &str = "id, label, weapon, positives, negative, polarity,
+     re_rolls_max, mastery_rank_max, min_values, created_at, notify";
+
 pub fn list_saved(db: &Db) -> AppResult<Vec<SavedSearch>> {
     db.read(|c| {
-        let mut stmt = c.prepare(
-            "SELECT id, label, weapon, positives, negative, polarity,
-                    re_rolls_max, mastery_rank_max, min_values, created_at
-             FROM riven_saved_searches ORDER BY created_at DESC",
-        )?;
+        let mut stmt = c.prepare(&format!(
+            "SELECT {SAVED_COLS} FROM riven_saved_searches ORDER BY created_at DESC"
+        ))?;
         let rows = stmt.query_map([], map_saved)?;
         let mut out = Vec::new();
         for r in rows {
             out.push(r?);
         }
         Ok(out)
+    })
+}
+
+/// Saved searches with notifications enabled — the watcher's work list.
+pub fn list_notify_searches(db: &Db) -> AppResult<Vec<SavedSearch>> {
+    db.read(|c| {
+        let mut stmt = c.prepare(&format!(
+            "SELECT {SAVED_COLS} FROM riven_saved_searches WHERE notify = 1 ORDER BY created_at DESC"
+        ))?;
+        let rows = stmt.query_map([], map_saved)?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    })
+}
+
+/// Toggle the per-search notification opt-in.
+pub fn set_notify(db: &Db, id: i64, enabled: bool) -> AppResult<()> {
+    db.with(|c| {
+        c.execute(
+            "UPDATE riven_saved_searches SET notify = ?1 WHERE id = ?2",
+            params![enabled as i64, id],
+        )?;
+        Ok(())
     })
 }
 
@@ -287,6 +317,12 @@ mod tests {
         assert_eq!(rows[0].negative.as_deref(), Some("zoom"));
         assert_eq!(rows[0].min_values.get("critical_chance"), Some(&90.0));
         assert_eq!(rows[0].min_values.get("zoom"), Some(&60.0));
+        // notify is off by default and excluded from the watcher's list.
+        assert!(!rows[0].notify);
+        assert!(list_notify_searches(&db).unwrap().is_empty());
+        set_notify(&db, id, true).unwrap();
+        assert!(list_saved(&db).unwrap()[0].notify);
+        assert_eq!(list_notify_searches(&db).unwrap().len(), 1);
         delete_saved(&db, id).unwrap();
         assert!(list_saved(&db).unwrap().is_empty());
     }

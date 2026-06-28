@@ -366,6 +366,263 @@ body.flat-deltas .neg {
   display: flex;
   flex-direction: column;
 }
+
+/* ---- Riven saved-searches right sidebar (Riven screen only) -------------- */
+/* Mirrors the left nav: a flex sibling after <main> that collapses to width 0.
+   Border-left instead of right since it sits on the trailing edge. */
+.rsidebar {
+  width: 250px;
+  flex: none;
+  height: 100%;
+  border-left: 1px solid var(--line);
+  background: var(--bg-2);
+  overflow: hidden;
+  transition: width .28s cubic-bezier(0.2, 0.7, 0.3, 1), border-left-color .28s ease;
+}
+.shell.rsidebar-collapsed .rsidebar {
+  width: 0;
+  border-left-color: transparent;
+}
+.rsidebar-inner {
+  width: 250px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.rsidebar-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--soft);
+}
+.rsidebar-list {
+  flex: 1;
+  overflow-y: auto;
+}
+.rsidebar-empty {
+  padding: 14px 12px;
+  font-size: 11.5px;
+  color: var(--faint);
+  line-height: 1.5;
+}
+.rsaved {
+  border-bottom: 1px solid var(--line);
+}
+.rsaved-top {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 6px 3px 2px;
+}
+.rsaved-top button {
+  background: transparent;
+  border: none;
+  color: var(--soft);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: color .12s ease;
+}
+.rsaved-exp {
+  padding: 5px 4px;
+  flex: none;
+}
+.rsaved-exp svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  transition: transform .15s ease;
+}
+.rsaved.open .rsaved-exp svg {
+  transform: rotate(180deg);
+}
+.rsaved-load {
+  flex: 1;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--ink);
+  padding: 5px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rsaved-load:hover {
+  color: var(--accent);
+}
+.rsaved-bell,
+.rsaved-del {
+  padding: 5px;
+  flex: none;
+}
+.rsaved-bell svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+}
+.rsaved-bell:hover {
+  color: var(--ink);
+}
+.rsaved-bell.on {
+  color: var(--accent);
+}
+.rsaved-del:hover {
+  color: var(--neg);
+}
+.rsaved-peek {
+  padding: 2px 12px 10px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: riven-row-in .16s ease both;
+}
+.rsp-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+}
+.rsp-row > span:last-child {
+  text-align: right;
+  color: var(--ink);
+  min-width: 0;
+}
+.rsp-row .pos {
+  color: var(--pos);
+}
+.rsp-row .neg {
+  color: var(--neg);
+}
+
+/* ---- Notification center (topbar bell + dropdown) ----------------------- */
+.notif {
+  position: relative;
+  display: inline-flex;
+}
+.icon-btn.has-unread {
+  color: var(--ink);
+}
+.notif-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: var(--neg);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+  font-weight: 700;
+}
+.notif-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  width: 320px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+  animation: riven-menu-in .13s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.notif-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 11px;
+  border-bottom: 1px solid var(--line);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--soft);
+}
+.notif-clear {
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 11px;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.notif-clear:hover {
+  color: var(--neg);
+}
+.notif-list {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.notif-empty {
+  padding: 18px 12px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.notif-item {
+  display: flex;
+  align-items: stretch;
+  border-top: 1px solid var(--line);
+  border-left: 2px solid transparent;
+  transition: background .12s ease;
+}
+.notif-item:first-child {
+  border-top: none;
+}
+.notif-item:hover {
+  background: var(--hover);
+}
+.notif-item.unread {
+  border-left-color: var(--accent);
+}
+.ni-main {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 9px 11px;
+  cursor: pointer;
+}
+.ni-title {
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.ni-body {
+  font-size: 11.5px;
+  color: var(--soft);
+  margin-top: 2px;
+  word-break: break-word;
+}
+.ni-time {
+  font-size: 10px;
+  margin-top: 3px;
+}
+.ni-x {
+  flex: none;
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 11px;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+.ni-x:hover {
+  color: var(--neg);
+}
 .brand {
   display: flex;
   align-items: baseline;

@@ -2028,3 +2028,42 @@ pub fn create_riven_search(
 pub fn delete_riven_search(state: State<'_, Arc<AppState>>, id: i64) -> AppResult<()> {
     crate::db::rivens::delete_saved(&state.db, id)
 }
+
+/// Toggle whether the background watcher notifies on matches for this saved search.
+#[tauri::command]
+pub fn riven_search_set_notify(
+    state: State<'_, Arc<AppState>>,
+    id: i64,
+    enabled: bool,
+) -> AppResult<()> {
+    crate::db::rivens::set_notify(&state.db, id, enabled)
+}
+
+// ---- in-app notification center -------------------------------------------
+
+#[tauri::command]
+pub fn notifications_list(
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<Vec<crate::db::notifications::Notification>> {
+    crate::db::notifications::list_active(&state.db)
+}
+
+#[tauri::command]
+pub fn notifications_unread_count(state: State<'_, Arc<AppState>>) -> AppResult<i64> {
+    crate::db::notifications::unread_count(&state.db)
+}
+
+#[tauri::command]
+pub fn notifications_mark_all_read(state: State<'_, Arc<AppState>>) -> AppResult<()> {
+    crate::db::notifications::mark_all_read(&state.db)
+}
+
+#[tauri::command]
+pub fn notifications_dismiss(state: State<'_, Arc<AppState>>, id: i64) -> AppResult<()> {
+    crate::db::notifications::dismiss(&state.db, id)
+}
+
+#[tauri::command]
+pub fn notifications_clear_all(state: State<'_, Arc<AppState>>) -> AppResult<()> {
+    crate::db::notifications::clear_all(&state.db)
+}

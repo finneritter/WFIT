@@ -307,6 +307,13 @@ pub fn run() {
             commands::list_riven_searches,
             commands::create_riven_search,
             commands::delete_riven_search,
+            commands::riven_search_set_notify,
+            // notification center
+            commands::notifications_list,
+            commands::notifications_unread_count,
+            commands::notifications_mark_all_read,
+            commands::notifications_dismiss,
+            commands::notifications_clear_all,
             // set composition (Pass B)
             commands::sets_refresh,
             // game inventory import (memory-scan)
@@ -459,6 +466,10 @@ fn init_app(
     // Desktop-notification engine: watches world-state and fires OS toasts for
     // the user's enabled event categories (works while the window is hidden).
     notify::spawn(state.clone(), app.handle().clone());
+
+    // In-app riven watcher: periodically runs notify-enabled saved riven searches
+    // and files notification-center entries for matching auctions.
+    rivens::watch::spawn_riven_watch(state.clone(), app.handle().clone());
 
     // Kick off catalog/price warm-up off the UI thread; never block launch.
     tauri::async_runtime::spawn(async move {

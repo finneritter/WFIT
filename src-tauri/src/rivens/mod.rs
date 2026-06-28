@@ -14,6 +14,7 @@
 //! no separate source needed. There's no offline fallback because searching live
 //! auctions requires the network regardless.
 pub mod grade;
+pub mod watch;
 
 use crate::db::rivens as db_rivens;
 use crate::error::AppResult;
@@ -100,6 +101,9 @@ pub struct SavedSearch {
     pub re_rolls_max: Option<i64>,
     pub mastery_rank_max: Option<i64>,
     pub min_values: std::collections::HashMap<String, f64>,
+    /// When true, the background watcher checks this search and files a
+    /// notification on a matching auction.
+    pub notify: bool,
     pub created_at: String,
 }
 

@@ -69,6 +69,7 @@ export const keys = {
   rivenAttributes: ["rivenAttributes"] as const,
   rivenSearches: ["rivenSearches"] as const,
   rivenSearch: (q: string) => ["rivenSearch", q] as const,
+  notifications: ["notifications"] as const,
 };
 
 // Anything that touches inventory ripples into these derived views.
@@ -826,4 +827,28 @@ export function useDeleteRivenSearch() {
     mutationFn: (id: number) => api.deleteRivenSearch(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.rivenSearches }),
   });
+}
+export function useSetRivenNotify() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: { id: number; enabled: boolean }) => api.setRivenSearchNotify(a.id, a.enabled),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.rivenSearches }),
+  });
+}
+
+// ---- notification center ----
+export const useNotifications = () =>
+  useQuery({ queryKey: keys.notifications, queryFn: api.listNotifications });
+
+/** Refetch the notification list whenever the backend files new ones. */
+export function useNotificationEvents() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const un = listen("notifications-updated", () => {
+      qc.invalidateQueries({ queryKey: keys.notifications });
+    });
+    return () => {
+      un.then((f) => f());
+    };
+  }, [qc]);
 }
