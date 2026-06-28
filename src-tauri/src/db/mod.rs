@@ -20,6 +20,7 @@ pub mod prices;
 pub mod recommend;
 pub mod relic_data;
 pub mod relics;
+pub mod rivens;
 pub mod sales;
 pub mod sets;
 pub mod settings;
@@ -34,7 +35,7 @@ pub mod wfm;
 /// The schema version the MIGRATIONS list produces (`PRAGMA user_version` after
 /// `to_latest`). Bump in lockstep when appending a migration — the pre-migration
 /// backup gate and its test both pin it.
-pub const SCHEMA_VERSION: i64 = 13;
+pub const SCHEMA_VERSION: i64 = 14;
 
 // Append future migrations here; never edit a shipped one.
 static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
@@ -52,6 +53,7 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         M::up(include_str!("../../migrations/0011_owned_relics.sql")),
         M::up(include_str!("../../migrations/0012_relic_data.sql")),
         M::up(include_str!("../../migrations/0013_account.sql")),
+        M::up(include_str!("../../migrations/0014_rivens.sql")),
     ])
 });
 

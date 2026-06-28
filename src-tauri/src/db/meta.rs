@@ -45,6 +45,9 @@ pub const KEY_ITEM_MANIFEST_BUNDLE_VERSION: &str = "item_manifest_bundle_version
 pub const KEY_LAST_MANIFEST_SYNC: &str = "last_manifest_sync";
 /// Stamp of the last account-snapshot scan (game scan → account_* tables).
 pub const KEY_LAST_ACCOUNT_SCAN: &str = "last_account_scan";
+/// Stamp of the last riven reference (weapons + attributes) refresh from
+/// warframe.market v2. Long TTL — disposition only changes per Prime Access.
+pub const KEY_LAST_RIVEN_REF_SYNC: &str = "last_riven_ref_sync";
 /// Stamp of the pricing logic that produced the cached prices. When the code's
 /// PRICING_VERSION differs, the derived price caches are wiped and recomputed —
 /// so changes to how prices are derived take effect on the next launch without a

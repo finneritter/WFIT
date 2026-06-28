@@ -1954,3 +1954,73 @@ pub fn recovery_reset_db(app: tauri::AppHandle) -> AppResult<()> {
     tracing::warn!(moved = %moved.display(), "recovery: DB moved aside; restarting");
     app.restart();
 }
+
+// ===========================================================================
+// Rivens (separate API: v2 reference + v1 auction search)
+// ===========================================================================
+
+/// Riven-capable weapons (cached). Refreshes the reference from warframe.market
+/// once when the cache is cold.
+#[tauri::command]
+pub async fn list_riven_weapons(
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<Vec<crate::rivens::RivenWeapon>> {
+    if crate::db::rivens::weapons_empty(&state.db)? {
+        crate::rivens::ensure_reference(state.inner()).await?;
+    }
+    crate::db::rivens::list_weapons(&state.db)
+}
+
+/// Riven attributes / stats (cached).
+#[tauri::command]
+pub async fn list_riven_attributes(
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<Vec<crate::rivens::RivenAttribute>> {
+    if crate::db::rivens::weapons_empty(&state.db)? {
+        crate::rivens::ensure_reference(state.inner()).await?;
+    }
+    crate::db::rivens::list_attributes(&state.db)
+}
+
+/// Search live riven auctions for the desired roll, ranked by closeness + graded.
+#[tauri::command]
+pub async fn search_rivens(
+    state: State<'_, Arc<AppState>>,
+    query: crate::rivens::RivenQuery,
+    limit: Option<usize>,
+) -> AppResult<crate::rivens::RivenSearchResponse> {
+    if query.weapon.trim().is_empty() {
+        return Err(AppError::Invalid("pick a weapon first".into()));
+    }
+    crate::rivens::search(state.inner(), query, limit.unwrap_or(100)).await
+}
+
+#[tauri::command]
+pub fn list_riven_searches(
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<Vec<crate::rivens::SavedSearch>> {
+    crate::db::rivens::list_saved(&state.db)
+}
+
+#[tauri::command]
+pub fn create_riven_search(
+    state: State<'_, Arc<AppState>>,
+    label: String,
+    query: crate::rivens::RivenQuery,
+) -> AppResult<i64> {
+    crate::db::rivens::create_saved(
+        &state.db,
+        &label,
+        &query.weapon,
+        &query.positives,
+        query.negative.as_deref(),
+        query.polarity.as_deref(),
+        query.re_rolls_max,
+        query.mastery_rank_max,
+    )
+}
+
+#[tauri::command]
+pub fn delete_riven_search(state: State<'_, Arc<AppState>>, id: i64) -> AppResult<()> {
+    crate::db::rivens::delete_saved(&state.db, id)
+}

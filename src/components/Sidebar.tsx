@@ -10,6 +10,7 @@ export type ScreenId =
   | "watchlist"
   | "buy"
   | "market"
+  | "rivens"
   | "listings"
   | "ducats"
   | "arcanes"
@@ -45,6 +46,7 @@ const GROUPS: { label: string | null; items: NavDef[] }[] = [
       { id: "listings", label: "Listings", icon: "tag" },
       { id: "sold", label: "Sold History", icon: "history" },
       { id: "market", label: "Market", icon: "search" },
+      { id: "rivens", label: "Riven Search", icon: "search" },
     ],
   },
   {

@@ -1,0 +1,578 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "../components/Icon";
+import { Chip, SortTh, StatBox, TableStatus } from "../components/ui";
+import {
+  useCreateRivenSearch,
+  useDeleteRivenSearch,
+  useRivenAttributes,
+  useRivenSearch,
+  useRivenSearches,
+  useRivenWeapons,
+} from "../hooks/queries";
+import { copyText } from "../lib/clipboard";
+import { clsx, fmt } from "../lib/format";
+import { usePageSearch } from "../lib/searchContext";
+import { compileQuery } from "../lib/searchQuery";
+import { rivensSchema } from "../lib/searchSchemas";
+import type { RivenAttribute, RivenQuery, RivenResult, RivenWeapon } from "../lib/types";
+
+// Polarities a riven can roll (slug → in-game symbol). "any" = no preference.
+const POLARITIES: [string, string][] = [
+  ["madurai", "V (Madurai)"],
+  ["vazarin", "D (Vazarin)"],
+  ["naramon", "— (Naramon)"],
+];
+const MAX_POSITIVES = 3;
+const PREFS_KEY = "wfit.riven.prefs";
+
+interface RivenPrefs {
+  weapon: string;
+  positives: string[];
+  negative: string | null;
+  polarity: string | null;
+  reRollsMax: string;
+  masteryMax: string;
+  sortKey: SortKey;
+  sortDir: "asc" | "desc";
+}
+type SortKey = "match" | "price" | "grade" | "rerolls" | "rep";
+const DEFAULT_PREFS: RivenPrefs = {
+  weapon: "",
+  positives: [],
+  negative: null,
+  polarity: null,
+  reRollsMax: "",
+  masteryMax: "",
+  sortKey: "match",
+  sortDir: "asc",
+};
+function loadPrefs(): RivenPrefs {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    return raw ? { ...DEFAULT_PREFS, ...JSON.parse(raw) } : { ...DEFAULT_PREFS };
+  } catch {
+    return { ...DEFAULT_PREFS };
+  }
+}
+
+/** Capitalize the auction's generated riven name (stored lowercase, e.g. "cronibin"). */
+const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
+/** The warframe.market in-game whisper for a riven auction. (Confirm format vs the site.) */
+function whisperLine(r: RivenResult): string {
+  const price = r.buyout_price ?? r.starting_price ?? 0;
+  return `/w ${r.owner_name} Hi! I want to buy: "${r.weapon_name} ${cap(r.riven_name)}" (riven) for ${price} platinum. (warframe.market)`;
+}
+
+const priceOf = (r: RivenResult): number | null => r.buyout_price ?? r.starting_price;
+const TIER_LABEL = ["Exact", "All pos", "Close", "Partial", "Weapon"];
+
+export function RivenSearch({ onOpen }: { onOpen: (slug: string) => void }) {
+  const [prefs, setPrefs] = useState<RivenPrefs>(loadPrefs);
+  const patch = (p: Partial<RivenPrefs>) => setPrefs((cur) => ({ ...cur, ...p }));
+  useEffect(() => {
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    } catch {
+      // ignore storage errors
+    }
+  }, [prefs]);
+
+  const weapons = useRivenWeapons();
+  const attributes = useRivenAttributes();
+  const saved = useRivenSearches();
+  const createSaved = useCreateRivenSearch();
+  const deleteSaved = useDeleteRivenSearch();
+
+  const weapon = useMemo(
+    () => (weapons.data ?? []).find((w) => w.slug === prefs.weapon) ?? null,
+    [weapons.data, prefs.weapon],
+  );
+
+  // Stats valid for this weapon's riven type (exclusive_to null = any weapon).
+  const validAttrs = useMemo(() => {
+    const all = attributes.data ?? [];
+    if (!weapon) return all;
+    return all.filter((a) => !a.exclusive_to || a.exclusive_to.includes(weapon.riven_type));
+  }, [attributes.data, weapon]);
+  const attrName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of attributes.data ?? []) m.set(a.slug, a.name);
+    return m;
+  }, [attributes.data]);
+
+  // The query sent to the backend — null (no fetch) until a weapon is chosen.
+  const query: RivenQuery | null = useMemo(() => {
+    if (!prefs.weapon) return null;
+    const num = (s: string) => {
+      const n = Number.parseInt(s, 10);
+      return Number.isFinite(n) ? n : null;
+    };
+    return {
+      weapon: prefs.weapon,
+      positives: prefs.positives,
+      negative: prefs.negative,
+      polarity: prefs.polarity,
+      re_rolls_max: num(prefs.reRollsMax),
+      mastery_rank_max: num(prefs.masteryMax),
+    };
+  }, [prefs]);
+  const search = useRivenSearch(query);
+
+  const togglePositive = (slug: string) =>
+    patch({
+      positives: prefs.positives.includes(slug)
+        ? prefs.positives.filter((s) => s !== slug)
+        : prefs.positives.length < MAX_POSITIVES
+          ? [...prefs.positives, slug]
+          : prefs.positives,
+    });
+
+  const pickWeapon = (slug: string) =>
+    // New weapon → drop stats that no longer apply.
+    setPrefs((cur) => {
+      const w = (weapons.data ?? []).find((x) => x.slug === slug);
+      const ok = (s: string) => {
+        const a = (attributes.data ?? []).find((x) => x.slug === s);
+        return !a || !a.exclusive_to || (w ? a.exclusive_to.includes(w.riven_type) : true);
+      };
+      return {
+        ...cur,
+        weapon: slug,
+        positives: cur.positives.filter(ok),
+        negative: cur.negative && ok(cur.negative) ? cur.negative : null,
+      };
+    });
+
+  const loadSaved = (id: number) => {
+    const s = (saved.data ?? []).find((x) => x.id === id);
+    if (!s) return;
+    patch({
+      weapon: s.weapon,
+      positives: s.positives,
+      negative: s.negative,
+      polarity: s.polarity,
+      reRollsMax: s.re_rolls_max == null ? "" : String(s.re_rolls_max),
+      masteryMax: s.mastery_rank_max == null ? "" : String(s.mastery_rank_max),
+    });
+  };
+  const saveCurrent = () => {
+    if (!query || !weapon) return;
+    const label = `${weapon.name}${prefs.positives.length ? ` · ${prefs.positives.map((p) => attrName.get(p) ?? p).join("/")}` : ""}`;
+    createSaved.mutate({ label, query });
+  };
+
+  return (
+    <div className="mkt-screener">
+      {/* Saved searches */}
+      {(saved.data ?? []).length > 0 ? (
+        <div className="mkt-filters">
+          <span className="muted">Saved:</span>
+          {(saved.data ?? []).map((s) => (
+            <span key={s.id} className="chip" style={{ paddingRight: 4 }}>
+              <button
+                type="button"
+                className="th-sort"
+                title="Load this search"
+                onClick={() => loadSaved(s.id)}
+              >
+                {s.label || s.weapon}
+              </button>
+              <button
+                type="button"
+                className="th-sort"
+                title="Delete"
+                style={{ opacity: 0.6, marginLeft: 4 }}
+                onClick={() => deleteSaved.mutate(s.id)}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      <WeaponPicker
+        weapons={weapons.data ?? []}
+        selected={weapon}
+        loading={weapons.isLoading}
+        onPick={pickWeapon}
+      />
+
+      {weapon ? (
+        <StatPicker
+          attrs={validAttrs}
+          positives={prefs.positives}
+          negative={prefs.negative}
+          onTogglePositive={togglePositive}
+          onNegative={(s) => patch({ negative: s })}
+        />
+      ) : null}
+
+      {/* Secondary constraints + save */}
+      {weapon ? (
+        <div className="mkt-filters">
+          <span className="mkt-field">
+            <span className="muted">Polarity</span>
+            <select
+              className="lf-select"
+              value={prefs.polarity ?? ""}
+              onChange={(e) => patch({ polarity: e.target.value || null })}
+            >
+              <option value="">any</option>
+              {POLARITIES.map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </span>
+          <span className="mkt-field">
+            <span className="muted">Max rolls</span>
+            <input
+              className="lf-qty"
+              type="number"
+              min={0}
+              placeholder="∞"
+              value={prefs.reRollsMax}
+              onChange={(e) => patch({ reRollsMax: e.target.value })}
+            />
+          </span>
+          <span className="mkt-field">
+            <span className="muted">Max MR</span>
+            <input
+              className="lf-qty"
+              type="number"
+              min={0}
+              placeholder="∞"
+              value={prefs.masteryMax}
+              onChange={(e) => patch({ masteryMax: e.target.value })}
+            />
+          </span>
+          <span className="mkt-sep" />
+          <button
+            type="button"
+            className="btn sm"
+            disabled={createSaved.isPending}
+            onClick={saveCurrent}
+          >
+            ★ Save search
+          </button>
+          <button
+            type="button"
+            className="btn sm"
+            title="Open this weapon on the Market screen"
+            onClick={() => onOpen(weapon.slug)}
+          >
+            Open weapon
+          </button>
+        </div>
+      ) : null}
+
+      {weapon ? (
+        <Results search={search} weapon={weapon} prefs={prefs} patch={patch} />
+      ) : (
+        <div className="empty">Pick a weapon to search live riven auctions.</div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Weapon combobox: filter the ~400 weapons by name, click to select.
+// ---------------------------------------------------------------------------
+function WeaponPicker({
+  weapons,
+  selected,
+  loading,
+  onPick,
+}: {
+  weapons: RivenWeapon[];
+  selected: RivenWeapon | null;
+  loading: boolean;
+  onPick: (slug: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const matches = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return weapons.slice(0, 50);
+    return weapons.filter((w) => w.name.toLowerCase().includes(t)).slice(0, 50);
+  }, [weapons, q]);
+
+  return (
+    <div className="riven-weapon" style={{ position: "relative" }}>
+      <div className="search mkt-search">
+        <Icon name="search" />
+        <input
+          placeholder={loading ? "Loading weapons…" : "Choose a weapon…"}
+          value={open ? q : selected ? `${selected.name}` : q}
+          onFocus={() => {
+            setOpen(true);
+            setQ("");
+          }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setOpen(true);
+          }}
+        />
+        {selected ? (
+          <span className="muted" style={{ paddingRight: 8 }}>
+            {selected.riven_type} · disp {selected.disposition.toFixed(2)}
+          </span>
+        ) : null}
+      </div>
+      {open && matches.length > 0 ? (
+        <div className="viewmenu" style={{ left: 0, right: 0, maxHeight: 320, overflowY: "auto" }}>
+          {matches.map((w) => (
+            <button
+              key={w.slug}
+              type="button"
+              className={clsx("viewopt", selected?.slug === w.slug && "on")}
+              onMouseDown={() => onPick(w.slug)}
+            >
+              <span>{w.name}</span>
+              <span className="muted">
+                {w.riven_type} · {w.disposition.toFixed(2)}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Stat picker: positives (toggle chips, max 3) + a negative selector.
+// ---------------------------------------------------------------------------
+function StatPicker({
+  attrs,
+  positives,
+  negative,
+  onTogglePositive,
+  onNegative,
+}: {
+  attrs: RivenAttribute[];
+  positives: string[];
+  negative: string | null;
+  onTogglePositive: (slug: string) => void;
+  onNegative: (slug: string | null) => void;
+}) {
+  return (
+    <>
+      <div className="mkt-filters">
+        <span className="muted">
+          Positives ({positives.length}/{MAX_POSITIVES}):
+        </span>
+        {attrs.map((a) => (
+          <Chip
+            key={a.slug}
+            active={positives.includes(a.slug)}
+            onClick={() => onTogglePositive(a.slug)}
+          >
+            {a.name}
+          </Chip>
+        ))}
+      </div>
+      <div className="mkt-filters">
+        <span className="muted">Negative:</span>
+        <select
+          className="lf-select"
+          value={negative ?? ""}
+          onChange={(e) => onNegative(e.target.value || null)}
+        >
+          <option value="">any / none</option>
+          {attrs.map((a) => (
+            <option key={a.slug} value={a.slug}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Results: price summary + ranked, graded, topbar-filterable auction table.
+// ---------------------------------------------------------------------------
+function Results({
+  search,
+  weapon,
+  prefs,
+  patch,
+}: {
+  search: ReturnType<typeof useRivenSearch>;
+  weapon: RivenWeapon;
+  prefs: RivenPrefs;
+  patch: (p: Partial<RivenPrefs>) => void;
+}) {
+  const topbar = usePageSearch();
+  const { test } = useMemo(() => compileQuery(topbar, rivensSchema), [topbar]);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const data = search.data;
+  const rows = useMemo(() => {
+    let rs = (data?.results ?? []).filter(test);
+    const dir = prefs.sortDir === "asc" ? 1 : -1;
+    const num = (v: number | null | undefined) =>
+      v == null
+        ? prefs.sortDir === "asc"
+          ? Number.POSITIVE_INFINITY
+          : Number.NEGATIVE_INFINITY
+        : v;
+    rs = [...rs].sort((a, b) => {
+      switch (prefs.sortKey) {
+        case "price":
+          return dir * (num(priceOf(a)) - num(priceOf(b)));
+        case "grade":
+          return dir * (num(a.grade) - num(b.grade));
+        case "rerolls":
+          return dir * (a.re_rolls - b.re_rolls);
+        case "rep":
+          return dir * (a.owner_reputation - b.owner_reputation);
+        default:
+          // match: tier asc, then matched desc, then price asc — the backend order.
+          return (
+            a.match_tier - b.match_tier ||
+            b.matched_positives - a.matched_positives ||
+            num(priceOf(a)) - num(priceOf(b))
+          );
+      }
+    });
+    return rs;
+  }, [data, test, prefs.sortKey, prefs.sortDir]);
+
+  const setSort = (key: SortKey) =>
+    patch(
+      prefs.sortKey === key
+        ? { sortDir: prefs.sortDir === "asc" ? "desc" : "asc" }
+        : { sortKey: key, sortDir: key === "price" || key === "match" ? "asc" : "desc" },
+    );
+  const colSort = { key: prefs.sortKey, dir: prefs.sortDir };
+
+  const copy = async (r: RivenResult) => {
+    if (await copyText(whisperLine(r))) {
+      setCopiedId(r.id);
+      setTimeout(() => setCopiedId((k) => (k === r.id ? null : k)), 1500);
+    }
+  };
+
+  const summary = data?.summary;
+  return (
+    <>
+      <div className="statband">
+        <StatBox
+          k="Cheapest"
+          v={summary?.min == null ? "—" : fmt(summary.min)}
+          unit={summary?.min == null ? undefined : "p"}
+        />
+        <StatBox
+          k="Median"
+          v={summary?.median == null ? "—" : fmt(summary.median)}
+          unit={summary?.median == null ? undefined : "p"}
+        />
+        <StatBox k="Matches" v={fmt(summary?.count ?? 0)} />
+        <StatBox k="Disposition" v={weapon.disposition.toFixed(2)} />
+        <StatBox k="Results" v={fmt(rows.length)} />
+      </div>
+      {data && !data.graded ? (
+        <div className="muted" style={{ padding: "4px 2px" }}>
+          Grades unavailable for this weapon (no disposition/base data) — shown as “—”.
+        </div>
+      ) : null}
+
+      <div className="tpanel">
+        <table className="dtable">
+          <thead>
+            <tr>
+              <SortTh<SortKey> label="Match" col="match" sort={colSort} onSort={setSort} />
+              <th>Stats</th>
+              <SortTh<SortKey> label="Grade" col="grade" sort={colSort} onSort={setSort} right />
+              <SortTh<SortKey> label="Price" col="price" sort={colSort} onSort={setSort} right />
+              <th>Seller</th>
+              <th>Status</th>
+              <SortTh<SortKey> label="Rep" col="rep" sort={colSort} onSort={setSort} right />
+              <SortTh<SortKey> label="Rolls" col="rerolls" sort={colSort} onSort={setSort} right />
+              <th className="r">MR</th>
+              <th className="r">Whisper</th>
+            </tr>
+          </thead>
+          <tbody>
+            {search.isLoading || search.isError || rows.length === 0 ? (
+              <TableStatus
+                span={10}
+                loading={search.isLoading}
+                error={search.isError}
+                loadingText="Searching auctions…"
+                errorText="Couldn't load auctions. Try again in a moment."
+                emptyText="No auctions match. Try fewer stats."
+              />
+            ) : (
+              rows.map((r) => {
+                const price = priceOf(r);
+                return (
+                  <tr key={r.id}>
+                    <td>
+                      <span className={clsx("chip", r.match_tier === 0 && "pos")}>
+                        {TIER_LABEL[r.match_tier] ?? "—"}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="riven-stats">
+                        {r.attributes.map((a) => (
+                          <span
+                            key={a.slug}
+                            className={clsx(
+                              "riven-stat",
+                              a.positive ? "pos" : "neg",
+                              a.wanted && "want",
+                            )}
+                            title={a.name}
+                          >
+                            {a.positive ? "+" : ""}
+                            {a.value}
+                            {a.unit === "percent" ? "%" : a.unit === "seconds" ? "s" : ""} {a.name}
+                            {a.grade != null ? (
+                              <b className="muted"> {Math.round(a.grade)}%</b>
+                            ) : null}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="r num">
+                      {r.grade == null ? "—" : <GradePill grade={r.grade} />}
+                    </td>
+                    <td className="r num">
+                      {price == null ? "—" : `${fmt(price)}p`}
+                      {r.is_direct_sell ? null : <span className="muted"> bid</span>}
+                    </td>
+                    <td>{r.owner_name}</td>
+                    <td>
+                      <span className={clsx("mkt-dot", r.owner_status)} /> {r.owner_status}
+                    </td>
+                    <td className="r num">{fmt(r.owner_reputation)}</td>
+                    <td className="r num">{r.re_rolls}</td>
+                    <td className="r num">{r.mastery_level}</td>
+                    <td className="r">
+                      <button type="button" className="btn sm" onClick={() => copy(r)}>
+                        {copiedId === r.id ? "Copied!" : "Copy /w"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function GradePill({ grade }: { grade: number }) {
+  const cls = grade >= 80 ? "pos" : grade >= 55 ? "" : "neg";
+  return <span className={clsx("num", cls)}>{Math.round(grade)}%</span>;
+}

@@ -10,6 +10,7 @@ mod gamescan;
 mod market;
 mod notify;
 mod overlay;
+mod rivens;
 mod types;
 mod wfm_account;
 mod wfm_socket;
@@ -299,6 +300,13 @@ pub fn run() {
             commands::get_recommended_price,
             commands::wfm_reprice_preview,
             commands::wfm_reprice_apply,
+            // rivens
+            commands::list_riven_weapons,
+            commands::list_riven_attributes,
+            commands::search_rivens,
+            commands::list_riven_searches,
+            commands::create_riven_search,
+            commands::delete_riven_search,
             // set composition (Pass B)
             commands::sets_refresh,
             // game inventory import (memory-scan)
@@ -562,6 +570,36 @@ pub(crate) async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()>
     // "Update game data". Same bundled-baseline pattern as relics.
     if let Err(e) = crate::db::account::seed_if_empty_or_stale(&state.db) {
         tracing::warn!(error = %e, "item manifest seed failed; Account names may be sparse");
+    }
+
+    // 1.8) Riven reference (weapons + attributes, incl. disposition) for the Riven
+    // Search tab — 2 v2 calls, refreshed when the cache is empty or older than the
+    // TTL (disposition only changes per Prime Access). Best-effort; a search also
+    // lazily refreshes on a cold cache.
+    {
+        const RIVEN_REF_TTL_DAYS: i64 = 14;
+        let need = crate::db::rivens::weapons_empty(&state.db)?
+            || match meta::get(&state.db, meta::KEY_LAST_RIVEN_REF_SYNC)? {
+                Some(ts) => DateTime::parse_from_rfc3339(&ts)
+                    .map(|t| {
+                        Utc::now().signed_duration_since(t.with_timezone(&Utc))
+                            > Duration::days(RIVEN_REF_TTL_DAYS)
+                    })
+                    .unwrap_or(true),
+                None => true,
+            };
+        if need {
+            match crate::rivens::ensure_reference(&state).await {
+                Ok(()) => {
+                    meta::set(
+                        &state.db,
+                        meta::KEY_LAST_RIVEN_REF_SYNC,
+                        &Utc::now().to_rfc3339(),
+                    )?;
+                }
+                Err(e) => tracing::warn!(error = %e, "riven reference refresh failed"),
+            }
+        }
     }
 
     // 2+3) Owned (then watchlist) pricing — the phase the inventory value depends on.

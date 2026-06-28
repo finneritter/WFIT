@@ -15,6 +15,7 @@ import type {
   RecommendationRow,
   RelicRow,
   ResourceRow,
+  RivenResult,
   SaleRow,
   SetRow,
   TrendRow,
@@ -410,6 +411,35 @@ export const resourcesSchema: SearchSchema<ResourceRow> = {
   },
 };
 
+// Riven Search results. The form (weapon + stat pickers) drives the API query;
+// the topbar narrows the returned auctions (by price, grade, rerolls, polarity…).
+const RIVEN_POLARITIES = ["madurai", "vazarin", "naramon"] as const;
+const rivenPrice = (r: RivenResult): number | null => r.buyout_price ?? r.starting_price;
+export const rivensSchema: SearchSchema<RivenResult> = {
+  text: (r) =>
+    `${r.weapon_name} ${r.riven_name} ${r.owner_name} ${r.polarity} ${r.attributes.map((a) => a.name).join(" ")}`,
+  is: {
+    exact: { test: (r) => r.match_tier === 0, hint: "matches all your stats exactly" },
+    direct: { test: (r) => r.is_direct_sell, hint: "buyout (not an auction)" },
+    online: { test: (r) => r.owner_status !== "offline", hint: "seller online/ingame" },
+    graded: { test: (r) => r.grade != null, hint: "has a roll grade" },
+  },
+  fields: {
+    polarity: {
+      kind: "enum",
+      get: (r) => r.polarity,
+      values: RIVEN_POLARITIES,
+      hint: "mod polarity",
+    },
+    plat: { kind: "number", get: rivenPrice, hint: "price (plat)" },
+    grade: { kind: "number", get: (r) => r.grade, hint: "roll grade %" },
+    rerolls: { kind: "number", get: (r) => r.re_rolls, hint: "reroll count" },
+    mr: { kind: "number", get: (r) => r.mastery_level, hint: "mastery requirement" },
+    rep: { kind: "number", get: (r) => r.owner_reputation, hint: "seller reputation" },
+    matched: { kind: "number", get: (r) => r.matched_positives, hint: "desired positives present" },
+  },
+};
+
 export const PAGE_SCHEMAS: Partial<Record<ScreenId, AnySearchSchema>> = {
   inventory: inventorySchema,
   watchlist: watchlistSchema,
@@ -421,6 +451,7 @@ export const PAGE_SCHEMAS: Partial<Record<ScreenId, AnySearchSchema>> = {
   sold: soldSchema,
   listings: listingsSchema,
   trends: trendsSchema,
+  rivens: rivensSchema,
   // Default tab is Overview (sales-backed); the Resources/Armory tabs compile their
   // own schema against the same topbar text.
   account: soldSchema,
@@ -436,6 +467,7 @@ export const PAGE_PLACEHOLDER: Partial<Record<ScreenId, string>> = {
   relics: "Search relics…  try tier:axi ev>30 is:scanned",
   sold: "Search sales…  try days<7 unit>20",
   listings: "Search listings…  try is:undercut",
+  rivens: "Filter results…  try is:exact plat<100 grade>80 polarity:madurai rerolls<5",
   trends: "Search trends…  try delta>10 is:owned",
   account: "Search account…  Overview: unit>20 days<7 · Armory: cat:warframe rank<30",
 };

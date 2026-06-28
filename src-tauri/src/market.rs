@@ -204,6 +204,233 @@ impl Market {
         Ok(out)
     }
 
+    // ---- rivens (separate API: v2 reference + v1 auction search) -------------
+
+    /// All riven-capable weapons with their disposition (v2 `/riven/weapons`).
+    pub async fn fetch_riven_weapons(&self) -> AppResult<Vec<crate::rivens::RivenWeapon>> {
+        #[derive(Deserialize)]
+        struct Resp {
+            data: Vec<W>,
+        }
+        #[derive(Deserialize)]
+        struct W {
+            slug: String,
+            #[serde(default)]
+            group: String,
+            #[serde(rename = "rivenType", default)]
+            riven_type: String,
+            #[serde(default)]
+            disposition: f64,
+            i18n: Option<I18n>,
+        }
+        #[derive(Deserialize)]
+        struct I18n {
+            en: Option<En>,
+        }
+        #[derive(Deserialize)]
+        struct En {
+            name: Option<String>,
+        }
+
+        let url = format!("{API_V2}/riven/weapons");
+        let resp: Resp = self
+            .get_throttled(&url)
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        Ok(resp
+            .data
+            .into_iter()
+            .map(|w| {
+                let name = w
+                    .i18n
+                    .and_then(|x| x.en)
+                    .and_then(|e| e.name)
+                    .unwrap_or_else(|| w.slug.clone());
+                crate::rivens::RivenWeapon {
+                    slug: w.slug,
+                    name,
+                    riven_type: w.riven_type,
+                    group: w.group,
+                    disposition: w.disposition,
+                }
+            })
+            .collect())
+    }
+
+    /// All riven attributes / stats (v2 `/riven/attributes`).
+    pub async fn fetch_riven_attributes(&self) -> AppResult<Vec<crate::rivens::RivenAttribute>> {
+        #[derive(Deserialize)]
+        struct Resp {
+            data: Vec<A>,
+        }
+        #[derive(Deserialize)]
+        struct A {
+            slug: String,
+            unit: Option<String>,
+            #[serde(rename = "exclusiveTo")]
+            exclusive_to: Option<Vec<String>>,
+            #[serde(rename = "positiveIsNegative")]
+            positive_is_negative: Option<bool>,
+            i18n: Option<I18n>,
+        }
+        #[derive(Deserialize)]
+        struct I18n {
+            en: Option<En>,
+        }
+        #[derive(Deserialize)]
+        struct En {
+            name: Option<String>,
+        }
+
+        let url = format!("{API_V2}/riven/attributes");
+        let resp: Resp = self
+            .get_throttled(&url)
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        Ok(resp
+            .data
+            .into_iter()
+            .map(|a| {
+                let name = a
+                    .i18n
+                    .and_then(|x| x.en)
+                    .and_then(|e| e.name)
+                    .unwrap_or_else(|| a.slug.clone());
+                crate::rivens::RivenAttribute {
+                    slug: a.slug,
+                    name,
+                    unit: a.unit,
+                    exclusive_to: a.exclusive_to,
+                    positive_is_negative: a.positive_is_negative.unwrap_or(false),
+                }
+            })
+            .collect())
+    }
+
+    /// Live riven auctions for a weapon, cheapest-first (v1 `/auctions/search`).
+    /// One broad call — the caller ranks/filters client-side for "closest match".
+    /// Skips closed/private/invisible auctions.
+    pub async fn search_riven_auctions(
+        &self,
+        weapon_url_name: &str,
+    ) -> AppResult<Vec<crate::rivens::RivenAuction>> {
+        #[derive(Deserialize)]
+        struct Resp {
+            payload: Payload,
+        }
+        #[derive(Deserialize)]
+        struct Payload {
+            #[serde(default)]
+            auctions: Vec<Auction>,
+        }
+        #[derive(Deserialize)]
+        struct Auction {
+            id: String,
+            buyout_price: Option<i64>,
+            starting_price: Option<i64>,
+            top_bid: Option<i64>,
+            #[serde(default)]
+            is_direct_sell: bool,
+            #[serde(default = "default_true")]
+            visible: bool,
+            #[serde(default)]
+            closed: bool,
+            #[serde(default)]
+            private: bool,
+            #[serde(default)]
+            created: String,
+            #[serde(default)]
+            updated: String,
+            owner: Owner,
+            item: Item,
+        }
+        #[derive(Deserialize)]
+        struct Owner {
+            #[serde(default)]
+            ingame_name: String,
+            #[serde(default)]
+            status: String,
+            #[serde(default)]
+            reputation: i64,
+        }
+        #[derive(Deserialize)]
+        struct Item {
+            #[serde(default)]
+            name: String,
+            #[serde(default)]
+            weapon_url_name: String,
+            #[serde(default)]
+            mastery_level: i64,
+            #[serde(default)]
+            mod_rank: i64,
+            #[serde(default)]
+            re_rolls: i64,
+            #[serde(default)]
+            polarity: String,
+            #[serde(default)]
+            attributes: Vec<Attr>,
+        }
+        #[derive(Deserialize)]
+        struct Attr {
+            #[serde(default)]
+            url_name: String,
+            #[serde(default)]
+            value: f64,
+            #[serde(default)]
+            positive: bool,
+        }
+        fn default_true() -> bool {
+            true
+        }
+
+        let url = format!(
+            "{API_V1}/auctions/search?type=riven&weapon_url_name={weapon_url_name}&sort_by=price_asc"
+        );
+        let r = self.get_throttled(&url).await?;
+        if !r.status().is_success() {
+            return Ok(Vec::new());
+        }
+        let resp: Resp = r.json().await?;
+        Ok(resp
+            .payload
+            .auctions
+            .into_iter()
+            .filter(|a| a.visible && !a.closed && !a.private)
+            .map(|a| crate::rivens::RivenAuction {
+                id: a.id,
+                riven_name: a.item.name,
+                weapon_url_name: a.item.weapon_url_name,
+                mastery_level: a.item.mastery_level,
+                mod_rank: a.item.mod_rank,
+                re_rolls: a.item.re_rolls,
+                polarity: a.item.polarity,
+                attributes: a
+                    .item
+                    .attributes
+                    .into_iter()
+                    .map(|x| crate::rivens::AuctionAttr {
+                        url_name: x.url_name,
+                        value: x.value,
+                        positive: x.positive,
+                    })
+                    .collect(),
+                buyout_price: a.buyout_price,
+                starting_price: a.starting_price,
+                top_bid: a.top_bid,
+                is_direct_sell: a.is_direct_sell,
+                owner_name: a.owner.ingame_name,
+                owner_status: a.owner.status,
+                owner_reputation: a.owner.reputation,
+                created: a.created,
+                updated: a.updated,
+            })
+            .collect())
+    }
+
     /// Per-item 90-day statistics → a fully-derived PriceUpsert (history + cache
     /// figures). Returns None when the item has no usable closed-market history.
     pub async fn fetch_statistics(&self, slug: &str) -> AppResult<Option<PriceUpsert>> {

@@ -33,6 +33,7 @@ import { Inventory } from "./routes/Inventory";
 import { Listings } from "./routes/Listings";
 import { Market } from "./routes/Market";
 import { Relics } from "./routes/Relics";
+import { RivenSearch } from "./routes/RivenSearch";
 import { Rotation } from "./routes/Rotation";
 import { Sets } from "./routes/Sets";
 import { Settings } from "./routes/Settings";
@@ -51,6 +52,7 @@ const TITLES: Record<ScreenId, string> = {
   watchlist: "Watchlist",
   buy: "Buy List",
   market: "Market",
+  rivens: "Riven Search",
   listings: "Listings",
   ducats: "Ducats",
   arcanes: "Arcanes",
@@ -244,6 +246,7 @@ export default function App() {
                 {screen === "market" && (
                   <Market onOpen={open} initialSlug={marketSlug ?? undefined} />
                 )}
+                {screen === "rivens" && <RivenSearch onOpen={open} />}
                 {screen === "listings" && <Listings onOpen={open} initialTab={listingsTab} />}
                 {screen === "ducats" && <Ducats onOpen={open} />}
                 {screen === "arcanes" && <Arcanes onOpen={open} />}

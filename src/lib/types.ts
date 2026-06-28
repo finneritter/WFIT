@@ -760,3 +760,88 @@ export interface Worldstate {
   // authoritative case); "warframestat" = wrapper-only fallback (DE unreachable).
   fissure_source: "de" | "warframestat";
 }
+
+// ---- rivens (separate API: v2 reference + v1 auction search) ----
+export interface RivenWeapon {
+  slug: string;
+  name: string;
+  riven_type: string; // rifle|pistol|shotgun|melee|zaw|kitgun|archgun
+  group: string;
+  disposition: number;
+}
+
+export interface RivenAttribute {
+  slug: string;
+  name: string;
+  unit: string | null; // percent|seconds|multiply|null
+  exclusive_to: string[] | null; // null = any weapon
+  positive_is_negative: boolean; // true = a "positive" roll is bad (e.g. recoil)
+}
+
+export interface RivenResultAttr {
+  slug: string;
+  name: string;
+  value: number;
+  positive: boolean;
+  unit: string | null;
+  grade: number | null; // % of god roll (positives only)
+  wanted: boolean; // matches one of the user's desired stats
+}
+
+export interface RivenResult {
+  id: string;
+  riven_name: string;
+  weapon_url_name: string;
+  weapon_name: string;
+  mastery_level: number;
+  mod_rank: number;
+  re_rolls: number;
+  polarity: string;
+  attributes: RivenResultAttr[];
+  buyout_price: number | null;
+  starting_price: number | null;
+  top_bid: number | null;
+  is_direct_sell: boolean;
+  owner_name: string;
+  owner_status: "ingame" | "online" | "offline" | string;
+  owner_reputation: number;
+  grade: number | null; // overall mean grade of gradeable positives
+  match_tier: number; // 0 exact … 4 weapon-only
+  matched_positives: number;
+  created: string;
+  updated: string;
+}
+
+export interface RivenPriceSummary {
+  min: number | null;
+  median: number | null;
+  count: number;
+}
+
+export interface RivenSearchResponse {
+  results: RivenResult[];
+  summary: RivenPriceSummary;
+  graded: boolean; // false when disposition unknown → grades shown as "—"
+}
+
+// Mirrors the Rust RivenQuery (snake_case fields, sent as the `query` arg).
+export interface RivenQuery {
+  weapon: string;
+  positives: string[];
+  negative: string | null;
+  polarity: string | null;
+  re_rolls_max: number | null;
+  mastery_rank_max: number | null;
+}
+
+export interface RivenSavedSearch {
+  id: number;
+  label: string;
+  weapon: string;
+  positives: string[];
+  negative: string | null;
+  polarity: string | null;
+  re_rolls_max: number | null;
+  mastery_rank_max: number | null;
+  created_at: string;
+}

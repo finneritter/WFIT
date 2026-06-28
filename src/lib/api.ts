@@ -31,6 +31,11 @@ import type {
   RepriceApply,
   RepriceRow,
   ResourceRow,
+  RivenAttribute,
+  RivenQuery,
+  RivenSavedSearch,
+  RivenSearchResponse,
+  RivenWeapon,
   SaleRow,
   ScanApply,
   ScanDiffRow,
@@ -229,3 +234,13 @@ export const getAccountProfile = () => invoke<AccountProfile>("get_account_profi
 export const getAccountArsenal = () => invoke<GearRow[]>("get_account_arsenal");
 export const getAccountResources = () => invoke<ResourceRow[]>("get_account_resources");
 export const getAccountCodex = () => invoke<CodexData>("get_account_codex");
+
+// rivens (separate API: v2 reference + v1 auction search)
+export const listRivenWeapons = () => invoke<RivenWeapon[]>("list_riven_weapons");
+export const listRivenAttributes = () => invoke<RivenAttribute[]>("list_riven_attributes");
+export const searchRivens = (query: RivenQuery, limit?: number) =>
+  invoke<RivenSearchResponse>("search_rivens", { query, limit: limit ?? null });
+export const listRivenSearches = () => invoke<RivenSavedSearch[]>("list_riven_searches");
+export const createRivenSearch = (label: string, query: RivenQuery) =>
+  invoke<number>("create_riven_search", { label, query });
+export const deleteRivenSearch = (id: number) => invoke<void>("delete_riven_search", { id });

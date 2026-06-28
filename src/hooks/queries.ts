@@ -10,6 +10,7 @@ import type {
   NotificationPrefs,
   OverlayPrefs,
   RepriceApply,
+  RivenQuery,
   ScanApply,
 } from "../lib/types";
 
@@ -64,6 +65,10 @@ export const keys = {
   accountResources: ["accountResources"] as const,
   accountCodex: ["accountCodex"] as const,
   backups: ["backups"] as const,
+  rivenWeapons: ["rivenWeapons"] as const,
+  rivenAttributes: ["rivenAttributes"] as const,
+  rivenSearches: ["rivenSearches"] as const,
+  rivenSearch: (q: string) => ["rivenSearch", q] as const,
 };
 
 // Anything that touches inventory ripples into these derived views.
@@ -778,5 +783,47 @@ export function useAccountScan() {
       invalidateAccount(qc);
       qc.invalidateQueries({ queryKey: keys.gameScan });
     },
+  });
+}
+
+// ---- rivens ----
+// Reference data is effectively static within a session (refreshed backend-side on
+// a long TTL) — cache it indefinitely.
+export const useRivenWeapons = () =>
+  useQuery({
+    queryKey: keys.rivenWeapons,
+    queryFn: api.listRivenWeapons,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+export const useRivenAttributes = () =>
+  useQuery({
+    queryKey: keys.rivenAttributes,
+    queryFn: api.listRivenAttributes,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+// Live auction search — only runs once a weapon is chosen. Keyed on the full query
+// so changing any field refetches; short staleTime keeps live prices reasonably fresh.
+export const useRivenSearch = (query: RivenQuery | null) =>
+  useQuery({
+    queryKey: keys.rivenSearch(query ? JSON.stringify(query) : ""),
+    queryFn: () => api.searchRivens(query as RivenQuery),
+    enabled: !!query?.weapon,
+    staleTime: 30_000,
+  });
+export const useRivenSearches = () =>
+  useQuery({ queryKey: keys.rivenSearches, queryFn: api.listRivenSearches });
+export function useCreateRivenSearch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: { label: string; query: RivenQuery }) =>
+      api.createRivenSearch(a.label, a.query),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.rivenSearches }),
+  });
+}
+export function useDeleteRivenSearch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.deleteRivenSearch(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.rivenSearches }),
   });
 }

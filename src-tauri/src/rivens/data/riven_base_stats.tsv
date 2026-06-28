@@ -1,0 +1,17 @@
+multishot	90	119.7	119.7	-	60.3
+base_damage_/_melee_damage	165	164.7	219.6	164.7	99.9
+slash_damage	120	120	120	119.7	90
+impact_damage	120	120	120	119.7	90
+puncture_damage	120	120	120	119.7	90
+critical_chance	149.99	90	149.99	180	99.9
+critical_damage	120	90	90	90	80.1
+heat_damage	90	90	90	90	119.7
+cold_damage	90	90	90	90	119.7
+electric_damage	90	90	90	90	119.7
+toxin_damage	90	90	90	90	119.7
+status_chance	90	90	90	90	60.3
+status_duration	99.99	99.99	99.99	99.99	99.99
+fire_rate_/_attack_speed	60.03	90	74.7	54.9	60.03
+magazine_capacity	50	50	50	-	60.3
+ammo_maximum	49.95	90	90	-	99.9
+reload_speed	50	50	50	-	99.9
