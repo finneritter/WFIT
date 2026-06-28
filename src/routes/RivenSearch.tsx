@@ -439,7 +439,7 @@ function StatPicker({
     const a = bySlug.get(slug);
     const isPos = kind === "min";
     return (
-      <div key={slug} className={clsx("riven-statrow", isPos ? "pos" : "neg")}>
+      <div key={slug} className={clsx("riven-statrow", isPos ? "rv-pos" : "rv-neg")}>
         <span className="rsr-name">
           <span className="rsr-sign">{isPos ? "+" : "−"}</span>
           {a?.name ?? slug}
@@ -773,8 +773,8 @@ function Results({
                             key={a.slug}
                             className={clsx(
                               "riven-stat",
-                              a.positive ? "pos" : "neg",
-                              a.wanted && "want",
+                              a.positive ? "rv-pos" : "rv-neg",
+                              a.wanted && "rv-want",
                             )}
                             title={a.name}
                           >

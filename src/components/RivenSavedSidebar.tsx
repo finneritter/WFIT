@@ -124,13 +124,13 @@ function SavedRow({
           </div>
           <div className="rsp-row">
             <span className="muted">Positives</span>
-            <span className="pos">
+            <span className="rv-pos">
               {s.positives.length ? s.positives.map((p) => `${name(p)}${val(p)}`).join(", ") : "—"}
             </span>
           </div>
           <div className="rsp-row">
             <span className="muted">Negative</span>
-            <span className="neg">
+            <span className="rv-neg">
               {s.negative ? `${name(s.negative)}${val(s.negative)}` : "any"}
             </span>
           </div>

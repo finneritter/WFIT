@@ -495,10 +495,10 @@ body.flat-deltas .neg {
   color: var(--ink);
   min-width: 0;
 }
-.rsp-row .pos {
+.rsp-row .rv-pos {
   color: var(--pos);
 }
-.rsp-row .neg {
+.rsp-row .rv-neg {
   color: var(--neg);
 }
 
@@ -5641,10 +5641,10 @@ button.rsetbar:hover .rsetbox.hit-sp {
 .riven-statrow:hover {
   background: var(--hover);
 }
-.riven-statrow.pos:hover {
+.riven-statrow.rv-pos:hover {
   border-left-color: var(--pos);
 }
-.riven-statrow.neg:hover {
+.riven-statrow.rv-neg:hover {
   border-left-color: var(--neg);
 }
 @keyframes riven-row-in {
@@ -5670,10 +5670,10 @@ button.rsetbar:hover .rsetbox.hit-sp {
   font-weight: 700;
   font-size: 13px;
 }
-.riven-statrow.pos .rsr-sign {
+.riven-statrow.rv-pos .rsr-sign {
   color: var(--pos);
 }
-.riven-statrow.neg .rsr-sign {
+.riven-statrow.rv-neg .rsr-sign {
   color: var(--neg);
 }
 .riven-val {
@@ -5804,15 +5804,17 @@ button.rsetbar:hover .rsetbox.hit-sp {
   white-space: nowrap;
 }
 /* Positive rolls default to a light green; the stats we actually searched for
-   ("want") deepen to a darker green; negatives stay red. .want is declared last
-   so it wins on a `pos want` / `neg want` span (equal specificity → source order). */
-.riven-stat.pos {
+   ("rv-want") deepen to a darker green; negatives stay red. rv-want is declared
+   last so it wins on a `rv-pos rv-want` span (equal specificity → source order).
+   Riven-specific class names (not the global .pos/.neg) so the app-wide
+   "flat deltas" preference doesn't grey these out. */
+.riven-stat.rv-pos {
   color: #8fdca8;
 }
-.riven-stat.neg {
+.riven-stat.rv-neg {
   color: var(--neg);
 }
-.riven-stat.want {
+.riven-stat.rv-want {
   color: #2f9e54;
   font-weight: 600;
 }
