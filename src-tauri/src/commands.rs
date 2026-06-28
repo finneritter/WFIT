@@ -1992,7 +1992,10 @@ pub async fn search_rivens(
     if query.weapon.trim().is_empty() {
         return Err(AppError::Invalid("pick a weapon first".into()));
     }
-    crate::rivens::search(state.inner(), query, limit.unwrap_or(100)).await
+    // warframe.market returns a weapon's full auction list in one call; the cap is
+    // only how many ranked rows we hand back. Default high enough to show ~all of
+    // them (well above any weapon's live-auction count) while bounding table size.
+    crate::rivens::search(state.inner(), query, limit.unwrap_or(500)).await
 }
 
 #[tauri::command]
