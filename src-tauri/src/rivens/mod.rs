@@ -14,6 +14,7 @@
 //! no separate source needed. There's no offline fallback because searching live
 //! auctions requires the network regardless.
 pub mod grade;
+pub mod price;
 pub mod watch;
 
 use crate::db::rivens as db_rivens;
