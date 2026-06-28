@@ -119,6 +119,40 @@ pub(crate) fn shrunk_price(r: &RivenResult, now: DateTime<Utc>) -> Option<f64> {
     Some(realistic * staleness_factor(&r.updated, now) * seller_factor(r))
 }
 
+/// Value at percentile `p` (0..1) of a sorted slice (nearest-rank).
+#[allow(dead_code)] // used by later tasks
+fn pctl(sorted: &[f64], p: f64) -> f64 {
+    if sorted.is_empty() {
+        return 0.0;
+    }
+    let idx = ((sorted.len() as f64 - 1.0) * p).round() as usize;
+    sorted[idx.min(sorted.len() - 1)]
+}
+
+/// Winsorized low-percentile band over comps' shrunk prices → (point, low, high).
+#[allow(dead_code)] // used by later tasks
+pub(crate) fn band(comps: &[&RivenResult], now: DateTime<Utc>) -> Option<(i64, i64, i64)> {
+    let mut prices: Vec<f64> = comps.iter().filter_map(|r| shrunk_price(r, now)).collect();
+    if prices.is_empty() {
+        return None;
+    }
+    prices.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    // Drop one extreme each side once there are enough samples.
+    let w: &[f64] = if prices.len() >= 5 {
+        &prices[1..prices.len() - 1]
+    } else {
+        &prices[..]
+    };
+    let point = pctl(w, POINT_PCTL);
+    let low = prices[0]; // actual observed floor, not the winsorized minimum
+    let high = pctl(w, HIGH_PCTL).max(point);
+    Some((
+        point.round() as i64,
+        low.round() as i64,
+        high.round() as i64,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,5 +228,28 @@ mod tests {
         a.top_bid = Some(100);
         // (100 + 200) / 2 = 150, no shrink (fresh, online)
         assert_eq!(shrunk_price(&a, now()).unwrap().round() as i64, 150);
+    }
+
+    #[test]
+    fn band_anchors_low_and_rejects_outliers() {
+        // Prices 50,60,70,80, plus a 1000 aspirational outlier.
+        let cs: Vec<RivenResult> = [50, 60, 70, 80, 1000]
+            .iter()
+            .enumerate()
+            .map(|(i, p)| comp(&format!("c{i}"), *p, 0, 80.0, 0, "ingame"))
+            .collect();
+        let refs: Vec<&RivenResult> = cs.iter().collect();
+        let (point, low, high) = band(&refs, now()).unwrap();
+        assert!(
+            point <= 70,
+            "point {point} should anchor low, not at the mean"
+        );
+        assert_eq!(low, 50);
+        assert!(high < 1000, "outlier must be winsorized out of high {high}");
+    }
+
+    #[test]
+    fn band_empty_is_none() {
+        assert!(band(&[], now()).is_none());
     }
 }
