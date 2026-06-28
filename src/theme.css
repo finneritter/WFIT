@@ -5830,6 +5830,26 @@ button.rsetbar:hover .rsetbox.hit-sp {
   padding: 5px 11px;
 }
 
+/* Polarity / Max rolls / Max MR / Save / Open weapon row — unify the text size
+   (the inputs fell back to the browser default, larger than the 11px labels and
+   buttons) and match every control's height so the row reads as one set. */
+.riven-constraints .mkt-field,
+.riven-constraints .mkt-field .muted {
+  font-size: 12px;
+}
+.riven-constraints .lf-select,
+.riven-constraints .lf-qty {
+  font-size: 12px;
+  height: 30px;
+}
+.riven-constraints .btn.sm {
+  font-size: 12px;
+  height: 30px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+}
+
 .mkt-table .rowlink {
   cursor: pointer;
 }

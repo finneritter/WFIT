@@ -239,7 +239,7 @@ export function RivenSearch({
 
       {/* Secondary constraints + save */}
       {weapon ? (
-        <div className="mkt-filters">
+        <div className="mkt-filters riven-constraints">
           <span className="mkt-field">
             <span className="muted">Polarity</span>
             <select
