@@ -37,7 +37,7 @@ interface RivenPrefs {
   sortKey: SortKey;
   sortDir: "asc" | "desc";
 }
-type SortKey = "match" | "price" | "grade" | "rerolls" | "rep";
+type SortKey = "match" | "price" | "grade";
 const DEFAULT_PREFS: RivenPrefs = {
   weapon: "",
   positives: [],
@@ -634,10 +634,6 @@ function Results({
           return dir * (num(priceOf(a)) - num(priceOf(b)));
         case "grade":
           return dir * (num(a.grade) - num(b.grade));
-        case "rerolls":
-          return dir * (a.re_rolls - b.re_rolls);
-        case "rep":
-          return dir * (a.owner_reputation - b.owner_reputation);
         default:
           // match: tier asc, then matched desc, then price asc — the backend order.
           return (
@@ -699,8 +695,6 @@ function Results({
               <SortTh<SortKey> label="Price" col="price" sort={colSort} onSort={setSort} right />
               <th>Seller</th>
               <th>Status</th>
-              <SortTh<SortKey> label="Rep" col="rep" sort={colSort} onSort={setSort} right />
-              <SortTh<SortKey> label="Rolls" col="rerolls" sort={colSort} onSort={setSort} right />
               <th className="r">MR</th>
               <th className="r">Whisper</th>
             </tr>
@@ -708,7 +702,7 @@ function Results({
           <tbody>
             {search.isLoading || search.isError || rows.length === 0 ? (
               <TableStatus
-                span={10}
+                span={8}
                 loading={search.isLoading}
                 error={search.isError}
                 loadingText="Searching auctions…"
@@ -758,12 +752,10 @@ function Results({
                     <td>
                       <span className={clsx("mkt-dot", r.owner_status)} /> {r.owner_status}
                     </td>
-                    <td className="r num">{fmt(r.owner_reputation)}</td>
-                    <td className="r num">{r.re_rolls}</td>
                     <td className="r num">{r.mastery_level}</td>
                     <td className="r">
                       <button type="button" className="btn sm" onClick={() => copy(r)}>
-                        {copiedId === r.id ? "Copied!" : "Copy /w"}
+                        {copiedId === r.id ? "Copied!" : "Copy whisper"}
                       </button>
                     </td>
                   </tr>

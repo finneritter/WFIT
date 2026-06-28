@@ -231,6 +231,7 @@ export default function App() {
               keysRef={searchKeysRef}
               onOpen={open}
             />
+            <LiveBadge />
             {screen === "rivens" ? (
               <button
                 type="button"
@@ -242,7 +243,6 @@ export default function App() {
                 <Icon name="bookmark" />
               </button>
             ) : null}
-            <LiveBadge />
             <SyncNow />
             <button
               type="button"

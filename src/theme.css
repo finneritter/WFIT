@@ -5774,6 +5774,35 @@ button.rsetbar:hover .rsetbox.hit-sp {
   color: var(--faint);
 }
 
+/* Results table: stack each rolled stat on its own line with breathing room
+   (previously a run-on string). Wanted stats brighten; negatives go red; the
+   per-stat grade % stays muted. */
+.riven-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 3px 0;
+}
+.riven-stat {
+  font-size: 11.5px;
+  color: var(--soft);
+  white-space: nowrap;
+}
+.riven-stat.want {
+  color: var(--ink);
+  font-weight: 600;
+}
+.riven-stat.neg {
+  color: var(--neg);
+}
+.riven-stat b {
+  font-weight: 500;
+  margin-left: 2px;
+}
+.dtable td:has(.riven-stats) {
+  vertical-align: middle;
+}
+
 .mkt-table .rowlink {
   cursor: pointer;
 }
