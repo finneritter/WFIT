@@ -2261,6 +2261,13 @@ tr.over-budget td {
 .lf-select {
   flex: 1;
 }
+/* The open option list is OS-rendered; WebKitGTK doesn't reliably honor the dark
+   color-scheme for it, so without explicit colors the popup falls back to GTK's
+   grey. Match the panel (same fix the timezone picker uses). */
+.lf-select option {
+  background: var(--panel);
+  color: var(--ink);
+}
 .lf-qty {
   width: 64px;
   text-align: right;

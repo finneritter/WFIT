@@ -282,7 +282,7 @@ export function RivenSearch({
             />
           </span>
           <span className="mkt-field">
-            <span className="muted">Seller</span>
+            <span className="muted">Status</span>
             <select
               className="lf-select"
               value={prefs.status}
