@@ -34,10 +34,13 @@ interface RivenPrefs {
   polarity: string | null;
   reRollsMax: string;
   masteryMax: string;
+  // Client-side seller-presence filter: any · online (online or in-game) · in-game only.
+  status: StatusFilter;
   sortKey: SortKey;
   sortDir: "asc" | "desc";
 }
 type SortKey = "match" | "price" | "grade";
+type StatusFilter = "any" | "online" | "ingame";
 const DEFAULT_PREFS: RivenPrefs = {
   weapon: "",
   positives: [],
@@ -46,6 +49,7 @@ const DEFAULT_PREFS: RivenPrefs = {
   polarity: null,
   reRollsMax: "",
   masteryMax: "",
+  status: "any",
   sortKey: "match",
   sortDir: "asc",
 };
@@ -276,6 +280,18 @@ export function RivenSearch({
               value={prefs.masteryMax}
               onChange={(e) => patch({ masteryMax: e.target.value })}
             />
+          </span>
+          <span className="mkt-field">
+            <span className="muted">Seller</span>
+            <select
+              className="lf-select"
+              value={prefs.status}
+              onChange={(e) => patch({ status: e.target.value as StatusFilter })}
+            >
+              <option value="any">any</option>
+              <option value="online">online</option>
+              <option value="ingame">in-game</option>
+            </select>
           </span>
           <span className="mkt-sep" />
           <button
@@ -618,9 +634,18 @@ function Results({
     };
   }, [prefs.minValues, prefs.negative]);
 
+  // Seller-presence filter: "online" keeps in-game OR online (anyone reachable now);
+  // "ingame" keeps only in-game; "any" keeps all.
+  const statusOk = useMemo(() => {
+    const s = prefs.status;
+    if (s === "any") return () => true;
+    return (r: RivenResult) =>
+      s === "ingame" ? r.owner_status === "ingame" : r.owner_status !== "offline";
+  }, [prefs.status]);
+
   const data = search.data;
   const rows = useMemo(() => {
-    let rs = (data?.results ?? []).filter(test).filter(passesThresholds);
+    let rs = (data?.results ?? []).filter(test).filter(passesThresholds).filter(statusOk);
     const dir = prefs.sortDir === "asc" ? 1 : -1;
     const num = (v: number | null | undefined) =>
       v == null
@@ -644,7 +669,7 @@ function Results({
       }
     });
     return rs;
-  }, [data, test, passesThresholds, prefs.sortKey, prefs.sortDir]);
+  }, [data, test, passesThresholds, statusOk, prefs.sortKey, prefs.sortDir]);
 
   const setSort = (key: SortKey) =>
     patch(
