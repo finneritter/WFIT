@@ -14,6 +14,29 @@ function isMouseWheel(e: WheelEvent): boolean {
   return Math.abs(e.deltaY) >= 50 && e.deltaY === Math.trunc(e.deltaY);
 }
 
+// True when the wheel started inside a scrollable element (between the target and
+// `stop`) that can still scroll in this direction — e.g. an open dropdown's option
+// list. Those events must scroll that element natively, not be hijacked to scroll
+// the page; without this, inner menus (the riven stat picker, weapon combobox)
+// can't be wheeled because this content-level handler preventDefaults them.
+function innerScrollerCanScroll(
+  start: EventTarget | null,
+  stop: HTMLElement,
+  deltaY: number,
+): boolean {
+  let node = start instanceof HTMLElement ? start : ((start as Node | null)?.parentElement ?? null);
+  while (node && node !== stop) {
+    const oy = getComputedStyle(node).overflowY;
+    if ((oy === "auto" || oy === "scroll") && node.scrollHeight > node.clientHeight + 1) {
+      const atTop = node.scrollTop <= 0;
+      const atBottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 1;
+      if ((deltaY < 0 && !atTop) || (deltaY > 0 && !atBottom)) return true;
+    }
+    node = node.parentElement;
+  }
+  return false;
+}
+
 export function attachSmoothScroll(el: HTMLElement): () => void {
   let target = el.scrollTop;
   let raf: number | null = null;
@@ -44,6 +67,11 @@ export function attachSmoothScroll(el: HTMLElement): () => void {
     if (!isMouseWheel(e)) {
       // Keep target in sync so the next wheel tick doesn't snap backwards
       // to a stale value left over from a previous mouse-wheel animation.
+      target = el.scrollTop;
+      return;
+    }
+    // An open dropdown/list under the cursor scrolls itself natively.
+    if (innerScrollerCanScroll(e.target, el, e.deltaY)) {
       target = el.scrollTop;
       return;
     }
