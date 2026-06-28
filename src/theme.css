@@ -5788,12 +5788,18 @@ button.rsetbar:hover .rsetbox.hit-sp {
   color: var(--soft);
   white-space: nowrap;
 }
-.riven-stat.want {
-  color: var(--ink);
-  font-weight: 600;
+/* Positive rolls default to a light green; the stats we actually searched for
+   ("want") deepen to a darker green; negatives stay red. .want is declared last
+   so it wins on a `pos want` / `neg want` span (equal specificity → source order). */
+.riven-stat.pos {
+  color: #8fdca8;
 }
 .riven-stat.neg {
   color: var(--neg);
+}
+.riven-stat.want {
+  color: #2f9e54;
+  font-weight: 600;
 }
 .riven-stat b {
   font-weight: 500;
