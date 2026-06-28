@@ -319,6 +319,16 @@ mod tests {
     }
 
     #[test]
+    fn level_staleness_downgrades_one_notch() {
+        // High (6 comps) with stale data → Medium
+        assert_eq!(level(6, STALE_OLD_DAYS + 1), Confidence::Medium);
+        // Medium (4 comps) with stale data → Low
+        assert_eq!(level(4, STALE_OLD_DAYS + 1), Confidence::Low);
+        // Low stays Low even when stale
+        assert_eq!(level(1, STALE_OLD_DAYS + 1), Confidence::Low);
+    }
+
+    #[test]
     fn estimate_none_without_comparable_rolls() {
         // Only tier-3 results (not comparable) → no estimate.
         let cs = vec![comp("a", 100, 3, 50.0, 0, "ingame")];
