@@ -472,7 +472,7 @@ body.flat-deltas .neg {
   color: var(--ink);
 }
 .rsaved-bell.on {
-  color: var(--accent);
+  color: var(--neg);
 }
 .rsaved-del:hover {
   color: var(--neg);
@@ -508,7 +508,7 @@ body.flat-deltas .neg {
   display: inline-flex;
 }
 .icon-btn.has-unread {
-  color: var(--ink);
+  color: var(--neg);
 }
 .notif-badge {
   position: absolute;
@@ -1011,6 +1011,14 @@ body.flat-deltas .neg {
   color: var(--ink);
   border-color: var(--line-2);
   background: var(--hover);
+}
+/* Toggled-on icon button (e.g. the saved-searches panel toggle while open) —
+   accent fill, same "whited-out" look as the Add items button. */
+.icon-btn.on,
+.icon-btn.on:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
 }
 .icon-btn svg {
   width: 15px;

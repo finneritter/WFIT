@@ -77,11 +77,14 @@ const TIER_LABEL = ["Exact", "All pos", "Close", "Partial", "Weapon"];
 export function RivenSearch({
   onOpen,
   loadReq,
+  onSaved,
 }: {
   onOpen: (slug: string) => void;
   // A request from the saved-searches sidebar / a notification to load a saved
   // search into the form. The nonce lets the same id re-fire.
   loadReq?: { id: number; nonce: number } | null;
+  // Called after a search is saved — opens the saved-searches panel.
+  onSaved?: () => void;
 }) {
   const [prefs, setPrefs] = useState<RivenPrefs>(loadPrefs);
   const patch = (p: Partial<RivenPrefs>) => setPrefs((cur) => ({ ...cur, ...p }));
@@ -207,6 +210,7 @@ export function RivenSearch({
       if (Number.isFinite(v)) minValues[slug] = v;
     }
     createSaved.mutate({ label, query, minValues });
+    onSaved?.();
   };
 
   // Apply a load request from the sidebar / a notification deep-link. Keyed on the

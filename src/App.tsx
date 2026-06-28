@@ -159,6 +159,10 @@ export default function App() {
       return next;
     });
   }, []);
+  const openRivenPanel = useCallback(() => {
+    setRivenPanelOpen(true);
+    localStorage.setItem("wfit.riven.panelOpen", "1");
+  }, []);
 
   const toggleNav = useCallback(() => {
     setNavCollapsed((c) => {
@@ -295,7 +299,9 @@ export default function App() {
                 {screen === "market" && (
                   <Market onOpen={open} initialSlug={marketSlug ?? undefined} />
                 )}
-                {screen === "rivens" && <RivenSearch onOpen={open} loadReq={rivenLoadReq} />}
+                {screen === "rivens" && (
+                  <RivenSearch onOpen={open} loadReq={rivenLoadReq} onSaved={openRivenPanel} />
+                )}
                 {screen === "listings" && <Listings onOpen={open} initialTab={listingsTab} />}
                 {screen === "ducats" && <Ducats onOpen={open} />}
                 {screen === "arcanes" && <Arcanes onOpen={open} />}
