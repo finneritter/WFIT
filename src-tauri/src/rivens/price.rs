@@ -55,7 +55,6 @@ pub(crate) struct Estimate {
 
 /// A deal verdict for one listing vs its grade-positioned expected price.
 #[derive(Debug, Clone, Serialize)]
-#[allow(dead_code)] // used by later tasks
 pub(crate) struct Deal {
     pub kind: String,   // "great" | "fair" | "overpriced"
     pub delta_pct: i64, // + above expected, - below
@@ -63,7 +62,6 @@ pub(crate) struct Deal {
 }
 
 /// Listed ask: buyout, else starting price.
-#[allow(dead_code)] // used by later tasks
 pub(crate) fn ask_of(r: &RivenResult) -> Option<i64> {
     r.buyout_price.or(r.starting_price)
 }
@@ -154,7 +152,6 @@ pub(crate) fn band(comps: &[&RivenResult], now: DateTime<Utc>) -> Option<(i64, i
 }
 
 /// Confidence from strong-comp count, downgraded one notch when comps are stale.
-#[allow(dead_code)] // used by later tasks
 pub(crate) fn level(n: usize, max_stale_days: i64) -> Confidence {
     let base = match n {
         0..=2 => Confidence::Low,
@@ -170,6 +167,73 @@ pub(crate) fn level(n: usize, max_stale_days: i64) -> Confidence {
     } else {
         base
     }
+}
+
+/// Multiplier on the band point for a roll's grade vs the comps' median grade.
+/// Convex so near-max rolls command a premium; clamped. 1.0 when grades unknown.
+#[allow(dead_code)] // used by later tasks
+fn grade_mult(g: Option<f64>, comps: &[&RivenResult]) -> f64 {
+    let gl = match g {
+        Some(x) if x > 0.0 => x,
+        _ => return 1.0,
+    };
+    let mut grades: Vec<f64> = comps.iter().filter_map(|r| r.grade).collect();
+    if grades.is_empty() {
+        return 1.0;
+    }
+    grades.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let med = grades[grades.len() / 2];
+    if med <= 0.0 {
+        return 1.0;
+    }
+    (gl / med)
+        .powf(GRADE_CONVEX)
+        .clamp(GRADE_MULT_MIN, GRADE_MULT_MAX)
+}
+
+/// Score a single listing against its peers (same/looser-tier rolls, self-excluded),
+/// grade-positioned. None for non-matching rolls (tier ≥ 2), thin peer sets, or when
+/// peer confidence is Low (don't claim a deal on noise).
+#[allow(dead_code)] // used by later tasks
+pub fn deal_for(
+    listing: &RivenResult,
+    results: &[RivenResult],
+    now: DateTime<Utc>,
+) -> Option<Deal> {
+    if listing.match_tier > 1 {
+        return None;
+    }
+    let price = ask_of(listing)? as f64;
+    let comps: Vec<&RivenResult> = results
+        .iter()
+        .filter(|r| r.match_tier <= 1 && r.id != listing.id)
+        .collect();
+    if comps.len() < 2 {
+        return None;
+    }
+    let max_stale = comps
+        .iter()
+        .map(|r| age_days(&r.updated, now))
+        .max()
+        .unwrap_or(0);
+    if level(comps.len(), max_stale) == Confidence::Low {
+        return None;
+    }
+    let (point, _, _) = band(&comps, now)?;
+    let expected = (point as f64 * grade_mult(listing.grade, &comps)).max(1.0);
+    let delta = (price - expected) / expected * 100.0;
+    let kind = if delta <= -DEAL_BAND_PCT {
+        "great"
+    } else if delta >= DEAL_BAND_PCT {
+        "overpriced"
+    } else {
+        "fair"
+    };
+    Some(Deal {
+        kind: kind.into(),
+        delta_pct: delta.round() as i64,
+        expected: expected.round() as i64,
+    })
 }
 
 /// Estimate the searched roll's value from the comparable (tier ≤ 1) listings.
@@ -333,5 +397,53 @@ mod tests {
         // Only tier-3 results (not comparable) → no estimate.
         let cs = vec![comp("a", 100, 3, 50.0, 0, "ingame")];
         assert!(estimate_target(&cs, now()).is_none());
+    }
+
+    fn pool(prices: &[i64]) -> Vec<RivenResult> {
+        prices
+            .iter()
+            .enumerate()
+            .map(|(i, p)| comp(&format!("p{i}"), *p, 0, 80.0, 0, "ingame"))
+            .collect()
+    }
+
+    #[test]
+    fn cheap_listing_is_a_great_deal() {
+        // Band ~100; a 50p listing of the same grade should read "great".
+        let mut rs = pool(&[100, 105, 110, 115, 120]);
+        let cheap = comp("cheap", 50, 0, 80.0, 0, "ingame");
+        rs.push(cheap.clone());
+        let d = deal_for(&cheap, &rs, now()).unwrap();
+        assert_eq!(d.kind, "great");
+        assert!(d.delta_pct < 0);
+    }
+
+    #[test]
+    fn expensive_listing_is_overpriced() {
+        let mut rs = pool(&[100, 105, 110, 115, 120]);
+        let dear = comp("dear", 400, 0, 80.0, 0, "ingame");
+        rs.push(dear.clone());
+        assert_eq!(deal_for(&dear, &rs, now()).unwrap().kind, "overpriced");
+    }
+
+    #[test]
+    fn higher_grade_raises_expected_price() {
+        let rs = pool(&[100, 105, 110, 115, 120]);
+        let low_grade = comp("lg", 100, 0, 60.0, 0, "ingame");
+        let high_grade = comp("hg", 100, 0, 95.0, 0, "ingame");
+        let e_low = deal_for(&low_grade, &rs, now()).unwrap().expected;
+        let e_high = deal_for(&high_grade, &rs, now()).unwrap().expected;
+        assert!(e_high > e_low, "a better roll should expect a higher price");
+    }
+
+    #[test]
+    fn no_deal_for_worse_rolls_or_thin_comps() {
+        // Tier 2 listing → no badge.
+        let rs = pool(&[100, 105, 110]);
+        let worse = comp("w", 100, 2, 80.0, 0, "ingame");
+        assert!(deal_for(&worse, &rs, now()).is_none());
+        // Only one other comp (thin) → suppressed.
+        let two = pool(&[100, 105]);
+        assert!(deal_for(&two[0], &two, now()).is_none());
     }
 }
