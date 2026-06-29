@@ -79,6 +79,24 @@ pub fn excluded_min_plat_by_cat(db: &Db) -> AppResult<std::collections::HashMap<
     db.read(excluded_min_plat_by_cat_conn)
 }
 
+/// Minimum per-unit suggested sell price (plat) for an owned item to surface in
+/// the Listings → Recommended list. Below this it's not worth the trade hassle,
+/// so it's hidden. User-tunable; defaults to `REC_MIN_PRICE_DEFAULT`.
+pub const KEY_REC_MIN_PRICE: &str = "rec_min_sell_price";
+pub const REC_MIN_PRICE_DEFAULT: i64 = 15;
+
+/// The recommendation sell-price floor in plat (clamped ≥ 0; default when unset).
+pub fn rec_min_price_conn(c: &Connection) -> AppResult<i64> {
+    Ok(get_conn(c, KEY_REC_MIN_PRICE)?
+        .and_then(|s| s.parse::<i64>().ok())
+        .map(|n| n.max(0))
+        .unwrap_or(REC_MIN_PRICE_DEFAULT))
+}
+
+pub fn rec_min_price(db: &Db) -> AppResult<i64> {
+    db.read(rec_min_price_conn)
+}
+
 /// Desktop-notification preferences + the close-to-tray behavior toggle, stored
 /// as one JSON blob (same approach as the per-category min-plat map above). The
 /// backend `notify` engine reads this each tick; `close_to_tray` is also mirrored

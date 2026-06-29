@@ -7,6 +7,8 @@ import {
   useInventory,
   useListingRecommendations,
   useListings,
+  usePricingProgress,
+  useRecommendationsRefresh,
   useSearchCatalog,
   useWfmAccount,
   useWfmApplyImport,
@@ -460,6 +462,14 @@ function RecommendedTable({
 }) {
   const { data: rows = [], isLoading, isError } = useListingRecommendations(active);
   const create = useWfmCreateOrder();
+  // The full "redo": force-reprice every owned item (fresh stats + order books),
+  // then rebuild the list. A backend price sync drives usePricingProgress, which
+  // feeds the progress bar below the header.
+  const redo = useRecommendationsRefresh();
+  const { data: progress } = usePricingProgress();
+  const refreshing = redo.isPending || !!progress?.active;
+  const refreshPct =
+    progress && progress.total > 0 ? `${(progress.priced / progress.total) * 100}%` : undefined;
   const [confirmAll, setConfirmAll] = useState(false);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkErr, setBulkErr] = useState<string | null>(null);
@@ -540,6 +550,16 @@ function RecommendedTable({
             {view.length ? ` · ${view.length} · ~${fmt(totalEst)}p` : ""}
           </h3>
           <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            className="btn sm"
+            style={{ marginRight: 8 }}
+            disabled={refreshing}
+            title="Re-fetch prices for every owned item, then rebuild the recommendations"
+            onClick={() => redo.mutate()}
+          >
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
           {confirmAll ? (
             <span className="lf-actions">
               <span className="muted" style={{ marginRight: 8 }}>
@@ -569,6 +589,14 @@ function RecommendedTable({
             </button>
           )}
         </div>
+        {refreshing ? (
+          <div className="upd-prog" style={{ margin: "0 0 8px" }}>
+            <div
+              className={clsx("upd-prog-fill", !refreshPct && "indeterminate")}
+              style={refreshPct ? { width: refreshPct } : undefined}
+            />
+          </div>
+        ) : null}
         {bulkErr ? (
           <div className="conn-note neg" style={{ margin: "0 0 8px" }}>
             Couldn't list everything: {bulkErr}

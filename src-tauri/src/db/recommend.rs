@@ -18,8 +18,10 @@ const VOLUME_MIN: f64 = 10.0;
 const DUCAT_CHEAP_MAX: i64 = 8;
 /// Mirror of `commands::get_ducats`: ≥ this ducats-per-plat is "efficient" → ducat it.
 const DUCAT_EFFICIENT_MIN: f64 = 5.0;
-/// Cap the list — it's a "what to sell next" shortlist, not an export.
-const MAX_ROWS: usize = 50;
+/// Safety cap so a huge inventory can't return an unbounded list. The real
+/// curation is the liquidity/ducat/exclusion gates plus the user's per-unit
+/// sell-price floor (`settings::KEY_REC_MIN_PRICE`), so this rarely bites.
+const MAX_ROWS: usize = 200;
 
 /// An owned, not-already-listed candidate before the liquidity/ducat/price gates.
 struct Cand {
@@ -105,6 +107,9 @@ pub fn list(db: &Db) -> AppResult<Vec<RecommendationRow>> {
         // Same value-exclusion the inventory/valuation uses, so an item the user has
         // excluded (cheap mods, etc.) never surfaces here as something to sell.
         let rules = inventory::ExclusionRules::load(c)?;
+        // The user's "worth selling" floor: drop any row that would list below
+        // this per unit, so the list is genuinely "what to sell", not everything.
+        let min_price = crate::db::settings::rec_min_price_conn(c)?;
         // Owned (rank, qty) breakdown per slug. Mods/arcanes are priced PER RANK — a
         // rank-10 mod is a different good than rank 0 — so each owned rank becomes its
         // own row, priced and listed independently. Primes/sets have no inventory_ranks
@@ -168,6 +173,10 @@ pub fn list(db: &Db) -> AppResult<Vec<RecommendationRow>> {
                 let Some(suggested) = prices::fair_sell_price(c, &cand.slug, rank)? else {
                     continue;
                 };
+                // Below the user's per-unit floor → not worth listing.
+                if suggested < min_price {
+                    continue;
+                }
                 // Displayed median: the rank-aware price for ranked goods; for
                 // non-ranked, the outlier-cleaned (winsorized) last daily median.
                 let clean_median = if rank.is_some() {
@@ -359,6 +368,12 @@ mod tests {
     fn same_item_at_two_ranks_splits_into_two_rows() {
         let db = test_db("recommend-split");
         db.with(|c| {
+            // Disable the sell-price floor: this test exercises rank-splitting, and
+            // the rank-0 copy (9p) is below the default 15p floor.
+            c.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?1, '0')",
+                params![crate::db::settings::KEY_REC_MIN_PRICE],
+            )?;
             c.execute(
                 "INSERT INTO catalog_items (slug, display_name, part_type, category)
                  VALUES ('molt', 'Molt Augmented', 'Arcane', 'arcane')",
@@ -408,6 +423,25 @@ mod tests {
         assert_eq!(rows[0].suggested_price, 199);
         assert_eq!(rows[1].rank, Some(0));
         assert_eq!(rows[1].suggested_price, 9);
+    }
+
+    #[test]
+    fn respects_min_sell_price_floor() {
+        let db = test_db("recommend-floor");
+        // Two liquid, non-ducat, unlisted items: one above the floor, one below.
+        seed(&db, "worth-it", 1, None, 40, 12, 14); // suggested 39 ≥ floor
+        seed(&db, "too-cheap", 1, None, 12, 12, 14); // suggested 11 < floor
+                                                     // Floor of 20p: only the 39p item survives.
+        db.with(|c| {
+            c.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?1, '20')",
+                params![crate::db::settings::KEY_REC_MIN_PRICE],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+        let slugs: Vec<String> = list(&db).unwrap().into_iter().map(|r| r.slug).collect();
+        assert_eq!(slugs, vec!["worth-it"]);
     }
 
     #[test]

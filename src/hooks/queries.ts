@@ -35,6 +35,7 @@ export const keys = {
   excludedRarities: ["excludedRarities"] as const,
   excludedMinPlat: ["excludedMinPlat"] as const,
   excludedMinPlatByCat: ["excludedMinPlatByCat"] as const,
+  recMinPrice: ["recMinPrice"] as const,
   notificationPrefs: ["notificationPrefs"] as const,
   overlayPrefs: ["overlayPrefs"] as const,
   sets: ["sets"] as const,
@@ -454,6 +455,18 @@ export function useSetExcludedMinPlatByCat() {
     },
   });
 }
+export const useRecMinPrice = () =>
+  useQuery({ queryKey: keys.recMinPrice, queryFn: api.getRecMinPrice });
+export function useSetRecMinPrice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (value: number) => api.setRecMinPrice(value),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.recMinPrice });
+      qc.invalidateQueries({ queryKey: keys.recommendations });
+    },
+  });
+}
 
 // ---- notifications + close-to-tray ----
 export const useNotificationPrefs = () =>
@@ -513,6 +526,21 @@ export function usePricesRefresh() {
       api.pricesRefresh(a.slugs, a.force),
     onSuccess: () => {
       invalidateInventoryDerived(qc); // already marks catalog stale (refetchType: none)
+    },
+  });
+}
+
+// The Recommended-tab "redo": force a fresh pull of statistics + live order
+// books for EVERY owned item (not just the stale slice the topbar normally
+// reprices), then rebuild the recommendation list against the fresh caches.
+export function useRecommendationsRefresh() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.pricesRefresh(undefined, true),
+    onSuccess: () => {
+      invalidateInventoryDerived(qc);
+      qc.invalidateQueries({ queryKey: keys.recommendations });
+      qc.invalidateQueries({ queryKey: keys.listings });
     },
   });
 }

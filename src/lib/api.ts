@@ -137,6 +137,8 @@ export const getExcludedMinPlatByCat = () =>
   invoke<Record<string, number>>("get_excluded_min_plat_by_cat");
 export const setExcludedMinPlatByCat = (thresholds: Record<string, number>) =>
   invoke<void>("set_excluded_min_plat_by_cat", { thresholds });
+export const getRecMinPrice = () => invoke<number>("get_rec_min_price");
+export const setRecMinPrice = (value: number) => invoke<void>("set_rec_min_price", { value });
 export const getPricingProgress = () => invoke<PricingProgress>("get_pricing_progress");
 
 // notifications + close-to-tray

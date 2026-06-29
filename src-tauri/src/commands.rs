@@ -544,6 +544,21 @@ pub fn set_excluded_min_plat_by_cat(
     settings::set(&state.db, settings::KEY_EXCLUDED_MIN_PLAT_BY_CAT, &json)
 }
 
+/// Minimum per-unit suggested sell price (plat) for an item to be recommended.
+#[tauri::command]
+pub fn get_rec_min_price(state: State<'_, Arc<AppState>>) -> AppResult<i64> {
+    settings::rec_min_price(&state.db)
+}
+
+#[tauri::command]
+pub fn set_rec_min_price(state: State<'_, Arc<AppState>>, value: i64) -> AppResult<()> {
+    settings::set(
+        &state.db,
+        settings::KEY_REC_MIN_PRICE,
+        &value.max(0).to_string(),
+    )
+}
+
 #[tauri::command]
 pub fn get_notification_prefs(
     state: State<'_, Arc<AppState>>,

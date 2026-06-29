@@ -19,11 +19,13 @@ import {
   useOverlayPrefs,
   usePricesRefresh,
   useRebuildCache,
+  useRecMinPrice,
   useSetExcludedMinPlat,
   useSetExcludedMinPlatByCat,
   useSetExcludedRarities,
   useSetNotificationPrefs,
   useSetOverlayPrefs,
+  useSetRecMinPrice,
   useSetsRefresh,
   useSimulateInventory,
   useSummary,
@@ -509,6 +511,16 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
     }
     setCatFloors.mutate(next);
   };
+  const { data: recMinPrice = 15 } = useRecMinPrice();
+  const setRecMin = useSetRecMinPrice();
+  const [recMinInput, setRecMinInput] = useState("");
+  useEffect(() => {
+    setRecMinInput(String(recMinPrice));
+  }, [recMinPrice]);
+  const commitRecMin = () => {
+    const n = Math.max(0, Math.round(Number(recMinInput) || 0));
+    if (n !== recMinPrice) setRecMin.mutate(n);
+  };
   const [dev, setDevState] = useState(() => {
     try {
       return localStorage.getItem("wfit-dev") === "1";
@@ -710,6 +722,31 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
                 </span>
               </label>
             ))}
+          </div>
+        </Row>
+      </section>
+
+      <section className="tpanel">
+        <div className="tpanel-h">
+          <h3>Listing recommendations</h3>
+        </div>
+        <Row
+          label="Minimum sell price"
+          hint="Only recommend listing an item when its suggested price is at least this much plat per unit — below this it isn't worth the trade. Applies to the Listings → Recommended tab. Default 15."
+        >
+          <div className="set-num">
+            <input
+              type="number"
+              min={0}
+              value={recMinInput}
+              placeholder="15"
+              onChange={(e) => setRecMinInput(e.target.value)}
+              onBlur={commitRecMin}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              }}
+            />
+            <span className="u">p</span>
           </div>
         </Row>
       </section>

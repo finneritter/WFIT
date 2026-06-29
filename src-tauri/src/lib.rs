@@ -234,6 +234,8 @@ pub fn run() {
             commands::set_excluded_min_plat,
             commands::get_excluded_min_plat_by_cat,
             commands::set_excluded_min_plat_by_cat,
+            commands::get_rec_min_price,
+            commands::set_rec_min_price,
             commands::get_notification_prefs,
             commands::set_notification_prefs,
             commands::send_test_notification,
