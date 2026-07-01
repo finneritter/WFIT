@@ -15,7 +15,8 @@ cloud backend is being deleted in favor of one local binary. **No auth, no hosti
 beyond the original plan are done — game inventory import, rank-aware mods/arcanes, robust order-book
 pricing, liquidation-adjusted ("realizable") valuation, an **Arcanes/Vosfor dissolution screen**, a
 backend perf pass (read-connection pool + batched valuation), UI micro-animations, and per-category
-cheap-item exclusion. The app now has **11 screens** (Arcanes added beyond the 9-screen wireframe).
+cheap-item exclusion. The app now has **16 screens** (Dashboard, Market, Relics, Account, Arcanes, and a
+**Riven Search** screen all added beyond the 9-screen wireframe), plus a global-hotkey Void Cascade HUD overlay.
 `docs/HANDOFF.md` is the current-state doc; read it first. The `.claude/plans/` and
 `docs/archive/` files (incl. `CLAUDE_ECONOMIC_RESEARCH/`) are now historical design references, not a to-do list.
 
@@ -120,10 +121,15 @@ Retired (do not build from): `reference/design/` (old "Primely" hi-fi),
 Rust core in `src-tauri/src/`: `market.rs` (warframe.market v2 client + throttle), `worldstate.rs`
 (api.warframestat.us, isolated), `wfm_account.rs` (account/orders + keychain), `gamescan/`
 (opt-in DE memory-scan inventory import — isolated like worldstate, Linux + Windows, off by default;
-per-OS backend behind a shared `scan.rs` `MemReader` trait), `domain/`
+per-OS backend behind a shared `scan.rs` `MemReader` trait), `rivens/` (Riven Search domain — separate
+warframe.market surface: v2 riven reference/weapons/attributes + v1 auction search; `grade.rs`/`price.rs`
+value estimator + `watch.rs` saved-search matching, isolated from the main market path), `overlay.rs`
+(global-hotkey Void Cascade status HUD pill; always-on-top, Rust-owned auto-hide), `notify.rs` +
+`wfm_socket.rs` (in-app notification center + wfm websocket), `domain/`
 (`classify`/`partname`/`mod_rarity`/`arcane` — pure; the rarity & arcane datasets are bundled `.tsv`s
-loaded into `Lazy` maps, no DB table), `db/` (rusqlite modules per table incl. `arcanes.rs`,
-transactional writes), `commands.rs` (the `#[command]` surface), `lib.rs` (`AppState` + handler registry).
+loaded into `Lazy` maps, no DB table), `db/` (rusqlite modules per table — inventory, prices, settings,
+watchlist, buylist, sales, sets, trends, relics, rivens, arcanes, notifications, etc.; transactional
+writes), `commands.rs` (the `#[command]` surface), `lib.rs` (`AppState` + handler registry).
 **DB connection model** (`db/mod.rs`): one writer behind a mutex (`with`/`with_mut`, also used by the
 few legacy read paths) **plus an r2d2 pool of `query_only` read connections** (`read()`) for hot UI
 reads, so a market sync holding the writer doesn't freeze the UI (WAL = concurrent readers).
