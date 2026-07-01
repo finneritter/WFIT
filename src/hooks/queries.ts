@@ -51,7 +51,7 @@ export const keys = {
   recommendedPrice: (slug: string, rank: number | null) =>
     ["recommendedPrice", slug, rank] as const,
   worldstate: ["worldstate"] as const,
-  vendorIntel: ["vendorIntel"] as const,
+  vendorBoard: ["vendorBoard"] as const,
   wantedNow: ["wantedNow"] as const,
   relics: ["relics"] as const,
   relicChoices: ["relicChoices"] as const,
@@ -178,15 +178,41 @@ export const useWorldstateHardReset = () => {
     onSuccess: (ws) => qc.setQueryData(keys.worldstate, ws),
   });
 };
-// Baro/Varzia stock enriched with market value + ownership. Cheap (reads cached
-// worldstate); refetch on the same cadence as the worldstate so deals stay current.
-export const useVendorIntel = () =>
+// The Vendors board: per-vendor stock enriched with value + ownership + check-off.
+// Cheap (reads cached worldstate); refetch on the worldstate cadence so deals stay current.
+export const useVendorBoard = () =>
   useQuery({
-    queryKey: keys.vendorIntel,
-    queryFn: api.getVendorIntel,
+    queryKey: keys.vendorBoard,
+    queryFn: api.getVendorBoard,
     refetchInterval: 60_000,
     refetchIntervalInBackground: true,
   });
+
+// Manual check-off toggles. Invalidate the board so owned/manual state re-renders.
+export function useToggleVendorCheck() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      vendorKey,
+      itemRef,
+      checked,
+    }: {
+      vendorKey: string;
+      itemRef: string;
+      checked: boolean;
+    }) =>
+      checked ? api.markVendorCheck(vendorKey, itemRef) : api.unmarkVendorCheck(vendorKey, itemRef),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.vendorBoard }),
+  });
+}
+
+export function useClearVendorChecks() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vendorKey: string) => api.clearVendorChecks(vendorKey),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.vendorBoard }),
+  });
+}
 // Wanted items farmable from a live reward source right now. Depends on the
 // worldstate + watchlist/inventory; refetch on the worldstate cadence.
 export const useWantedNow = () =>
@@ -504,6 +530,7 @@ export function useLivePriceEvents() {
       qc.invalidateQueries({ queryKey: keys.listings });
       qc.invalidateQueries({ queryKey: keys.recommendations });
       qc.invalidateQueries({ queryKey: keys.pricingProgress });
+      qc.invalidateQueries({ queryKey: keys.vendorBoard });
       // Market-screen order books and the drawer's recommended price come from
       // the same caches the heartbeat just refreshed. Only refetch what's on
       // screen — these are per-slug queries and most are unmounted.

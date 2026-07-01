@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Countdown, TierBadge } from "../components/Countdown";
 import { BlockStatus, rowAction } from "../components/ui";
-import { useVendorIntel, useWantedNow, useWorldstate } from "../hooks/queries";
+import { useWantedNow, useWorldstate } from "../hooks/queries";
 import { clsx, dayTime, fmt, glyph, hhmm, msUntil, nextUtc, tzLabel } from "../lib/format";
 import type {
   ArbitrationBlock,
@@ -9,15 +9,12 @@ import type {
   Invasion,
   Nightwave,
   Sortie,
-  Trader,
-  VendorIntelRow,
   Worldstate,
 } from "../lib/types";
 
 const TABS = [
   ["overview", "Overview"],
   ["fissures", "Fissures"],
-  ["vendors", "Vendors"],
 ] as const;
 type TabId = (typeof TABS)[number][0];
 
@@ -358,152 +355,6 @@ function OverviewTab({ ws, onOpen }: { ws: Worldstate; onOpen: (slug: string) =>
 }
 
 // ---------------------------------------------------------------------------
-// Vendors: Baro-arrival hero + currency-colored stock tables
-// ---------------------------------------------------------------------------
-
-/** §7.12 hero — the Vendors screen's one answer: is Baro here, and for how long? */
-function BaroHero({ baro }: { baro: Trader | null }) {
-  const active = baro?.active ?? false;
-  return (
-    <div className={clsx("fwx", active && "hit")}>
-      <div className="fwx-top">
-        <span className="led" />
-        <span className="lbl">Void Trader</span>
-        <span>bi-weekly relay visit</span>
-        <span className="status">{active ? "● HERE NOW" : "away"}</span>
-      </div>
-      <div className="fwx-main">
-        <div>
-          <div className="fwx-title">Baro Ki'Teer</div>
-          <div className="fwx-meta">
-            <span>{baro?.location ?? "location unknown"}</span>
-            <span className="muted">·</span>
-            <span className="muted">
-              {active
-                ? `${baro?.inventory.length ?? 0} items in stock`
-                : "stock revealed on arrival"}
-            </span>
-          </div>
-        </div>
-        <div className="fwx-timer">
-          <div className="big">
-            <Countdown
-              iso={baro ? (active ? baro.expiry : baro.activation) : null}
-              warnMs={12 * 3_600_000}
-              soonMs={2 * 3_600_000}
-            />
-          </div>
-          <div className="tl">{active ? "until departure" : "until arrival"}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** §7.13 stock table — glyph tile · name · currency (colored) · credits. */
-function VendorTable({
-  rows,
-  currency,
-  onOpen,
-}: {
-  rows: VendorIntelRow[];
-  currency: "ducats" | "aya";
-  onOpen: (slug: string) => void;
-}) {
-  const aya = currency === "aya";
-  const costCls = aya ? "v-aya" : "v-ducat";
-  const totalCost = rows.reduce((s, r) => s + (r.cost ?? 0), 0);
-  const totalValue = rows.reduce((s, r) => s + (r.median_plat ?? 0), 0);
-  return (
-    <div className={clsx("vt", aya && "aya")}>
-      <div className="vt-head">
-        <span />
-        <span>Item</span>
-        <span className="r">Value</span>
-        <span className="r">{aya ? "Aya" : "Ducats"}</span>
-      </div>
-      {rows.map((r, i) => {
-        const clickable = r.slug != null;
-        return (
-          <div
-            className={clsx("vrow", r.good_deal && "deal", clickable && "click")}
-            key={`${r.item}-${i}`}
-            title={
-              r.cost_per_plat != null
-                ? `${r.cost_per_plat.toFixed(1)} ${aya ? "aya" : "ducats"} per plat of value`
-                : undefined
-            }
-            {...(clickable ? rowAction(() => onOpen(r.slug as string)) : {})}
-          >
-            <span className="vgl">
-              {r.thumbnail_url ? (
-                <img src={r.thumbnail_url} alt="" loading="lazy" />
-              ) : (
-                glyph(r.item)
-              )}
-            </span>
-            <span className="vn" title={r.item}>
-              {r.item}
-              {r.good_deal ? <span className="deal-tag">DEAL</span> : null}
-              {r.owned_qty > 0 ? <span className="owned-tag">OWNED ×{r.owned_qty}</span> : null}
-            </span>
-            <span className="v-plat">{r.median_plat != null ? `${fmt(r.median_plat)}p` : "—"}</span>
-            <span className={costCls}>{fmt(r.cost)}</span>
-          </div>
-        );
-      })}
-      <div className="vt-foot">
-        <span />
-        <span className="tk">Total</span>
-        <span className="v-plat">{totalValue > 0 ? `${fmt(totalValue)}p` : "—"}</span>
-        <span className={costCls}>{fmt(totalCost)}</span>
-      </div>
-    </div>
-  );
-}
-
-function VendorsTab({ ws, onOpen }: { ws: Worldstate; onOpen: (slug: string) => void }) {
-  // Enriched stock (market value + ownership). The intel command reads the same
-  // cached worldstate, so its rows mirror ws.baro/ws.varzia 1:1 (same order).
-  const { data: intel } = useVendorIntel();
-  const baroRows = intel?.baro ?? [];
-  const varziaRows = intel?.varzia ?? [];
-  return (
-    <>
-      <BaroHero baro={ws.baro} />
-      <div className="rot-grid vend">
-        <div className="tpanel">
-          <div className="tpanel-h">
-            <h3>Baro · Stock</h3>
-            {baroRows.length > 0 ? <span className="meta">{baroRows.length} items</span> : null}
-          </div>
-          {baroRows.length > 0 ? (
-            <VendorTable rows={baroRows} currency="ducats" onOpen={onOpen} />
-          ) : (
-            <div className="baro-note">Stock shows once Baro arrives.</div>
-          )}
-        </div>
-        <div className="tpanel">
-          <div className="tpanel-h">
-            <h3>Varzia · Prime Resurgence</h3>
-            {ws.varzia?.expiry ? (
-              <span className="meta num">
-                <Countdown iso={ws.varzia.expiry} /> left
-              </span>
-            ) : null}
-          </div>
-          {varziaRows.length > 0 ? (
-            <VendorTable rows={varziaRows} currency="aya" onOpen={onOpen} />
-          ) : (
-            <div className="baro-note">No resurgence rotation listed right now.</div>
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Fissures (the original Rotation content, restyled behavior-intact)
 // ---------------------------------------------------------------------------
 
@@ -737,7 +588,6 @@ export function Rotation({ onOpen }: { onOpen: (slug: string) => void }) {
 
       {tab === "overview" && <OverviewTab ws={ws} onOpen={onOpen} />}
       {tab === "fissures" && <FissuresTab ws={ws} deVerified={deVerified} />}
-      {tab === "vendors" && <VendorsTab ws={ws} onOpen={onOpen} />}
     </>
   );
 }

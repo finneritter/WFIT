@@ -73,28 +73,45 @@ pub struct InventoryRow {
     pub excluded: bool,
 }
 
-/// One vendor (Baro/Varzia) stock line enriched against the catalog: market value,
-/// whether you already own it, and a buy-it signal. Powers the Rotation Vendors tab.
+/// One vendor stock line enriched against the catalog: market value, whether you
+/// already own it, a buy-it signal, and its check-off state. Powers the Vendors screen.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VendorIntelRow {
     pub item: String,                  // vendor's display name (as listed)
-    pub slug: Option<String>,          // catalog slug if the name resolved (click-to-open)
+    pub slug: Option<String>,          // catalog slug if it resolved (click-to-open)
     pub thumbnail_url: Option<String>, // catalog thumbnail when resolved
     pub median_plat: Option<i64>,      // market value, None if untracked on warframe.market
     pub owned_qty: i64,                // how many you already own (0 = don't have it)
-    pub cost: Option<i64>,             // ducats (Baro) or aya (Varzia) — mirrors VendorItem.ducats
+    pub cost: Option<i64>,             // ducats/aya/steel-essence — mirrors VendorItem.ducats
     pub credits: Option<i64>,
     /// cost / median_plat — currency spent per plat of resale value (lower = better deal).
     pub cost_per_plat: Option<f64>,
     /// Worth grabbing: a meaningfully valuable item you don't already own.
     pub good_deal: bool,
+    /// Stable per-row id used to persist manual check-offs: uniqueName else slug
+    /// else normalized name. Never empty.
+    pub item_ref: String,
+    /// Resolved to a market-tracked catalog slug → ownership auto-detect is possible.
+    /// False for account-bound wares (they're manual-check only).
+    pub tradeable: bool,
+    /// Grabbed: you own it (auto) or you manually ticked it.
+    pub checked: bool,
+    /// Why `checked` is true: "owned" (from inventory/scan) or "manual". None when unchecked.
+    pub check_source: Option<String>,
 }
 
-/// Enriched Baro + Varzia stock for the Rotation Vendors tab.
+/// One vendor column on the Vendors board: its live status/countdown plus enriched stock.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VendorIntel {
-    pub baro: Vec<VendorIntelRow>,
-    pub varzia: Vec<VendorIntelRow>,
+pub struct VendorPanel {
+    pub key: String,  // stable vendor id: "baro" | "varzia" | "steel_path"
+    pub name: String, // display name
+    pub character: Option<String>,
+    pub location: Option<String>,
+    pub currency: String, // "ducats" | "aya" | "steel_essence"
+    pub active: bool,
+    pub activation: Option<String>, // ISO — arrival / window start
+    pub expiry: Option<String>,     // ISO — departure / window end
+    pub rows: Vec<VendorIntelRow>,
 }
 
 /// A wanted item (watchlist or missing set part) available from a live worldstate

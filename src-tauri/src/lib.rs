@@ -275,7 +275,10 @@ pub fn run() {
             // worldstate
             commands::get_worldstate,
             commands::force_worldstate_refresh,
-            commands::get_vendor_intel,
+            commands::get_vendor_board,
+            commands::mark_vendor_check,
+            commands::unmark_vendor_check,
+            commands::clear_vendor_checks,
             commands::get_wanted_now,
             // relics
             commands::get_relics,

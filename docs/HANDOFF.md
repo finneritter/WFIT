@@ -155,9 +155,9 @@ the rarity exclusion** (affects value, not the raw owned-count). Applied in `own
   dims after 5min without updates (offline). Verified live: `last_price_sync` advanced every ~60s for
   13 consecutive minutes post-drain.
 
-### 8. Rotation acquisition planning — tabs, wanted-now, vendors, Crack
-The Rotation screen is now tabbed (`routes/Rotation.tsx`, `TABS`): **Overview · Fissures · Crack ·
-Vendors**. Beyond the world-state clocks it answers "what should I go get right now?":
+### 8. Rotation acquisition planning — tabs, wanted-now, Crack (Vendors is now its own screen)
+The Rotation screen is tabbed (`routes/Rotation.tsx`, `TABS`): **Overview · Fissures · Crack**.
+Beyond the world-state clocks it answers "what should I go get right now?":
 - **Wanted Now** (`WantedNowPanel`, Overview; `get_wanted_now` → `WantedNowRow`): wanted items a
   **live reward source is handing out right now**, so you don't miss a window. "Wanted" =
   `wanted::wanted_items` (watchlist items **plus** the missing parts of any set you've already
@@ -172,16 +172,28 @@ Vendors**. Beyond the world-state clocks it answers "what should I go get right 
     noise ("blueprint", "forma", "kuva") can't match half the catalog. Deliberately
     lower-fidelity but kept safe by only ever running against the user's small wanted set, so a
     loose match can at worst surface something they already care about. Unit-tested.
-- **Vendors** (`VendorsTab` + `VendorIntel { baro, varzia }`, `get_vendor_intel`): the rotating
-  stock of **Baro Ki'Teer** (priced in **ducats**) and **Varzia** (priced in **aya**), enriched
-  against your catalog so each line shows its **market value**, whether you **already own it**, and
-  **cost-per-plat** efficiency (`ducats|aya ÷ median plat`). A line is tagged a **DEAL** when you
-  don't own it and its market value clears `DEAL_MIN_PLAT = 40` (`db/vendor.rs::enrich`,
-  `VendorIntelRow.good_deal`). The enrichment is a pure DB-side cross-join — names normalize via
-  `catalog::normalize_name`; items that don't resolve to a tracked slug pass through priceless
-  (they're simply not on warframe.market). Lives in `db/vendor.rs` rather than `worldstate/` so the
-  world-state module keeps its DB-free isolation contract; the raw stock comes pre-parsed from
-  `worldstate`.
+### 8b. Vendors screen — horizontal board + check-off (`routes/Vendors.tsx`)
+The old Rotation "Vendors" tab is now its **own top-level screen**: a horizontally-scrolling board
+of vendor **columns** (`get_vendor_board` → `Vec<VendorPanel>`), one per rotating vendor, each with a
+live countdown header and a check-off spreadsheet of stock.
+- **Vendors (Wave 1, fully live from worldstate):** **Baro Ki'Teer** (ducats), **Varzia** (aya),
+  **Teshin / Steel Path Honors** (steel essence — this week's featured pick + the permanent
+  `evergreens` shop). Each panel: `{key, name, currency, active, activation, expiry, rows}`. Adding a
+  vendor = one more panel producer in `commands::get_vendor_board`, no UI change (Wave-2 sources that
+  need a bundled/derived dataset — Duviri Circuit, Nightwave Cred — slot in the same way).
+- **Enrichment** (`db/vendor.rs::enrich(vendor_key, items)`): pure DB-side cross-join. Resolves each
+  line to a market slug via **`game_ref` (DE `uniqueName`, exact)** first, then falls back to
+  `catalog::normalize_name` fuzzy matching. Attaches market value, owned qty, cost-per-plat, the
+  **DEAL** flag (`DEAL_MIN_PLAT = 40`, unowned only), plus `tradeable` (resolved to a slug) and the
+  check state. Items that resolve to no slug pass through priceless + `tradeable=false` (account-bound
+  wares — manual-check only). Lives in `db/vendor.rs`, keeping `worldstate/` DB-free.
+- **Check-off** (auto + manual): a row shows **checked** when you **own it** (`owned_qty>0`, from
+  inventory / game-scan — `check_source="owned"`, can't be unticked) **or** you manually ticked it
+  (`check_source="manual"`). Manual checks persist in the `vendor_checkoff` table (migration 0017,
+  `db/vendor_checkoff.rs`, keyed `(vendor_key, item_ref)`, **no catalog FK** so account-bound items
+  are tickable), survive rotations, and are cleared per-column via `clear_vendor_checks`. Commands:
+  `mark_vendor_check` / `unmark_vendor_check` / `clear_vendor_checks`. Search wired via
+  `vendorsSchema` (`is:deal|owned|checked|tradeable`, `plat`/`cost`), filtered per column.
 - **Crack tab** (`CrackTab` + `CrackRow`): owned relics whose drops include a **wanted** item —
   watch/buy-list entries plus the missing parts of any set you're within **2 parts** of finishing
   (`db::wanted::crack_targets`, `SET_CLOSE_THRESHOLD = 2`). Rows split into **Crackable now** (a

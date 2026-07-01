@@ -538,21 +538,33 @@ export interface Trader {
   character: string | null;
   inventory: VendorItem[];
 }
-// Vendor stock enriched against the catalog (Rotation Vendors tab).
+// Vendor stock enriched against the catalog (Vendors screen).
 export interface VendorIntelRow {
   item: string;
   slug: string | null;
   thumbnail_url: string | null;
   median_plat: number | null;
   owned_qty: number;
-  cost: number | null; // ducats (Baro) or aya (Varzia)
+  cost: number | null; // ducats / aya / steel essence
   credits: number | null;
   cost_per_plat: number | null; // cost / median_plat (lower = better)
   good_deal: boolean;
+  item_ref: string; // stable id for persisting manual checks
+  tradeable: boolean; // resolved to a market slug → ownership auto-detect works
+  checked: boolean; // owned (auto) or manually ticked
+  check_source: "owned" | "manual" | null;
 }
-export interface VendorIntel {
-  baro: VendorIntelRow[];
-  varzia: VendorIntelRow[];
+// One vendor column on the Vendors board.
+export interface VendorPanel {
+  key: string; // "baro" | "varzia" | "steel_path"
+  name: string;
+  character: string | null;
+  location: string | null;
+  currency: string; // "ducats" | "aya" | "steel_essence"
+  active: boolean;
+  activation: string | null;
+  expiry: string | null;
+  rows: VendorIntelRow[];
 }
 // A wanted item available from a live reward source now (Rotation Overview).
 export interface WantedNowRow {

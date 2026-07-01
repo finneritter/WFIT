@@ -19,6 +19,7 @@ import type {
   SaleRow,
   SetRow,
   TrendRow,
+  VendorIntelRow,
   WatchRow,
 } from "./types";
 
@@ -440,6 +441,22 @@ export const rivensSchema: SearchSchema<RivenResult> = {
   },
 };
 
+// Vendor board rows. Applied per-column (each vendor panel filters its own rows
+// against the shared topbar query).
+export const vendorsSchema: SearchSchema<VendorIntelRow> = {
+  text: (r) => r.item,
+  is: {
+    deal: { test: (r) => r.good_deal, hint: "worth grabbing (unowned + valuable)" },
+    owned: { test: (r) => r.owned_qty > 0, hint: "already in your inventory" },
+    checked: { test: (r) => r.checked, hint: "grabbed (owned or ticked)" },
+    tradeable: { test: (r) => r.tradeable, hint: "sells on warframe.market" },
+  },
+  fields: {
+    plat: { kind: "number", get: (r) => r.median_plat, hint: "market value (plat)" },
+    cost: { kind: "number", get: (r) => r.cost, hint: "vendor price" },
+  },
+};
+
 export const PAGE_SCHEMAS: Partial<Record<ScreenId, AnySearchSchema>> = {
   inventory: inventorySchema,
   watchlist: watchlistSchema,
@@ -452,6 +469,7 @@ export const PAGE_SCHEMAS: Partial<Record<ScreenId, AnySearchSchema>> = {
   listings: listingsSchema,
   trends: trendsSchema,
   rivens: rivensSchema,
+  vendors: vendorsSchema,
   // Default tab is Overview (sales-backed); the Resources/Armory tabs compile their
   // own schema against the same topbar text.
   account: soldSchema,
@@ -469,6 +487,7 @@ export const PAGE_PLACEHOLDER: Partial<Record<ScreenId, string>> = {
   listings: "Search listings…  try is:undercut",
   rivens: "Filter results…  try is:exact plat<100 grade>80 polarity:madurai rerolls<5",
   trends: "Search trends…  try delta>10 is:owned",
+  vendors: "Search vendors…  try is:deal plat>50 · is:checked to hide grabbed",
   account: "Search account…  Overview: unit>20 days<7 · Armory: cat:warframe rank<30",
 };
 

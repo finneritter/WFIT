@@ -45,7 +45,7 @@ import type {
   StartupStatus,
   Summary,
   TrendsData,
-  VendorIntel,
+  VendorPanel,
   WantedNowRow,
   WatchRow,
   WfmAccount,
@@ -175,8 +175,14 @@ export const getItemSellers = (slug: string) => invoke<ItemSellers>("get_item_se
 export const getWorldstate = () => invoke<Worldstate>("get_worldstate");
 // Hard reset: discard the backend's worldstate + arbitration caches and re-fetch.
 export const forceWorldstateRefresh = () => invoke<Worldstate>("force_worldstate_refresh");
-// Baro/Varzia stock cross-referenced with the catalog (market value, owned, deals).
-export const getVendorIntel = () => invoke<VendorIntel>("get_vendor_intel");
+// The Vendors board: one panel per rotating vendor, stock enriched + check-off state.
+export const getVendorBoard = () => invoke<VendorPanel[]>("get_vendor_board");
+export const markVendorCheck = (vendorKey: string, itemRef: string) =>
+  invoke<void>("mark_vendor_check", { vendorKey, itemRef });
+export const unmarkVendorCheck = (vendorKey: string, itemRef: string) =>
+  invoke<void>("unmark_vendor_check", { vendorKey, itemRef });
+export const clearVendorChecks = (vendorKey: string) =>
+  invoke<void>("clear_vendor_checks", { vendorKey });
 // Wanted items (watchlist + missing set parts) farmable from a live reward source.
 export const getWantedNow = () => invoke<WantedNowRow[]>("get_wanted_now");
 

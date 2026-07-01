@@ -16,6 +16,7 @@ export type ScreenId =
   | "arcanes"
   | "relics"
   | "rotation"
+  | "vendors"
   | "account"
   | "sold"
   | "settings";
@@ -59,7 +60,10 @@ const GROUPS: { label: string | null; items: NavDef[] }[] = [
   },
   {
     label: "World",
-    items: [{ id: "rotation", label: "Rotation", icon: "timer" }],
+    items: [
+      { id: "rotation", label: "Rotation", icon: "timer" },
+      { id: "vendors", label: "Vendors", icon: "coin" },
+    ],
   },
   {
     label: "Account",

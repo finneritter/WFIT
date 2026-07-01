@@ -42,6 +42,7 @@ import { Sets } from "./routes/Sets";
 import { Settings } from "./routes/Settings";
 import { SoldHistory } from "./routes/SoldHistory";
 import { Trends } from "./routes/Trends";
+import { Vendors } from "./routes/Vendors";
 import { Watchlist } from "./routes/Watchlist";
 
 // Below this window width the sidebar auto-collapses to reclaim space.
@@ -61,6 +62,7 @@ const TITLES: Record<ScreenId, string> = {
   arcanes: "Arcanes",
   relics: "Relics",
   rotation: "Rotation",
+  vendors: "Vendors",
   account: "Account",
   sold: "Sold History",
   settings: "Settings",
@@ -307,6 +309,7 @@ export default function App() {
                 {screen === "arcanes" && <Arcanes onOpen={open} />}
                 {screen === "relics" && <Relics onOpen={open} onNavigate={navigate} />}
                 {screen === "rotation" && <Rotation onOpen={open} />}
+                {screen === "vendors" && <Vendors onOpen={open} />}
                 {screen === "account" && <Account onOpen={open} onNavigate={navigate} />}
                 {screen === "sold" && <SoldHistory onOpen={open} />}
                 {screen === "settings" && <Settings onNavigate={navigate} />}

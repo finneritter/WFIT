@@ -7232,3 +7232,149 @@ button.hw-nav:hover {
     }
   }
 }
+
+/* ============================================================================
+   Vendors screen — horizontal board of vendor columns (Baro · Varzia · Teshin)
+   ============================================================================ */
+.vboard-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.vboard-wrap .filters .hint {
+  font-size: 11px;
+  color: var(--faint);
+}
+.vboard {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  align-items: flex-start;
+}
+.vcol {
+  flex: 0 0 360px;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.vcol.on {
+  border-color: var(--line-2);
+}
+.vcol-h {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-2);
+  background: var(--panel-2);
+}
+.vcol-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.vcol-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+.vcol-status {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.vcol-status.live {
+  color: var(--pos);
+}
+.vcol-status.away {
+  color: var(--faint);
+}
+.vcol-meta {
+  font-size: 11px;
+  color: var(--soft);
+  margin-top: 2px;
+}
+.vcol-btm {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.vcol-timer {
+  font-size: 15px;
+  font-weight: 700;
+}
+.vcol-timer .tl {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 400;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.vcol-got {
+  font-size: 11px;
+  color: var(--soft);
+}
+.vcol-got .lnk {
+  margin-left: 6px;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+.vcol-got .lnk:hover {
+  text-decoration: underline;
+}
+.vcol-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--faint);
+  font-size: 12px;
+}
+.vtbl {
+  width: 100%;
+}
+.vtbl th.chk,
+.vtbl td.chk {
+  width: 30px;
+  text-align: center;
+  padding-left: 8px;
+  padding-right: 0;
+}
+.vtbl td.chk input {
+  cursor: pointer;
+}
+.vtbl td.chk input:disabled {
+  cursor: default;
+  accent-color: var(--pos);
+  opacity: 0.85;
+}
+.vtbl tr.checked td {
+  opacity: 0.5;
+}
+.vtbl tr.vdeal td.chk {
+  box-shadow: inset 2px 0 0 var(--pos);
+}
+.vtbl .deal-tag,
+.vtbl .owned-tag {
+  font-size: 8.5px;
+  margin-left: 5px;
+  padding: 0 3px;
+  letter-spacing: .04em;
+  border: 1px solid var(--line-2);
+  vertical-align: middle;
+}
+.vtbl .deal-tag {
+  color: var(--pos);
+  border-color: var(--pos);
+}
+.vtbl .owned-tag {
+  color: var(--faint);
+}
+.v-essence {
+  color: var(--hot);
+}

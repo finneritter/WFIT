@@ -1,7 +1,8 @@
 use crate::db::wfm::{ImportApply, ListingMirror};
 use crate::db::{
     account, buylist, catalog, gamescan as gamescan_db, inventory, meta, prices, recommend,
-    relic_data, relics, sales, sets, settings, trends, vault, vendor, wanted, watchlist, wfm,
+    relic_data, relics, sales, sets, settings, trends, vault, vendor, vendor_checkoff, wanted,
+    watchlist, wfm,
 };
 use crate::error::{AppError, AppResult};
 use crate::gamescan;
@@ -1006,21 +1007,95 @@ pub async fn force_worldstate_refresh(
     state.worldstate.force_refresh().await
 }
 
-/// Baro + Varzia stock cross-referenced against the catalog: market value, owned
-/// qty, cost-per-plat, and a "worth grabbing" flag. Reads the (cached) worldstate,
-/// then enriches via `db::vendor` — the worldstate module stays DB-free.
+/// The Vendors board: one panel per rotating vendor (Baro, Varzia, Teshin/Steel
+/// Path), each with live status/countdown and stock cross-referenced against the
+/// catalog (market value, owned qty, deal flag, check-off state). Reads the (cached)
+/// worldstate and enriches via `db::vendor` — the worldstate module stays DB-free.
 #[tauri::command]
-pub async fn get_vendor_intel(state: State<'_, Arc<AppState>>) -> AppResult<VendorIntel> {
+pub async fn get_vendor_board(state: State<'_, Arc<AppState>>) -> AppResult<Vec<VendorPanel>> {
     let ws = state.worldstate.get().await?;
-    let baro = match &ws.baro {
-        Some(t) => vendor::enrich(&state.db, &t.inventory)?,
-        None => Vec::new(),
-    };
-    let varzia = match &ws.varzia {
-        Some(t) => vendor::enrich(&state.db, &t.inventory)?,
-        None => Vec::new(),
-    };
-    Ok(VendorIntel { baro, varzia })
+    let mut panels = Vec::new();
+
+    if let Some(t) = &ws.baro {
+        panels.push(VendorPanel {
+            key: "baro".into(),
+            name: "Baro Ki'Teer".into(),
+            character: t.character.clone(),
+            location: t.location.clone(),
+            currency: "ducats".into(),
+            active: t.active,
+            activation: t.activation.clone(),
+            expiry: t.expiry.clone(),
+            rows: vendor::enrich(&state.db, "baro", &t.inventory)?,
+        });
+    }
+    if let Some(t) = &ws.varzia {
+        panels.push(VendorPanel {
+            key: "varzia".into(),
+            name: "Varzia · Prime Resurgence".into(),
+            character: t.character.clone(),
+            location: t.location.clone(),
+            currency: "aya".into(),
+            active: t.active,
+            activation: t.activation.clone(),
+            expiry: t.expiry.clone(),
+            rows: vendor::enrich(&state.db, "varzia", &t.inventory)?,
+        });
+    }
+    if let Some(sp) = &ws.steel_path {
+        // Teshin is always available; the weekly window drives the featured-item
+        // countdown. Rows = this week's featured pick + the permanent evergreen shop.
+        let items: Vec<crate::worldstate::VendorItem> = sp
+            .current_reward
+            .iter()
+            .chain(sp.evergreens.iter())
+            .map(|r| crate::worldstate::VendorItem {
+                item: r.name.clone(),
+                unique_name: None, // steelPath rows carry no uniqueName; name-match only
+                ducats: r.cost,    // Steel Essence, in the shared "cost" slot
+                credits: None,
+            })
+            .collect();
+        panels.push(VendorPanel {
+            key: "steel_path".into(),
+            name: "Teshin · Steel Path Honors".into(),
+            character: Some("Teshin".into()),
+            location: Some("Any Relay".into()),
+            currency: "steel_essence".into(),
+            active: true,
+            activation: sp.activation.clone(),
+            expiry: sp.expiry.clone(),
+            rows: vendor::enrich(&state.db, "steel_path", &items)?,
+        });
+    }
+
+    Ok(panels)
+}
+
+/// Manually mark a vendor item as grabbed (persists across rotations).
+#[tauri::command]
+pub fn mark_vendor_check(
+    state: State<'_, Arc<AppState>>,
+    vendor_key: String,
+    item_ref: String,
+) -> AppResult<()> {
+    vendor_checkoff::set(&state.db, &vendor_key, &item_ref)
+}
+
+/// Clear a single manual vendor check.
+#[tauri::command]
+pub fn unmark_vendor_check(
+    state: State<'_, Arc<AppState>>,
+    vendor_key: String,
+    item_ref: String,
+) -> AppResult<()> {
+    vendor_checkoff::unset(&state.db, &vendor_key, &item_ref)
+}
+
+/// Clear every manual check for one vendor.
+#[tauri::command]
+pub fn clear_vendor_checks(state: State<'_, Arc<AppState>>, vendor_key: String) -> AppResult<()> {
+    vendor_checkoff::clear(&state.db, &vendor_key)
 }
 
 /// Pre-normalized wanted item, kept hot across many reward comparisons.

@@ -45,12 +45,16 @@ pub struct SteelPath {
     pub current_reward: Option<SpReward>,
     pub activation: Option<String>,
     pub expiry: Option<String>,
-    pub rotation: Vec<SpReward>, // the full 8-week Teshin cycle
+    pub rotation: Vec<SpReward>, // the full 8-week Teshin featured cycle
+    pub evergreens: Vec<SpReward>, // the permanent Teshin Steel-Essence shop
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VendorItem {
     pub item: String,
+    /// DE `uniqueName` — the stable id we resolve to a market slug via `game_ref`
+    /// (the display `item` string is often mangled, e.g. "M P V Equinox Prime …").
+    pub unique_name: Option<String>,
     /// Baro: ducats. Varzia: the wrapper reuses this key for the AYA cost —
     /// the UI labels it accordingly.
     pub ducats: Option<i64>,
@@ -138,6 +142,8 @@ struct RawSteelPath {
     expiry: Option<String>,
     #[serde(default)]
     rotation: Vec<RawSpReward>,
+    #[serde(default)]
+    evergreens: Vec<RawSpReward>,
 }
 
 #[derive(Deserialize)]
@@ -159,6 +165,8 @@ struct RawTrader {
 #[derive(Deserialize)]
 struct RawVendorItem {
     item: Option<String>,
+    #[serde(rename = "uniqueName")]
+    unique_name: Option<String>,
     ducats: Option<i64>,
     credits: Option<i64>,
 }
@@ -258,6 +266,7 @@ pub(super) fn steel_path_from(v: Option<Value>) -> Option<SteelPath> {
         activation: raw.activation,
         expiry: raw.expiry,
         rotation: raw.rotation.into_iter().map(reward).collect(),
+        evergreens: raw.evergreens.into_iter().map(reward).collect(),
     })
 }
 
@@ -287,6 +296,7 @@ pub(super) fn trader_from(v: Option<Value>) -> Option<Trader> {
                 let item = item.strip_prefix("M P V ").unwrap_or(&item).to_string();
                 Some(VendorItem {
                     item,
+                    unique_name: i.unique_name,
                     ducats: i.ducats,
                     credits: i.credits,
                 })
@@ -429,6 +439,7 @@ mod tests {
         assert_eq!(t.inventory[0].item, "Rhino Prime Single Pack");
         assert_eq!(t.inventory[1].item, "Boltor Prime");
         assert_eq!(t.inventory[0].ducats, Some(6)); // aya, labeled by the UI
+        assert_eq!(t.inventory[1].unique_name.as_deref(), Some("/y")); // captured for game_ref resolution
     }
 
     #[test]
