@@ -41,8 +41,8 @@ warnings on untouched files are tolerated (same policy as prior sessions).
 
 ### Pragmas (all connections, `tune()` in `db/mod.rs`)
 `busy_timeout=5000` (wait, don't `SQLITE_BUSY`, when a reader briefly meets the writer's commit),
-`cache_size=-65536` (64 MB), `mmap_size=256 MB`, `temp_store=MEMORY`. WAL + `synchronous=NORMAL`
-unchanged on the writer.
+`foreign_keys=ON` (enforce referential integrity), `cache_size=-65536` (64 MB), `mmap_size=256 MB`,
+`temp_store=MEMORY`. WAL + `synchronous=NORMAL` unchanged on the writer.
 
 ### Batched the inventory N+1 (`db/prices.rs`, `db/inventory.rs`)
 `get_inventory` went from **~2000+ queries to ~7**, with identical output:
@@ -53,8 +53,8 @@ unchanged on the writer.
   twins in lockstep if you touch one.**
 - `prices::bid_ladders_for(c, slugs)` and `recent_medians_for(c, slugs)` batch the per-row bid-ladder
   and 12-pt sparkline loads via one `IN (…)` query each.
-- `inventory::memberships(c, set_slugs)` batches the per-set `set_members` lookup that ran inside the
-  `owned_holdings` loop. `fetch_owned`/`set_templates` now take `&Connection`; `owned_holdings` runs
+- the private `inventory::memberships(c, set_slugs)` helper batches the per-set `set_members` lookup
+  that ran inside the `owned_holdings` loop. `fetch_owned`/`set_templates` now take `&Connection`; `owned_holdings` runs
   the whole valuation inside one `db.read()` closure.
 
 ### Index (`migrations/0009_perf_indexes.sql`)
