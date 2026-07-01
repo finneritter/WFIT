@@ -277,7 +277,10 @@ export default function App() {
             ) : null}
           </div>
 
-          <div className="content" ref={contentRef}>
+          <div
+            className={clsx("content", screen === "vendors" && "content-flush")}
+            ref={contentRef}
+          >
             <SearchProvider query={pageQuery} keysRef={searchKeysRef}>
               {/* Inventory stays mounted and is just hidden when inactive — its
                 ~800-tile grid is expensive to mount, so re-creating it on every

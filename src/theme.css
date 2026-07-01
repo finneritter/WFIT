@@ -7237,6 +7237,12 @@ button.hw-nav:hover {
    Vendors screen — horizontal board of vendor columns (Baro · Varzia · Teshin)
    ============================================================================ */
 /* ===== Vendors: a full-width spreadsheet grid ===== */
+/* Full-bleed: drop the content padding + its scroll so the grid reaches every
+   window edge and owns its own scroll (no double scrollbar / clipped bottom). */
+.content.content-flush {
+  padding: 0;
+  overflow: hidden;
+}
 .vgrid-wrap {
   height: 100%;
   display: flex;
@@ -7261,8 +7267,8 @@ button.hw-nav:hover {
   background: var(--bg);
   border-bottom: 1px solid var(--line);
   border-right: 1px solid var(--line);
-  padding: 8px 12px 9px;
-  line-height: 1.25;
+  padding: 10px 14px 12px;
+  line-height: 1.35;
 }
 .vhead.lastcol {
   border-right: none;
@@ -7297,6 +7303,7 @@ button.hw-nav:hover {
   display: flex;
   align-items: baseline;
   gap: 5px;
+  margin-top: 3px;
   font-size: 10px;
   color: var(--soft);
   white-space: nowrap;
