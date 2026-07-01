@@ -22,7 +22,9 @@ came from two copies of "the same" logic diverging (rank pricing, exclusions, va
 3. **One throttle for warframe.market.** Every market call goes through `market.rs`'s global
    serialized 400ms min-gap (~2.5 req/s); the async lock is held across the wait. Never add a
    second path or "optimize" it into a burst. Worldstate (350ms) and gamescan have their own
-   isolated clients — keep them separate.
+   isolated clients — keep them separate. The Riven screen's calls hit *different* warframe.market
+   endpoints (v2 riven reference + v1 auctions) but still go through this same shared throttle
+   (`rivens/` reuses the `market.rs` client) — "one throttle" means one rate limiter, not one endpoint.
 4. **Clicking an item opens the Drawer, everywhere.** Any row/tile representing an item is
    activatable and calls `onOpen(slug)`. This is a universal affordance, not per-screen.
 5. **The topbar search must work on every page that lists rows.** A page that renders rows
