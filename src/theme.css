@@ -7242,10 +7242,6 @@ button.hw-nav:hover {
   gap: 10px;
   min-height: 0;
 }
-.vboard-wrap .filters .hint {
-  font-size: 11px;
-  color: var(--faint);
-}
 .vboard {
   display: flex;
   gap: 12px;
@@ -7254,8 +7250,8 @@ button.hw-nav:hover {
   align-items: flex-start;
 }
 .vcol {
-  flex: 0 0 360px;
-  max-width: 360px;
+  flex: 0 0 220px;
+  max-width: 220px;
   display: flex;
   flex-direction: column;
   background: var(--panel);
@@ -7295,15 +7291,10 @@ button.hw-nav:hover {
   color: var(--soft);
   margin-top: 2px;
 }
-.vcol-btm {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-top: 8px;
-}
 .vcol-timer {
   font-size: 15px;
   font-weight: 700;
+  margin-top: 8px;
 }
 .vcol-timer .tl {
   display: block;
@@ -7313,22 +7304,6 @@ button.hw-nav:hover {
   text-transform: uppercase;
   letter-spacing: .05em;
 }
-.vcol-got {
-  font-size: 11px;
-  color: var(--soft);
-}
-.vcol-got .lnk {
-  margin-left: 6px;
-  background: none;
-  border: none;
-  color: var(--accent);
-  font-size: 11px;
-  cursor: pointer;
-  padding: 0;
-}
-.vcol-got .lnk:hover {
-  text-decoration: underline;
-}
 .vcol-empty {
   padding: 24px 12px;
   text-align: center;
@@ -7337,43 +7312,39 @@ button.hw-nav:hover {
 }
 .vtbl {
   width: 100%;
+  table-layout: fixed;
 }
-.vtbl th.chk,
 .vtbl td.chk {
-  width: 30px;
-  text-align: center;
+  width: 58px;
+  white-space: nowrap;
+  text-align: left;
   padding-left: 8px;
-  padding-right: 0;
+  padding-right: 6px;
+}
+/* Keep long item names inside the narrow column instead of overflowing. */
+.vtbl .dnm .nm {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .vtbl td.chk input {
   cursor: pointer;
+  vertical-align: middle;
 }
 .vtbl td.chk input:disabled {
   cursor: default;
   accent-color: var(--pos);
   opacity: 0.85;
 }
-.vtbl tr.checked td {
-  opacity: 0.5;
-}
-.vtbl tr.vdeal td.chk {
-  box-shadow: inset 2px 0 0 var(--pos);
-}
-.vtbl .deal-tag,
-.vtbl .owned-tag {
-  font-size: 8.5px;
+.vtbl .vplat {
   margin-left: 5px;
-  padding: 0 3px;
-  letter-spacing: .04em;
-  border: 1px solid var(--line-2);
+  font-size: 10px;
+  color: var(--faint);
   vertical-align: middle;
 }
-.vtbl .deal-tag {
-  color: var(--pos);
-  border-color: var(--pos);
-}
-.vtbl .owned-tag {
-  color: var(--faint);
+.vtbl tr.checked td {
+  opacity: 0.5;
 }
 .v-essence {
   color: var(--hot);

@@ -487,7 +487,7 @@ export const PAGE_PLACEHOLDER: Partial<Record<ScreenId, string>> = {
   listings: "Search listings…  try is:undercut",
   rivens: "Filter results…  try is:exact plat<100 grade>80 polarity:madurai rerolls<5",
   trends: "Search trends…  try delta>10 is:owned",
-  vendors: "Search vendors…  try is:deal plat>50 · is:checked to hide grabbed",
+  vendors: "Search vendors…  try is:deal plat>50 · is:checked",
   account: "Search account…  Overview: unit>20 days<7 · Armory: cat:warframe rank<30",
 };
 
