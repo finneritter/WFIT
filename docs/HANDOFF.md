@@ -1,4 +1,4 @@
-# WFIT — Session Handoff (2026-06-03)
+# WFIT — Session Handoff (2026-06-03; current-state notes appended 2026-06-29)
 
 WFIT is a working, installed **Tauri 2 (Rust) + local SQLite + React/Vite** desktop app for tracking
 owned Warframe tradeables, warframe.market prices, sets, ducats, arcane/Vosfor economics, your sell
@@ -9,8 +9,11 @@ earlier ones; prior sessions are condensed at the bottom.
 
 Everything below is **merged to `main`** (`github.com/finneritter/WFIT`) and the installed desktop app
 is on this code. The session feature branches (`perf/responsiveness`, `feat/animations`,
-`feat/arcanes`) were merged and **deleted**. The 11 screens: Inventory, Sets, Trends, Watchlist, Buy
-List, Listings, Ducats, **Arcanes** (new), Rotation, Sold History, Settings.
+`feat/arcanes`) were merged and **deleted**. The 16 screens: Dashboard (home + customizable widget
+grid), Inventory, Market (screener), **Riven Search** (auctions + value estimator), Relics (owned +
+"To crack"), Sets, Trends, Watchlist, Buy List, Listings, Ducats, Arcanes, Rotation, Sold History,
+Account (Tenno profile), Settings — plus a global-hotkey Void Cascade HUD overlay window. (This handoff
+was written at the 11-screen mark; the newer screens are summarized under "Since this handoff" below.)
 
 Gates green: `cargo clippy` clean · `cargo test` **27 pass + 3 ignored** · `tsc` · `npm run build` ·
 `biome` (pre-existing a11y/array-key warnings tolerated). Backend changes spot-checked against the live
@@ -26,8 +29,8 @@ npm run tauri:dev                   # dev; the WebKitGTK/Wayland env-var workaro
 scripts/install.sh                  # build optimized release + install as a launchable app ("WFIT" in KRunner)
 ```
 - **Linux prereq:** `webkit2gtk-4.1` (≥2.46 for `content-visibility`; this box runs 2.52).
-- Live DB: `~/.local/share/dev.finn.wfit/wfit.sqlite`. Migrations `0001`–`0010` applied on launch
-  (`db/mod.rs::SCHEMA_VERSION` must be bumped with the list). A pre-migration snapshot is saved
+- Live DB: `~/.local/share/dev.finn.wfit/wfit.sqlite`. Migrations `0001`–`0017` applied on launch
+  (`db/mod.rs::SCHEMA_VERSION = 17` must be bumped with the list). A pre-migration snapshot is saved
   automatically to `…/backups/` before any pending migration; manual backups via Settings →
   Backups (`VACUUM INTO`, newest 10 kept). If the DB fails to open/migrate, the app boots into a
   recovery screen (back up / reset-aside / quit) instead of panicking.
@@ -189,10 +192,49 @@ Vendors**. Beyond the world-state clocks it answers "what should I go get right 
 
 ---
 
+## Since this handoff (2026-06-11 → 2026-06-29)
+
+Features added after the 2026-06-03 session above. Each has its own spec/design doc where noted; this is
+the current-state index.
+
+- **Dashboard — home screen with customizable widget grid** (2026-06-11, widget redesign 2026-06-19;
+  `routes/Dashboard.tsx`, see `docs/HOME_WIDGETS.md`). Action-first overview: fixed portfolio hero +
+  world strip on top, a drag/reorder/resizable widget grid below (FLIP animation, persisted to
+  `localStorage`).
+- **Market — item screener** (2026-06-12; `routes/Market.tsx`). Category/price/volume filters, seller
+  order books with bid ladders, market link + copy-to-clipboard whisper. In-app market nav from the buy
+  list (2026-06-19) and budget UX.
+- **Relics screen** (2026-06-15; `routes/Relics.tsx`, migrations `0011_owned_relics` + `0012_relic_data`).
+  Owned relics with refinement levels and a "To crack" tab (crackable-now vs waiting-on-a-fissure).
+- **Account — Tenno trader profile** (2026-06-18; `routes/Account.tsx`, migration `0013_account`, see
+  `docs/WFM_ACCOUNT_SIGNIN.md`). Scan-populated sections plus a sales-backed Overview that works without
+  a game scan.
+- **Riven Search screen** (2026-06-24+; `routes/RivenSearch.tsx`, `src-tauri/src/rivens/`, migrations
+  `0014_rivens` / `0015_riven_search_thresholds` / `0016_app_notifications`). Separate warframe.market
+  surface: **v2 riven reference** (weapons/attributes, disposition in-API) + **v1 auction search**.
+  Unified stat picker with per-stat value thresholds, seller-status filter, a **riven value estimator**
+  (asks-anchored winsorized price band, confidence gating, per-listing **Deal** scoring — `rivens/grade.rs`
+  + `rivens/price.rs`), saved searches + an in-app notification center (`rivens/watch.rs`, `notify.rs`,
+  `db/notifications.rs`). Values stored at max rank; grade formula calibrated. See
+  `docs/superpowers/specs/2026-06-27-riven-value-estimator-design.md`.
+- **Void Cascade HUD overlay** (2026-06-24; `src-tauri/src/overlay.rs`, `src/overlay/`). A global-hotkey
+  always-on-top pill window (separate from the main webview) showing active Void Cascade tier / Steel
+  Path status / countdown, or time to the next Omnia reset. Rust-owned auto-hide; the frontend is a
+  minimal React app with no router/React Query, just listening for backend-pushed show events.
+- **Listings: min sell-price floor + Recommended Refresh** (2026-06-29; commit `17620c5`). A per-unit
+  sell-price floor in Settings (default 15p) filters `Listings → Recommended` to items worth the trade
+  hassle; a Refresh button force-reprices all owned items and rebuilds the recommendations.
+- **Vendor check-off** (migration `0017_vendor_checkoff`, `db/vendor_checkoff.rs`): mark Baro/Varzia lines
+  as bought.
+
+---
+
 ## Architecture pointers
 - **Migrations:** `0001_init` · `0002_ohlc` · `0003_game_import` · `0004_ranks` · `0005_orders` ·
   `0006_buy_orders` · `0007_mod_rarity` (`catalog_items.mod_rarity` + bundled `mod_rarity.tsv`) ·
-  `0008_vault_status` (`vault_status` table, WFCD-sourced, `db/vault.rs`) · `0009_perf_indexes`.
+  `0008_vault_status` (`vault_status` table, WFCD-sourced, `db/vault.rs`) · `0009_perf_indexes` ·
+  `0010_order_fetch_meta` · `0011_owned_relics` · `0012_relic_data` · `0013_account` · `0014_rivens` ·
+  `0015_riven_search_thresholds` · `0016_app_notifications` · `0017_vendor_checkoff`. (`SCHEMA_VERSION = 17`.)
 - **DB connection model** (`db/mod.rs`): one writer `Arc<Mutex<Connection>>` (`with`/`with_mut`) + an
   r2d2 read pool (`read()`). All tuned by `tune()`.
 - **Pricing path:** `market.rs` → `db/prices.rs` (`effective_price` + the batched `PriceMaps` /
@@ -202,9 +244,11 @@ Vendors**. Beyond the world-state clocks it answers "what should I go get right 
 - **Reference data (bundled, no DB table):** `domain/mod_rarity.rs` (mod rarity),
   `domain/arcane.rs` (arcane collection/rarity/vosfor). Pattern: `include_str!` a `.tsv`, `Lazy` map.
 - **Modules** (`src-tauri/src/`): `market.rs`, `worldstate/` (`mod.rs` + `raw.rs` DE cross-check),
-  `wfm_account.rs`, `gamescan/`, `domain/`
-  (`classify`/`partname`/`mod_rarity`/`arcane`), `db/` (per-table incl. `arcanes.rs`), `commands.rs`,
-  `lib.rs`.
+  `wfm_account.rs`, `wfm_socket.rs`, `gamescan/`, `rivens/` (separate wfm riven API — `mod.rs` +
+  `grade.rs`/`price.rs` value estimator + `watch.rs` saved-search matching), `overlay.rs` (global-hotkey
+  Void Cascade HUD window), `notify.rs` (in-app notification center), `domain/`
+  (`classify`/`partname`/`mod_rarity`/`arcane`), `db/` (per-table incl. `arcanes.rs`, `relics.rs`,
+  `account.rs`, `rivens.rs`, `notifications.rs`, `vendor_checkoff.rs`), `commands.rs`, `lib.rs`.
 
 ## Key gotchas / lessons
 - **`PRICING_VERSION` (`lib.rs`, currently checked on launch):** bump it when you change how *cached*
@@ -229,8 +273,9 @@ Vendors**. Beyond the world-state clocks it answers "what should I go get right 
   timers, so lag there is mostly harmless).
 - Per-category/rarity exclusion affects portfolio **value**, not the "Parts" count stat (matches the
   existing rarity-exclusion behavior).
-- Pass B set composition still uses the `set_slug` heuristic; game-scan is manual + Linux/Windows (macOS unsupported); Listings
-  write actions and macOS build still deferred.
+- Pass B set composition still uses the `set_slug` heuristic; game-scan is manual + Linux/Windows (macOS
+  unsupported). Listings write actions **shipped** (create/update/delete orders, `hooks/queries.ts` +
+  `components/ListingForm.tsx`); the macOS build is still deferred.
 
 ---
 
