@@ -7236,115 +7236,151 @@ button.hw-nav:hover {
 /* ============================================================================
    Vendors screen — horizontal board of vendor columns (Baro · Varzia · Teshin)
    ============================================================================ */
-.vboard-wrap {
+/* ===== Vendors: a full-width spreadsheet grid ===== */
+.vgrid-wrap {
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
   min-height: 0;
 }
-.vboard {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 8px;
-  align-items: flex-start;
+.vgrid {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  /* grid-template-columns set inline (one 1fr per vendor) */
+  grid-auto-rows: 34px;
+  align-content: start; /* pack rows at top; don't stretch the header row */
+  border-bottom: 1px solid var(--line);
 }
-.vcol {
-  flex: 0 0 220px;
-  max-width: 220px;
-  display: flex;
-  flex-direction: column;
-  background: var(--panel);
-  border: 1px solid var(--line);
+/* header cell — flush with the list, just bold text + a thin divider */
+.vhead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  padding: 8px 12px 9px;
+  line-height: 1.25;
 }
-.vcol.on {
-  border-color: var(--line-2);
+.vhead.lastcol {
+  border-right: none;
 }
-.vcol-h {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line-2);
-  background: var(--panel-2);
-}
-.vcol-top {
+.vhead .h1 {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: 8px;
 }
-.vcol-title {
-  font-size: 13px;
+.vhead .hname {
   font-weight: 700;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
-.vcol-status {
-  font-size: 10px;
+.vhead .hstatus {
+  font-size: 8.5px;
   text-transform: uppercase;
   letter-spacing: .05em;
+  margin-left: auto;
+  flex: none;
 }
-.vcol-status.live {
+.vhead .hstatus.live {
   color: var(--pos);
 }
-.vcol-status.away {
+.vhead .hstatus.away {
   color: var(--faint);
 }
-.vcol-meta {
-  font-size: 11px;
+.vhead .hmeta {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 10px;
   color: var(--soft);
-  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.vcol-timer {
-  font-size: 15px;
+.vhead .hcd {
   font-weight: 700;
-  margin-top: 8px;
+  color: var(--ink);
 }
-.vcol-timer .tl {
-  display: block;
-  font-size: 9.5px;
-  font-weight: 400;
+.vhead .htl {
   color: var(--faint);
   text-transform: uppercase;
-  letter-spacing: .05em;
+  letter-spacing: .04em;
+  font-size: 8.5px;
 }
-.vcol-empty {
-  padding: 24px 12px;
-  text-align: center;
+.vhead .hdot {
   color: var(--faint);
-  font-size: 12px;
 }
-.vtbl {
-  width: 100%;
-  table-layout: fixed;
+/* body cell — item name · vendor cost · grabbed checkbox; empty cells keep gridlines */
+.vcell {
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  min-width: 0;
+  height: 34px;
 }
-.vtbl td.chk {
-  width: 58px;
-  white-space: nowrap;
-  text-align: left;
-  padding-left: 8px;
-  padding-right: 6px;
+.vcell.lastcol {
+  border-right: none;
 }
-/* Keep long item names inside the narrow column instead of overflowing. */
-.vtbl .dnm .nm {
+.vcell.checked {
+  opacity: 0.45;
+}
+.vcell .vcell-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.vcell .vcell-main.static {
+  cursor: default;
+}
+.vgrid .dnm .nm {
   display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.vtbl td.chk input {
-  cursor: pointer;
-  vertical-align: middle;
+.vcell .vcost {
+  flex: none;
+  font-size: 11px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
-.vtbl td.chk input:disabled {
+.vcell .vcost.ducat {
+  color: var(--ducat);
+}
+.vcell .vcost.aya {
+  color: var(--aya);
+}
+.vcell .vcost.essence {
+  color: var(--essence);
+}
+.vcell input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin: 0 0 0 4px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.vcell input:disabled {
   cursor: default;
   accent-color: var(--pos);
   opacity: 0.85;
 }
-.vtbl .vplat {
-  margin-left: 5px;
-  font-size: 10px;
+.vcell .awaynote {
   color: var(--faint);
-  vertical-align: middle;
-}
-.vtbl tr.checked td {
-  opacity: 0.5;
+  font-size: 12px;
+  font-style: italic;
 }
 .v-essence {
   color: var(--hot);
