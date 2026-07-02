@@ -7255,7 +7255,8 @@ button.hw-nav:hover {
   overflow: auto;
   display: grid;
   /* grid-template-columns set inline (one 1fr per vendor) */
-  grid-auto-rows: 34px;
+  grid-template-rows: auto; /* header row sizes to its content… */
+  grid-auto-rows: 40px; /* …body rows stay fixed so columns align */
   align-content: start; /* pack rows at top; don't stretch the header row */
   border-bottom: 1px solid var(--line);
 }
@@ -7267,7 +7268,7 @@ button.hw-nav:hover {
   background: var(--bg);
   border-bottom: 1px solid var(--line);
   border-right: 1px solid var(--line);
-  padding: 10px 14px 12px;
+  padding: 14px 16px; /* side padding matches .vcell so text columns line up */
   line-height: 1.35;
 }
 .vhead.lastcol {
@@ -7302,8 +7303,8 @@ button.hw-nav:hover {
 .vhead .hmeta {
   display: flex;
   align-items: baseline;
-  gap: 5px;
-  margin-top: 3px;
+  gap: 6px;
+  margin-top: 6px;
   font-size: 10px;
   color: var(--soft);
   white-space: nowrap;
@@ -7329,10 +7330,10 @@ button.hw-nav:hover {
   border-right: 1px solid var(--line);
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 0 12px;
+  gap: 10px;
+  padding: 0 16px;
   min-width: 0;
-  height: 34px;
+  height: 40px;
 }
 .vcell.lastcol {
   border-right: none;
@@ -7375,7 +7376,7 @@ button.hw-nav:hover {
   width: 14px;
   height: 14px;
   flex: none;
-  margin: 0 0 0 4px;
+  margin: 0 0 0 6px;
   cursor: pointer;
   accent-color: var(--accent);
 }
