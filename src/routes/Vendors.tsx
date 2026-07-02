@@ -60,7 +60,50 @@ export function Vendors({ onOpen }: { onOpen: (slug: string) => void }) {
             />
           )),
         )}
+        {cols.map(({ panel, rows }, ci) => (
+          <VendorFoot
+            key={`${panel.key}:foot`}
+            panel={panel}
+            rows={rows}
+            last={ci === cols.length - 1}
+          />
+        ))}
       </div>
+    </div>
+  );
+}
+
+/** Sticky column footer: grabbed progress + what the rest would cost. Totals
+ *  follow the topbar search — they describe the rows you can see. */
+function VendorFoot({
+  panel,
+  rows,
+  last,
+}: {
+  panel: VendorPanel;
+  rows: VendorIntelRow[];
+  last: boolean;
+}) {
+  const cur = CURRENCY[panel.currency];
+  const grabbed = rows.filter((r) => r.checked).length;
+  const remaining = rows.reduce((s, r) => s + (r.checked ? 0 : (r.cost ?? 0)), 0);
+  return (
+    <div className={clsx("vfoot", last && "lastcol")}>
+      {rows.length > 0 ? (
+        <>
+          <span className="fgrab num">
+            {grabbed}/{rows.length}
+          </span>
+          <span className="flbl">grabbed</span>
+          {remaining > 0 ? (
+            <>
+              <span className="fdot">·</span>
+              <span className={clsx("fcost num", cur?.cls)}>{fmt(remaining)}</span>
+              <span className="flbl">{cur ? cur.label.toLowerCase() : ""} to go</span>
+            </>
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -137,12 +180,31 @@ function VendorCell({
   const owned = row.check_source === "owned";
 
   return (
-    <div className={clsx("vcell", row.checked && "checked", last && "lastcol")}>
+    <div
+      className={clsx(
+        "vcell",
+        row.checked && "checked",
+        !panel.active && "away-col",
+        last && "lastcol",
+      )}
+    >
       <div
         className={clsx("vcell-main", !row.slug && "static")}
         {...(row.slug ? rowAction(() => onOpen(row.slug as string)) : {})}
       >
-        <ItemName name={row.item} plat={null} thumb={row.thumbnail_url} />
+        <ItemName
+          name={row.item}
+          plat={row.median_plat}
+          thumb={row.thumbnail_url}
+          tags={
+            <>
+              {row.good_deal ? <span className="itag itag-deal">DEAL</span> : null}
+              {owned && row.owned_qty > 1 ? (
+                <span className="itag itag-qty num">×{row.owned_qty}</span>
+              ) : null}
+            </>
+          }
+        />
       </div>
       <span className={clsx("vcost num", cur?.cls)}>{row.cost != null ? fmt(row.cost) : ""}</span>
       <input

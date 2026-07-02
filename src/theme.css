@@ -3221,6 +3221,15 @@ body.hide-scan-tag .src-tag.src-scan {
   border: 1px solid var(--line-2);
   padding: 0 3px;
 }
+/* Vendors board: worth grabbing (unowned + valuable) / owned-stack size. */
+.itag-deal {
+  color: var(--pos);
+  border: 1px solid var(--pos);
+  padding: 0 3px;
+}
+.itag-qty {
+  color: var(--faint);
+}
 
 /* Uniform 30px toolbar height (scoped to .filters). */
 .filters .search {
@@ -7443,23 +7452,97 @@ button.hw-nav:hover {
 .vcell .vcost.essence {
   color: var(--essence);
 }
+.vcell:hover:not(.empty) {
+  background: var(--hover);
+}
+/* custom square check — DIM-flat: bordered box, filled inner square when ticked */
 .vcell input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
   width: 14px;
   height: 14px;
   flex: none;
   margin: 0 0 0 6px;
   cursor: pointer;
-  accent-color: var(--accent);
+  border: 1px solid var(--line-2);
+  background: transparent;
+  transition: border-color .12s ease, background-color .12s ease;
 }
-.vcell input:disabled {
+.vcell input[type="checkbox"]:hover {
+  border-color: var(--ink);
+}
+.vcell input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 3px var(--bg);
+}
+.vcell input[type="checkbox"]:disabled {
   cursor: default;
-  accent-color: var(--pos);
-  opacity: 0.85;
+}
+.vcell input[type="checkbox"]:checked:disabled {
+  /* auto-checked from ownership — green, not clearable */
+  border-color: var(--pos);
+  background: var(--pos);
+}
+.vcell input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .vcell .awaynote {
   color: var(--faint);
   font-size: 12px;
   font-style: italic;
+}
+/* away vendor — the whole column reads muted; the header countdown stays loud */
+.vcell.away-col .vcell-main,
+.vcell.away-col .vcost {
+  opacity: 0.55;
+}
+/* sticky column footer — grabbed progress + remaining spend */
+.vfoot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 16px;
+  height: 40px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.vfoot.lastcol {
+  border-right: none;
+}
+.vfoot .fgrab {
+  font-weight: 700;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.vfoot .flbl {
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-size: 8.5px;
+}
+.vfoot .fdot {
+  color: var(--faint);
+}
+.vfoot .fcost {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.vfoot .fcost.ducat {
+  color: var(--ducat);
+}
+.vfoot .fcost.aya {
+  color: var(--aya);
+}
+.vfoot .fcost.essence {
+  color: var(--essence);
 }
 .v-essence {
   color: var(--hot);
