@@ -6712,6 +6712,20 @@ button.acc-info {
   border: 1px dashed var(--line-2);
   background: color-mix(in srgb, var(--panel) 40%, transparent);
 }
+/* Edit-mode ghost tile: the first open cell doubles as a quick "add" target. */
+.hw-ghost {
+  border: 1px dashed var(--line-2);
+  background: none;
+  color: var(--faint);
+  font-size: 22px;
+  font-weight: 300;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.hw-ghost:hover {
+  background: var(--hover);
+  color: var(--soft);
+}
 /* The floating clone that follows the cursor. Absolutely positioned in the grid
    (gridRef is the positioning context), moved only via translate3d → its own GPU
    layer, so the moving shadow composites cleanly with no repaint trails. */
@@ -6748,6 +6762,10 @@ button.acc-info {
 .hw.editing .hw-b {
   /* While arranging, the body is inert so a drag/tap never opens an item. */
   pointer-events: none;
+}
+/* Click-to-focus (non-edit): a quiet monochrome hairline step-up. */
+.hw.focused .hw-card {
+  border-color: var(--soft);
 }
 
 /* Header — fixed chrome shared by every widget. */
@@ -6839,6 +6857,10 @@ button.hw-nav:hover {
   justify-content: center;
   gap: 2px;
 }
+/* Refetch failed but cached data is shown — quiet dim (title attr explains). */
+.hw-b.stale {
+  opacity: 0.75;
+}
 .hw-msg {
   color: var(--faint);
   font-size: 11.5px;
@@ -6857,6 +6879,7 @@ button.hw-nav:hover {
 }
 .hw-big {
   font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: 23px;
   font-weight: 700;
   line-height: 1.04;
@@ -6875,6 +6898,7 @@ button.hw-nav:hover {
   align-items: center;
   gap: 2px;
   font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   font-weight: 700;
   padding: 1px 5px;
@@ -6929,6 +6953,7 @@ button.hw-nav:hover {
 }
 .hw-cv {
   font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: 13px;
   font-weight: 600;
   color: var(--ink);
@@ -6954,6 +6979,11 @@ button.hw-nav:hover {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+/* Focused tile: the render cap comes off and the list scrolls in place. */
+.hw-rows.scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .hw-row {
   display: flex;
@@ -6998,6 +7028,7 @@ button.hw-nav:hover {
 }
 .hw-row-v {
   font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
@@ -7019,6 +7050,7 @@ button.hw-nav:hover {
   gap: 7px;
 }
 .hw-search-box {
+  position: relative; /* anchors the h=1 results popover */
   display: flex;
   align-items: center;
   gap: 7px;
@@ -7048,6 +7080,45 @@ button.hw-nav:hover {
 }
 .hw-search-res {
   overflow-y: auto;
+}
+/* 1-row tiles have no room for an inline list — results pop over the grid,
+   anchored under the input (same idiom as .riven-menu). The tile's clipping
+   chain (.hw-card/.hw-b are overflow:hidden) opens while the popover exists,
+   and the tile lifts above its neighbours (drag overlay stays on top at 20). */
+.hw-search-pop {
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: calc(100% + 4px);
+  z-index: 30;
+  flex: none;
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+  max-height: 190px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: riven-menu-in .13s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.hw:has(.hw-search-pop) {
+  z-index: 15;
+}
+.hw-card:has(.hw-search-pop),
+.hw-card:has(.hw-search-pop) .hw-b {
+  overflow: visible;
+}
+.hw-search-pop .hw-row {
+  padding: 5px 8px;
+}
+.hw-search-pop > div:first-child .hw-row {
+  border-top: 0;
+}
+.hw-search-pop .hw-msg {
+  padding: 7px 9px;
+}
+/* Keyboard highlight while arrowing through search results. */
+.hw-row-active .hw-row {
+  background: var(--hover);
 }
 
 /* Tone helpers (descendant match wins over the base .hw-big/.hw-cv color). */

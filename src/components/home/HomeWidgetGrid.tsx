@@ -1,12 +1,17 @@
 // The customizable lower half of the Home screen: a grid of widget tiles the
-// user can add (multi-select checklist), remove, drag to reorder, and resize by
-// the corner (snapping to 1×1 … 2×2). The order/sizes persist to localStorage
+// user can add (multi-select checklist), remove, drag to move, and resize by
+// the corner (snapping to 1×1 … 2×2). The layout persists to localStorage
 // (UI preference, single-user; same pattern as nav-collapsed / drawer-width).
 //
-// Built on plain CSS Grid (tiles flow across and fill gaps — `grid-auto-flow:
-// dense`) + Pointer Events for drag/resize. We deliberately do NOT use a grid
-// library: react-grid-layout's drag/resize and width measurement did not work
-// in the app's WebKitGTK webview, and Pointer Events are well-supported there.
+// Built on plain CSS Grid with freeform placement (each tile stores explicit
+// x/y and spans; gaps are allowed, dropping onto a tile pushes overlapped
+// tiles down — see resolveDown) + Pointer Events for drag/resize. We
+// deliberately do NOT use a grid library: react-grid-layout's drag/resize and
+// width measurement did not work in the app's WebKitGTK webview, and Pointer
+// Events are well-supported there.
+//
+// Outside edit mode a click on a tile's body "focuses" it: the row list drops
+// its cap and scrolls inside the tile. Long-pressing a tile enters edit mode.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useEscape } from "../../hooks/useEscape";
 import { clsx } from "../../lib/format";
@@ -89,6 +94,8 @@ export function HomeWidgetGrid({
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
   const [dragKey, setDragKey] = useState<string | null>(null);
+  // Click-to-focus: the focused tile's row list uncaps and scrolls (WidgetBody).
+  const [focusedKey, setFocusedKey] = useState<string | null>(null);
   // Transient order while a drag is in flight. The grid renders from this so
   // the other tiles reflow live, but we DON'T persist on every pointermove (that
   // wrote to localStorage per-move) — only commit on drop.
@@ -371,8 +378,70 @@ export function HomeWidgetGrid({
 
   const startEditing = useCallback(() => {
     setEditing(true);
+    setFocusedKey(null);
     setHintSeen("1");
   }, [setHintSeen]);
+
+  // ---- click-to-focus + long-press-to-edit (non-edit mode only) ---------------
+  // Escape or a click outside the focused tile releases focus.
+  useEffect(() => {
+    if (!focusedKey) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFocusedKey(null);
+    };
+    const onDown = (e: PointerEvent) => {
+      const el = gridRef.current?.querySelector(`[data-key="${focusedKey}"]`);
+      if (el && e.target instanceof Node && !el.contains(e.target)) setFocusedKey(null);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onDown);
+    };
+  }, [focusedKey]);
+
+  // Focus on body click — but never steal a click meant for a row/input/link.
+  const onTileClick = useCallback((e: React.MouseEvent, key: string) => {
+    if ((e.target as HTMLElement).closest("button, input, a")) return;
+    setFocusedKey((k) => (k === key ? null : key));
+  }, []);
+
+  // Long-press (~500ms, no movement) = enter edit mode, the gesture users try
+  // first. The click that follows the release is swallowed so it can't also
+  // focus a tile or open a drawer row.
+  const pressTimer = useRef<number | null>(null);
+  const suppressClick = useRef(false);
+  const beginPress = useCallback(
+    (e: React.PointerEvent) => {
+      const sx = e.clientX;
+      const sy = e.clientY;
+      const cancel = () => {
+        if (pressTimer.current != null) window.clearTimeout(pressTimer.current);
+        pressTimer.current = null;
+        window.removeEventListener("pointerup", cancel);
+        window.removeEventListener("pointermove", onMove);
+      };
+      const onMove = (ev: PointerEvent) => {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 8) cancel();
+      };
+      pressTimer.current = window.setTimeout(() => {
+        cancel();
+        suppressClick.current = true;
+        startEditing();
+      }, 500);
+      window.addEventListener("pointerup", cancel);
+      window.addEventListener("pointermove", onMove);
+    },
+    [startEditing],
+  );
+  const onTileClickCapture = useCallback((e: React.MouseEvent) => {
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, []);
 
   const dragItem = dragKey ? order.find((i) => i.key === dragKey) : null;
   const dragDef = dragItem ? WIDGET_MAP[dragItem.key] : null;
@@ -405,12 +474,15 @@ export function HomeWidgetGrid({
               );
             }
             return (
+              // biome-ignore lint/a11y/useKeyWithClickEvents: body-click focus is a pointer convenience — rows stay real buttons and Escape releases focus
               <div
                 key={it.key}
                 data-key={it.key}
-                className={clsx("hw", editing && "editing")}
+                className={clsx("hw", editing && "editing", focusedKey === it.key && "focused")}
                 style={place}
-                onPointerDown={editing ? (e) => startDrag(e, it.key) : undefined}
+                onPointerDown={editing ? (e) => startDrag(e, it.key) : beginPress}
+                onClickCapture={onTileClickCapture}
+                onClick={editing ? undefined : (e) => onTileClick(e, it.key)}
               >
                 <div className="hw-card">
                   <div className="hw-h">
@@ -441,7 +513,13 @@ export function HomeWidgetGrid({
                       <span className="hw-t">{def.title}</span>
                     )}
                   </div>
-                  <Render w={it.w} h={it.h} onOpen={onOpen} onNavigate={onNavigate} />
+                  <Render
+                    w={it.w}
+                    h={it.h}
+                    onOpen={onOpen}
+                    onNavigate={onNavigate}
+                    focused={focusedKey === it.key}
+                  />
                 </div>
                 {editing ? (
                   <button
@@ -454,6 +532,25 @@ export function HomeWidgetGrid({
               </div>
             );
           })}
+
+          {editing && !dragKey
+            ? (() => {
+                // Ghost "+" tile in the first open 1×1 cell — a quicker path to the
+                // Add checklist while arranging. No data-key, so FLIP ignores it.
+                const { x, y } = firstFree(order, 1, 1);
+                return (
+                  <button
+                    type="button"
+                    className="hw hw-ghost"
+                    style={{ gridColumn: `${x + 1} / span 1`, gridRow: `${y + 1} / span 1` }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => setAdding(true)}
+                  >
+                    +
+                  </button>
+                );
+              })()
+            : null}
 
           {dragItem && dragDef && DragRender ? (
             <div

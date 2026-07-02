@@ -83,10 +83,13 @@ function invalidateInventoryDerived(qc: QC) {
     keys.arcanes,
     keys.watchlist,
     keys.buyList,
+    keys.sales,
   ]) {
     qc.invalidateQueries({ queryKey: k });
   }
   qc.invalidateQueries({ queryKey: ["trends"] });
+  // Search results carry owned_qty too; stale-mark only (refetch on next use).
+  qc.invalidateQueries({ queryKey: ["searchCatalog"], refetchType: "none" });
   // Catalog rows carry owned_qty (joined from inventory). Mark stale but DON'T
   // force-refetch all five category queries on every edit — the open Add-items
   // grid is patched optimistically (patchCatalogRow); inactive catalog queries
