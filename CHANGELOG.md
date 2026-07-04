@@ -3,10 +3,9 @@
 All notable changes to WFIT are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [1.1.0] — 2026-07-04 · first public beta
+## [1.1.0] — 2026-07-04 · first public release
 
-The first release published for anyone to download. Marked **pre-release** on
-GitHub while WFIT is in beta.
+The first release published for anyone to download.
 
 ### New screens & features
 
@@ -41,11 +40,11 @@ GitHub while WFIT is in beta.
 
 ### Distribution
 
-- Public beta packaging: release bundles are built **lean** (the local dev
+- Public packaging: release bundles are built **lean** (the local dev
   dashboard no longer ships in installers; developers opt in with
   `--features dev-dashboard`).
-- CI releases are drafted as **pre-releases** with install notes; Windows
-  installers are unsigned for now (SmartScreen: More info → Run anyway).
+- CI drafts releases with install notes; Windows installers are unsigned for
+  now (SmartScreen: More info → Run anyway).
 
 ## [1.0.0] — 2026-06-19
 

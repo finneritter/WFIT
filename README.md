@@ -15,15 +15,13 @@ favor of **one binary + one local SQLite file**. No auth, no hosting, no deploy.
 
 ---
 
-## Download (beta)
+## Download
 
-> **Status: beta.** WFIT is a one-person hobby project that has been daily-driven on Linux for a
-> while, but you're an early adopter — expect rough edges and please
-> [open an issue](../../issues) when you hit one. Your data lives in one local SQLite file
-> (see [Layout](#layout)); nothing is uploaded anywhere.
+> WFIT is a one-person hobby project that has been daily-driven on Linux for a while, but you're
+> an early adopter — expect rough edges and please [open an issue](../../issues) when you hit one.
+> Your data lives in one local SQLite file (see [Layout](#layout)); nothing is uploaded anywhere.
 
-Grab the latest installer from **[Releases](../../releases)** (top entry; betas are marked
-pre-release, so GitHub's `latest` alias only kicks in from the first stable release):
+Grab the latest installer from **[Releases](../../releases/latest)**:
 
 | OS | File | Notes |
 |---|---|---|
