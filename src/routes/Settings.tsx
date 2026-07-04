@@ -30,6 +30,7 @@ import {
   useSimulateInventory,
   useSummary,
   useUpdateGameData,
+  useUpdateStatus,
   useWfmAccount,
 } from "../hooks/queries";
 
@@ -41,7 +42,14 @@ const CAT_FLOORS: [string, string][] = [
   ["mod", "Mod"],
   ["arcane", "Arcane"],
 ];
-import { openBackupsDir, sendTestNotification, wipeApp } from "../lib/api";
+import { open as openExternal } from "@tauri-apps/plugin-shell";
+import {
+  installAppUpdate,
+  openBackupsDir,
+  restartApp,
+  sendTestNotification,
+  wipeApp,
+} from "../lib/api";
 import { clsx, fmtBytes, syncedAgo } from "../lib/format";
 import {
   FONTS,
@@ -53,7 +61,13 @@ import {
   systemTimezone,
   timezoneOptions,
 } from "../lib/prefs";
-import type { GameDataProgress, NotificationPrefs, OverlayPrefs } from "../lib/types";
+import { errorMessage, pushToast } from "../lib/toast";
+import type {
+  GameDataProgress,
+  NotificationPrefs,
+  OverlayPrefs,
+  UpdateProgress,
+} from "../lib/types";
 
 function Row({
   label,
@@ -118,12 +132,103 @@ const NOTIF_DEFAULTS: NotificationPrefs = {
   vendor_arrival: true,
   daily_reset: false,
   weekly_reset: true,
+  auto_check_updates: true,
 };
 
 const OFF_ON: [string, string][] = [
   ["off", "Off"],
   ["on", "On"],
 ];
+
+/** Settings › About › Updates: check → install (with live download %) → restart.
+ *  Windows never reaches the restart step — the installer exits the app itself.
+ *  Installs that can't self-update (deb/rpm/bare binary) get a GitHub link. */
+function UpdatesRow() {
+  const upd = useUpdateStatus();
+  const [phase, setPhase] = useState<"idle" | "installing" | "done">("idle");
+  const [prog, setProg] = useState<UpdateProgress | null>(null);
+  useEffect(() => {
+    const unProg = listen<UpdateProgress>("update-download-progress", (e) => setProg(e.payload));
+    const unDone = listen("update-download-finished", () => setPhase("done"));
+    return () => {
+      unProg.then((f) => f());
+      unDone.then((f) => f());
+    };
+  }, []);
+
+  const s = upd.data;
+  const install = async () => {
+    setPhase("installing");
+    try {
+      await installAppUpdate(); // on Windows the installer exits the app inside this call
+      setPhase("done");
+    } catch (e) {
+      pushToast(errorMessage(e));
+      setPhase("idle");
+      setProg(null);
+    }
+  };
+
+  let body: React.ReactNode;
+  if (phase === "installing") {
+    const pct =
+      prog?.total && prog.total > 0 ? `${Math.floor((prog.downloaded * 100) / prog.total)}%` : null;
+    body = (
+      <span className="muted num">
+        Downloading… {pct ?? (prog ? fmtBytes(prog.downloaded) : "")}
+      </span>
+    );
+  } else if (phase === "done") {
+    body = (
+      <button type="button" className="btn" onClick={() => restartApp()}>
+        Restart now
+      </button>
+    );
+  } else if (s?.update_available && s.in_place) {
+    body = (
+      <button type="button" className="btn" onClick={install}>
+        Install v{s.latest_version}
+      </button>
+    );
+  } else if (s?.update_available) {
+    body = (
+      <button
+        type="button"
+        className="btn"
+        onClick={() => openExternal("https://github.com/finneritter/WFIT/releases/latest")}
+      >
+        Get v{s.latest_version} on GitHub
+      </button>
+    );
+  } else {
+    body = (
+      <>
+        {upd.isError ? (
+          <span className="muted">Check failed</span>
+        ) : s ? (
+          <span className="muted">Up to date</span>
+        ) : null}
+        <button
+          type="button"
+          className="btn"
+          disabled={upd.isFetching}
+          onClick={() => upd.refetch()}
+        >
+          {upd.isFetching ? "Checking…" : "Check for updates"}
+        </button>
+      </>
+    );
+  }
+
+  return (
+    <Row
+      label="Updates"
+      hint="Windows installs and Linux AppImages update in place; other installs link to GitHub."
+    >
+      {body}
+    </Row>
+  );
+}
 
 function Notifications() {
   const { data } = useNotificationPrefs();
@@ -166,6 +271,18 @@ function Notifications() {
           value={prefs.close_to_tray ? "on" : "off"}
           options={OFF_ON}
           onChange={(v) => save({ close_to_tray: v === "on" })}
+        />
+      </Row>
+      {/* App-level background behavior like close-to-tray, not an OS toast —
+          deliberately NOT gated by the master switch below. */}
+      <Row
+        label="Check for updates"
+        hint="Once a day, check GitHub for a new WFIT version and post an in-app notification. Nothing installs without you."
+      >
+        <Seg
+          value={prefs.auto_check_updates ? "on" : "off"}
+          options={OFF_ON}
+          onChange={(v) => save({ auto_check_updates: v === "on" })}
         />
       </Row>
       <Row
@@ -894,6 +1011,7 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
         <Row label="Version">
           <span className="num">v{version ?? "…"}</span>
         </Row>
+        <UpdatesRow />
         <Row label="Data sources">
           <span className="muted">warframe.market · warframestat.us</span>
         </Row>

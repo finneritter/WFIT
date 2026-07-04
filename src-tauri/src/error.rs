@@ -20,6 +20,8 @@ pub enum AppError {
     Invalid(String),
     #[error("not connected: {0}")]
     NotConnected(String),
+    #[error("updater: {0}")]
+    Updater(String),
     #[error("{0}")]
     Other(String),
 }

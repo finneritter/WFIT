@@ -104,6 +104,15 @@ export const useAppVersion = () =>
     queryFn: api.appVersion,
     staleTime: Number.POSITIVE_INFINITY,
   });
+// One check per session unless the Settings button refetches; never auto-retry
+// (a failed GitHub fetch shouldn't hammer the feed).
+export const useUpdateStatus = () =>
+  useQuery({
+    queryKey: ["updateStatus"],
+    queryFn: api.checkAppUpdate,
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
 export const useInventory = () => useQuery({ queryKey: keys.inventory, queryFn: api.getInventory });
 export const useSummary = () => useQuery({ queryKey: keys.summary, queryFn: api.getSummary });
 export const useSales = () => useQuery({ queryKey: keys.sales, queryFn: () => api.getSales() });

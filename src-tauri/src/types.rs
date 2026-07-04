@@ -237,6 +237,25 @@ pub struct PricingProgress {
     pub last_price_sync: Option<String>,
 }
 
+/// App-update check result (Settings › About). `in_place` = this install can
+/// self-update via the updater plugin (Windows installers, Linux AppImage);
+/// false = deb/rpm/bare-binary, which get a "download from GitHub" answer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateStatus {
+    pub current_version: String,
+    pub latest_version: Option<String>,
+    pub update_available: bool,
+    pub in_place: bool,
+    pub notes: Option<String>,
+}
+
+/// `update-download-progress` event payload (whole-percent ticks).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateProgress {
+    pub downloaded: u64,
+    pub total: Option<u64>,
+}
+
 /// A realized sale (Sold History).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SaleRow {

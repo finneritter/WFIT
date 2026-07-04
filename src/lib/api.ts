@@ -45,6 +45,7 @@ import type {
   StartupStatus,
   Summary,
   TrendsData,
+  UpdateStatus,
   VendorPanel,
   WantedNowRow,
   WatchRow,
@@ -54,6 +55,10 @@ import type {
 
 // app
 export const appVersion = () => getVersion();
+// self-update (Settings › About). install exits the process on Windows.
+export const checkAppUpdate = () => invoke<UpdateStatus>("check_app_update");
+export const installAppUpdate = () => invoke<void>("install_app_update");
+export const restartApp = () => invoke<void>("restart_app");
 
 // startup / recovery (work without AppState — usable on the recovery screen)
 export const startupStatus = () => invoke<StartupStatus>("startup_status");

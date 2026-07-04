@@ -113,6 +113,9 @@ pub struct NotificationPrefs {
     pub vendor_arrival: bool,
     pub daily_reset: bool,
     pub weekly_reset: bool,
+    /// Daily background check for a new WFIT version (in-app notification, not
+    /// an OS toast — deliberately NOT gated by `master_enabled`).
+    pub auto_check_updates: bool,
 }
 
 impl Default for NotificationPrefs {
@@ -125,6 +128,7 @@ impl Default for NotificationPrefs {
             vendor_arrival: true,
             daily_reset: false, // daily is noisy; opt-in
             weekly_reset: true,
+            auto_check_updates: true,
         }
     }
 }

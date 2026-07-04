@@ -739,6 +739,26 @@ export interface NotificationPrefs {
   vendor_arrival: boolean;
   daily_reset: boolean;
   weekly_reset: boolean;
+  // Daily background check for a new WFIT version (in-app notification;
+  // deliberately not gated by master_enabled — it's not an OS toast).
+  auto_check_updates: boolean;
+}
+
+/** App-update check result (mirrors types.rs::UpdateStatus). */
+export interface UpdateStatus {
+  current_version: string;
+  latest_version: string | null;
+  update_available: boolean;
+  // True when this install can self-update in place (Windows installers,
+  // Linux AppImage); false = deb/rpm/bare binary → point at GitHub instead.
+  in_place: boolean;
+  notes: string | null;
+}
+
+/** `update-download-progress` event payload (mirrors types.rs::UpdateProgress). */
+export interface UpdateProgress {
+  downloaded: number;
+  total: number | null;
 }
 
 /** Cascade HUD overlay prefs (mirrors db::settings::OverlayPrefs). */

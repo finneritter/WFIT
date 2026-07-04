@@ -12,6 +12,7 @@ mod notify;
 mod overlay;
 mod rivens;
 mod types;
+mod updater;
 mod wfm_account;
 mod wfm_socket;
 mod worldstate;
@@ -169,6 +170,15 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // Updater plugin: registered here (the docs' v2 pattern) and
+            // unconditionally — a recovery-mode session must still be able to
+            // check for the fixed version.
+            if let Err(e) = app
+                .handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())
+            {
+                tracing::warn!(error = %e, "updater plugin failed to initialize");
+            }
             // Tray icon: always built (even in recovery mode) so "Quit" is always
             // reachable. If it fails to build — e.g. no StatusNotifierItem host on
             // a bare Wayland session — close-to-tray is force-disabled in init_app
@@ -319,6 +329,10 @@ pub fn run() {
             commands::notifications_mark_all_read,
             commands::notifications_dismiss,
             commands::notifications_clear_all,
+            // app self-update
+            commands::check_app_update,
+            commands::install_app_update,
+            commands::restart_app,
             // set composition (Pass B)
             commands::sets_refresh,
             // game inventory import (memory-scan)
@@ -471,6 +485,7 @@ fn init_app(
     // Desktop-notification engine: watches world-state and fires OS toasts for
     // the user's enabled event categories (works while the window is hidden).
     notify::spawn(state.clone(), app.handle().clone());
+    updater::spawn_update_check(state.clone(), app.handle().clone());
 
     // In-app riven watcher: periodically runs notify-enabled saved riven searches
     // and files notification-center entries for matching auctions.

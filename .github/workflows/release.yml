@@ -54,13 +54,21 @@ jobs:
       # and uploads every artifact to one draft release keyed by the tag.
       # The body puts a direct-link download table front and center — the
       # collapsed "Assets" widget alone is easy for non-developers to miss.
+      # TAURI_SIGNING_*: sign the updater artifacts (`createUpdaterArtifacts`)
+      # so installed apps can verify updates. tauri-action also generates and
+      # uploads latest.json (the updater feed) automatically.
+      # updaterJsonPreferNsis: the single windows-x86_64 feed entry points at
+      # the NSIS installer — MSI→NSIS upgrade is supported, the reverse isn't.
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "WFIT ${{ github.ref_name }}"
           releaseDraft: true
+          updaterJsonPreferNsis: true
           releaseBody: |
             ## ⬇️ Downloads
 
@@ -77,3 +85,5 @@ jobs:
             ## What's new
 
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md).
+
+            Installed copies (Windows / AppImage) update themselves from Settings › About; deb/rpm installs get an in-app notification pointing here.

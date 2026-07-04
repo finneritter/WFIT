@@ -36,6 +36,11 @@ First launch: the app builds its local item catalog from warframe.market and sta
 the background (rate-limited to ~2.5 req/s — the full catalog takes a while; the topbar badge shows
 data age). Everything works offline afterwards except live prices and world-state.
 
+**Updates:** from v1.2.0 on, Windows installs and Linux AppImages **update themselves** — a daily
+check posts an in-app notification and Settings › About gets an **Install** button (signed +
+verified; nothing installs without you). deb/rpm installs get the notification with a link here
+instead. v1.1.0 predates the updater — reinstall once from the table above.
+
 > ⚠️ **One feature deserves a special warning:** the opt-in [game inventory
 > import](#game-inventory-import-opt-in-beta) reads the running Warframe client's memory, which
 > **violates DE's Terms of Service and could get your account banned**. It is off by default,

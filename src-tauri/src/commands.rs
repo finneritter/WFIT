@@ -2217,3 +2217,27 @@ pub fn notifications_dismiss(state: State<'_, Arc<AppState>>, id: i64) -> AppRes
 pub fn notifications_clear_all(state: State<'_, Arc<AppState>>) -> AppResult<()> {
     crate::db::notifications::clear_all(&state.db)
 }
+
+// ===========================================================================
+// App self-update (Settings › About)
+// ===========================================================================
+
+/// Check GitHub for a newer WFIT. In-place-capable installs go through the
+/// updater plugin; deb/rpm/bare binaries get a plain feed compare.
+#[tauri::command]
+pub async fn check_app_update(app: tauri::AppHandle) -> AppResult<crate::types::UpdateStatus> {
+    crate::updater::check(&app).await
+}
+
+/// Download + install the pending update (streams `update-download-progress`).
+/// On Windows the installer takes over and the process exits inside this call.
+#[tauri::command]
+pub async fn install_app_update(app: tauri::AppHandle) -> AppResult<()> {
+    crate::updater::install(app).await
+}
+
+/// Relaunch the app (the post-install step on Linux).
+#[tauri::command]
+pub fn restart_app(app: tauri::AppHandle) -> AppResult<()> {
+    app.restart()
+}

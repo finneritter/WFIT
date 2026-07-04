@@ -3,6 +3,24 @@
 All notable changes to WFIT are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] — 2026-07-04 · auto-update
+
+- **The app updates itself now.** A daily background check (Settings ›
+  Notifications › "Check for updates", on by default) posts an in-app
+  notification when a new version ships, and Settings › About grows an
+  **Install** button: signed download with live progress, then restart
+  (on Windows the installer takes over and relaunches). Nothing downloads
+  or installs without your click.
+  - In-place updates cover **Windows installs (NSIS/MSI) and Linux
+    AppImages**. deb/rpm and source installs can't self-update — they get
+    the notification with a link to GitHub Releases instead.
+  - Update artifacts are cryptographically **signed**; installs verify the
+    signature before applying (tauri-plugin-updater / minisign).
+  - Note: MSI installs are migrated to the NSIS installer by their first
+    auto-update (one-way; upstream supports only that direction).
+  - **v1.1.0 predates the updater** — update from it manually (once) via
+    GitHub Releases.
+
 ## [1.1.0] — 2026-07-04 · first public release
 
 The first release published for anyone to download.
