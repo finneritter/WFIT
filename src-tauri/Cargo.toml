@@ -1,6 +1,6 @@
 [package]
 name = "wfit"
-version = "1.0.0"
+version = "1.1.0"
 description = "Warframe Item Tracker — local Tauri desktop tracker for warframe.market"
 edition = "2021"
 license-file = "../LICENSE"
@@ -63,10 +63,11 @@ windows = { version = "0.58", features = [
 ] }
 
 [features]
-# `dev-dashboard` ships ON by default so every build (incl. release bundles) carries
-# the local web dashboard for anyone to test. Build lean with `--no-default-features
-# --features custom-protocol` to drop it (and its axum dep) entirely.
-default = ["custom-protocol", "dev-dashboard"]
+# Lean by default: public release bundles ship WITHOUT the dev dashboard (an
+# unauthenticated loopback server doesn't belong in strangers' installs). Local
+# workflows opt back in explicitly — `npm run tauri:dev` and `scripts/install.sh`
+# both pass `--features dev-dashboard`.
+default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 # Local web dashboard (observability + stress + fault injection): a loopback HTTP
 # server + axum. Default-on; the server binds 127.0.0.1:8848 (WFIT_DASH_PORT, 0 to

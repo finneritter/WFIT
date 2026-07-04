@@ -1,7 +1,7 @@
 {
   "name": "wfit",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "license": "UNLICENSED",
   "type": "module",
   "description": "Warframe Item Tracker — local Tauri desktop tracker for warframe.market",
@@ -10,8 +10,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:dev:dash": "WFIT_DASH_PORT=8848 tauri dev --features dev-dashboard",
+    "tauri:dev": "tauri dev --features dev-dashboard",
+    "tauri:dev:lean": "tauri dev",
     "lint": "biome check .",
     "format": "biome check --write .",
     "prepare": "git config core.hooksPath .githooks || true"

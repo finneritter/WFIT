@@ -3,6 +3,50 @@
 All notable changes to WFIT are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] — 2026-07-04 · first public beta
+
+The first release published for anyone to download. Marked **pre-release** on
+GitHub while WFIT is in beta.
+
+### New screens & features
+
+- **Riven Search** — a full riven market screen: v2 reference data + v1 auction
+  search, unified stat picker with per-stat value thresholds, seller-status
+  filter, saved searches with an in-app notification center, and a calibrated
+  **value estimator** (winsorized ask-anchored band, confidence gating,
+  per-listing deal score).
+- **Home dashboard** — customizable freeform widget grid (iOS-style drag /
+  resize / push-down), six new widgets, focus-to-scroll, search popover.
+- **Vendors** — standalone full-width board (Baro · Varzia · Teshin) with
+  check-off persistence, deal/owned tags and per-column totals; **Varzia's Aya
+  vs Regal Aya** correctly resolved per row (the API mislabels them); Wave-2
+  vendors: **The Circuit's weekly Incarnon choices** (live from DE) and
+  **Nora's Nightwave cred shop** (bundled catalog, live aura prices).
+- **Account** — scan-populated Tenno trader profile (Profile · Codex ·
+  Resources · Arsenal).
+- **Relics/Sets** — real vault data, a "To crack" tab driven by wanted items,
+  cross-screen deep-links, one-click game-data update.
+- **Void Cascade HUD overlay** — global hotkey (default `Alt+C`), always-on-top
+  status pill with Rust-owned auto-hide.
+- **Notifications** — desktop notifications (vendor arrivals, cascades,
+  S-tier arbitrations, resets) + close-to-tray.
+
+### Improvements & fixes
+
+- Listings: min sell-price floor for recommendations; required `perTrade` field
+  sent on ranked goods (order writes work again).
+- Pricing: troll-high live asks rejected from valuation.
+- Frameless window drag-to-resize + fluid responsive layout.
+- Throttle hardening: serialized market throttle + 429 retry on writes.
+
+### Distribution
+
+- Public beta packaging: release bundles are built **lean** (the local dev
+  dashboard no longer ships in installers; developers opt in with
+  `--features dev-dashboard`).
+- CI releases are drafted as **pre-releases** with install notes; Windows
+  installers are unsigned for now (SmartScreen: More info → Run anyway).
+
 ## [1.0.0] — 2026-06-19
 
 First stable release. WFIT is a single-user Tauri 2 (Rust) + local SQLite +

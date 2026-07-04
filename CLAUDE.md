@@ -100,9 +100,11 @@ Retired (do not build from): `reference/design/` (old "Primely" hi-fi),
 - **Dev dashboard** — a local **stress + observability + fault-injection** web dashboard the app
   serves on a loopback HTTP server (`127.0.0.1:8848`, `WFIT_DASH_PORT` to change, `0` to disable),
   opened from **Settings › Developer › Web dashboard** (no auto-open). It's behind the
-  **`dev-dashboard` Cargo feature, which is ON by default** — so it ships in release bundles for anyone
-  to test. Build lean to drop it + its axum dep: `cargo build --no-default-features --features
-  custom-protocol` (verify absence with `cargo tree -e no-dev | grep axum`). Everything lives in
+  **`dev-dashboard` Cargo feature — OFF by default since the public beta** (an unauthenticated
+  loopback server doesn't ship to strangers): release CI bundles are lean, while `npm run tauri:dev`
+  and `scripts/install.sh` pass `--features dev-dashboard` explicitly so local workflows keep it.
+  CI tests with the feature on AND checks the lean config compiles without axum
+  (`cargo tree -e no-dev | grep axum`). Everything lives in
   `src-tauri/src/devtools/`; hot-path instrumentation (market throttle, DB writer/read pool, heartbeat,
   `owned_holdings`) is zero-cost when the feature is off (no-op shims / `#[cfg]` blocks). Reproducible
   CLI: `cargo bench --features bench` (criterion microbench of the liquidation curve) and

@@ -9,9 +9,39 @@ It's a local-first rewrite of an old React + Supabase webapp — the entire clou
 favor of **one binary + one local SQLite file**. No auth, no hosting, no deploy.
 
 - **Stack:** Tauri 2 (Rust core) · SQLite (rusqlite, WAL) · React + Vite + TypeScript · TanStack Query
-- **Platform:** built and run on Linux (CachyOS/Arch); macOS must be built on macOS.
+- **Platform:** Linux + Windows (installers below); macOS must be built from source on macOS.
 - **Design:** dense, square, monochrome "trading terminal" aesthetic — hairline borders, tabular
   mono numbers, semantic-only color (`docs/ROTATION_PAGE_DESIGN.md` documents the visual language).
+
+---
+
+## Download (beta)
+
+> **Status: beta.** WFIT is a one-person hobby project that has been daily-driven on Linux for a
+> while, but you're an early adopter — expect rough edges and please
+> [open an issue](../../issues) when you hit one. Your data lives in one local SQLite file
+> (see [Layout](#layout)); nothing is uploaded anywhere.
+
+Grab the latest installer from **[Releases](../../releases/latest)**:
+
+| OS | File | Notes |
+|---|---|---|
+| **Windows** | `WFIT_x.y.z_x64-setup.exe` (or the `.msi`) | Unsigned for now — SmartScreen will warn; click **More info → Run anyway**. |
+| **Linux (any distro)** | `WFIT_x.y.z_amd64.AppImage` | `chmod +x` and run. Needs `webkit2gtk-4.1` installed. |
+| **Debian / Ubuntu** | `WFIT_x.y.z_amd64.deb` | `sudo apt install ./WFIT_*.deb` |
+| **Fedora / RHEL** | `WFIT-x.y.z-1.x86_64.rpm` | `sudo dnf install ./WFIT-*.rpm` |
+| **Arch** | AppImage, or build from source | `scripts/install.sh` builds + installs a native binary. |
+| **macOS** | build from source | No prebuilt bundle; `npm run tauri build` on a Mac. |
+
+First launch: the app builds its local item catalog from warframe.market and starts pricing it in
+the background (rate-limited to ~2.5 req/s — the full catalog takes a while; the topbar badge shows
+data age). Everything works offline afterwards except live prices and world-state.
+
+> ⚠️ **One feature deserves a special warning:** the opt-in [game inventory
+> import](#game-inventory-import-opt-in-beta) reads the running Warframe client's memory, which
+> **violates DE's Terms of Service and could get your account banned**. It is off by default,
+> gated behind a typed consent phrase, and completely separate from the rest of the app — everything
+> else only talks to public APIs.
 
 ---
 
@@ -94,7 +124,7 @@ The Loid / Vosfor dissolution calculator (`docs/ARCANE_DISSOLUTION.md`):
   copies, flagged per arcane: worth more as plat, or as Vosfor fodder.
 
 ### Rotation
-The live game-state hub, on three sub-tabs. Data refreshes every 45 s (a backend refresher keeps
+The live game-state hub, on two sub-tabs. Data refreshes every 45 s (a backend refresher keeps
 it live even when the window is hidden); the topbar refresh button becomes a **hard reset** here —
 it discards every worldstate cache and re-fetches all sources immediately.
 
@@ -106,12 +136,19 @@ it discards every worldstate cache and re-fetches all sources immediately.
 - **Fissures:** per-tier summary cards (count + next rotation; the Omnia card calls out Void
   Cascade), then every live fissure grouped **Normal / Steel Path / Void Storms** with tier filter
   chips. Fissures are DE-verified — the panel header says so.
-- **Vendors:** the *Baro arrival* hero (here-now glow + countdown to arrival/departure), Baro's
-  stock with **ducat (gold) + credit** columns and totals, and Varzia's Prime Resurgence stock in
-  **Aya (cyan)**.
 - All live timers recolor as they drain: ink → orange (≤5 min) → red (≤90 s).
 - Clock times follow the **Time zone** setting (auto = PC zone); the panel labels show the active
   zone so the labels and times can never disagree.
+
+### Vendors
+A full-width spreadsheet board — one column per rotating vendor, each with a live countdown header
+and a check-off list of stock cross-referenced against the market (value, owned, **DEAL** flag,
+cost-per-plat). Rows auto-check when you own the item; manual ticks persist across rotations.
+
+- **Baro Ki'Teer** (ducats) · **Varzia** (Aya + Regal Aya, resolved per row) · **Teshin / Steel
+  Path Honors** (this week's featured pick + the evergreen shop) · **The Circuit** (this week's
+  Incarnon Genesis choices — check off which you've earned as the 8-week pool rotates) ·
+  **Nora's cred offerings** (the stable Nightwave shop catalog; the aura pool gets live prices).
 
 ### Sold History
 Every recorded sale with price, date and notes — your realized profit ledger.

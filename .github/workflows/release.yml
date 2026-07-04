@@ -53,4 +53,6 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "WFIT ${{ github.ref_name }}"
           releaseDraft: true
-          releaseBody: "See commit history for changes."
+          # Beta phase: every release is marked pre-release until a stable 1.x.
+          prerelease: true
+          releaseBody: "Beta build — see CHANGELOG.md for what's new. Windows: the installer is unsigned; SmartScreen will warn (More info → Run anyway). Linux: the AppImage needs webkit2gtk-4.1."

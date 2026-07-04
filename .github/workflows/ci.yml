@@ -54,9 +54,21 @@ jobs:
       - name: cargo fmt
         run: cargo fmt --check
         working-directory: src-tauri
+      # --features dev-dashboard: defaults are lean (release bundles ship
+      # without the dashboard), but the dashboard code must stay green — it's
+      # what `npm run tauri:dev` and `scripts/install.sh` build.
       - name: cargo clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --features dev-dashboard -- -D warnings
         working-directory: src-tauri
       - name: cargo test
-        run: cargo test
+        run: cargo test --features dev-dashboard
+        working-directory: src-tauri
+      # The lean (public release) configuration must also compile and must not
+      # link the dashboard's HTTP stack.
+      - name: cargo check (lean release config)
+        run: |
+          cargo check
+          if cargo tree -e no-dev | grep -q axum; then
+            echo "lean build still links axum" && exit 1
+          fi
         working-directory: src-tauri

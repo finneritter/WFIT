@@ -13,7 +13,8 @@ DESKTOP="$HOME/.local/share/applications/wfit.desktop"
 
 echo "==> Building release binary (this takes a minute)…"
 cd "$REPO"
-npm run tauri -- build --no-bundle
+# Personal install keeps the dev dashboard (public release bundles are lean).
+npm run tauri -- build --no-bundle --features dev-dashboard
 
 echo "==> Installing to ~/.local …"
 mkdir -p "$(dirname "$BIN")" "$(dirname "$ICON")" "$(dirname "$DESKTOP")"
