@@ -91,9 +91,14 @@ hunt, Steel Path weekly, reset timers) · **Fissures** (the original UI, unchang
   requests). Each block lands as an untyped `serde_json::Value` and is parsed with
   `from_value(..).ok()`, so a shape change in one block degrades that block to `None` instead of
   failing the payload. Quirks: the archon hunt uses `missions[].type` where the sortie uses
-  `variants[].missionType`; **Varzia's `inventory[].ducats` actually holds the AYA cost** (the
-  wrapper reuses the key — label it "Aya"), and her vault-pack names arrive mangled
-  ("M P V Rhino Prime Single Pack" — the `M P V ` prefix is stripped).
+  `variants[].missionType`; **Varzia's stock mixes two currencies** (verified 2026-07-02 against
+  DE raw `PrimeVaultTraders[].Manifest` — every item has exactly one of the two):
+  `inventory[].ducats` = DE `PrimePrice` = **REGAL AYA** (frames 3 / single pack 6 / dual pack 10 /
+  cosmetics 1–2), `inventory[].credits` = DE `RegularPrice` = **AYA** (relics, 1 each).
+  `db/vendor.rs::enrich` resolves the per-row currency from that pair. Her vault-pack names
+  arrive mangled ("M P V Rhino Prime Single Pack" — the `M P V ` prefix is stripped), and her
+  aya relics arrive as projection names ("T1 Void Projection … Vault A Bronze" → rewritten to
+  "Lith Relic (Vault A)"; T1..T4 = Lith/Meso/Neo/Axi, the specific relic is not encoded).
 - **`worldstate/arbys.rs`** — arbitrations. warframestat's `arbitration` field is **broken**
   (always expired, epoch timestamps; DE doesn't publish arbitrations at all). Source instead:
   **`https://browse.wf/arbys.txt`** — a community-precomputed schedule (CSV `unix_ts,NodeId`, one

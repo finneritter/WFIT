@@ -8,12 +8,22 @@ import { compileQuery } from "../lib/searchQuery";
 import { vendorsSchema } from "../lib/searchSchemas";
 import type { VendorIntelRow, VendorPanel } from "../lib/types";
 
-// Each currency owns a color accent + short label (shown once in the column header).
-const CURRENCY: Record<string, { cls: string; label: string }> = {
-  ducats: { cls: "ducat", label: "Ducats" },
-  aya: { cls: "aya", label: "Aya" },
-  steel_essence: { cls: "essence", label: "Essence" },
+// Each currency owns a color accent, a header label, and a short per-cell unit.
+// The unit only renders in mixed-currency columns (Varzia: aya relics + regal-aya
+// frames/packs — regal is the real-money currency, hence its own loud color).
+const CURRENCY: Record<string, { cls: string; label: string; unit: string }> = {
+  ducats: { cls: "ducat", label: "Ducats", unit: "dc" },
+  aya: { cls: "aya", label: "Aya", unit: "aya" },
+  regal_aya: { cls: "regal", label: "Regal Aya", unit: "regal" },
+  steel_essence: { cls: "essence", label: "Essence", unit: "ess" },
 };
+
+/** Distinct row currencies, stable order (aya before regal). Falls back to the
+ *  panel's primary currency when there's no stock to inspect (away vendors). */
+function panelCurrencies(panel: VendorPanel): string[] {
+  const seen = [...new Set(panel.rows.map((r) => r.currency))].filter((c) => CURRENCY[c]);
+  return seen.length > 0 ? seen.sort() : [panel.currency];
+}
 
 /**
  * The Vendors board: a full-width spreadsheet. Each vendor is a column that
@@ -35,7 +45,11 @@ export function Vendors({ onOpen }: { onOpen: (slug: string) => void }) {
     );
   if (panels.length === 0) return <BlockStatus text="No vendors are active right now." />;
 
-  const cols = panels.map((panel) => ({ panel, rows: panel.rows.filter(test) }));
+  const cols = panels.map((panel) => ({
+    panel,
+    rows: panel.rows.filter(test),
+    mixed: panelCurrencies(panel).length > 1,
+  }));
   const bodyRows = Math.max(1, ...cols.map((c) => c.rows.length));
 
   return (
@@ -48,13 +62,14 @@ export function Vendors({ onOpen }: { onOpen: (slug: string) => void }) {
           <VendorHead key={panel.key} panel={panel} last={ci === cols.length - 1} />
         ))}
         {Array.from({ length: bodyRows }, (_, r) =>
-          cols.map(({ panel, rows }, ci) => (
+          cols.map(({ panel, rows, mixed }, ci) => (
             <VendorCell
               key={`${panel.key}:${r}`}
               panel={panel}
               row={rows[r]}
               rowIndex={r}
               rowCount={rows.length}
+              showUnit={mixed}
               last={ci === cols.length - 1}
               onOpen={onOpen}
             />
@@ -84,9 +99,17 @@ function VendorFoot({
   rows: VendorIntelRow[];
   last: boolean;
 }) {
-  const cur = CURRENCY[panel.currency];
   const grabbed = rows.filter((r) => r.checked).length;
-  const remaining = rows.reduce((s, r) => s + (r.checked ? 0 : (r.cost ?? 0)), 0);
+  // Remaining spend, grouped per currency — Varzia's aya + regal totals must not
+  // be summed into one number (different currencies, one of them real-money).
+  const remaining = new Map<string, number>();
+  for (const r of rows) {
+    if (r.checked || r.cost == null) continue;
+    remaining.set(r.currency, (remaining.get(r.currency) ?? 0) + r.cost);
+  }
+  const parts = [...remaining.entries()]
+    .filter(([c, sum]) => sum > 0 && CURRENCY[c])
+    .sort(([a], [b]) => a.localeCompare(b));
   return (
     <div className={clsx("vfoot", last && "lastcol")}>
       {rows.length > 0 ? (
@@ -95,13 +118,17 @@ function VendorFoot({
             {grabbed}/{rows.length}
           </span>
           <span className="flbl">grabbed</span>
-          {remaining > 0 ? (
-            <>
-              <span className="fdot">·</span>
-              <span className={clsx("fcost num", cur?.cls)}>{fmt(remaining)}</span>
-              <span className="flbl">{cur ? cur.label.toLowerCase() : ""} to go</span>
-            </>
-          ) : null}
+          {parts.map(([c, sum]) => {
+            const cur = CURRENCY[c];
+            return (
+              <span key={c} className="fpart">
+                <span className="fdot">·</span>
+                <span className={clsx("fcost num", cur.cls)}>{fmt(sum)}</span>
+                <span className="flbl">{cur.label.toLowerCase()}</span>
+              </span>
+            );
+          })}
+          {parts.length > 0 ? <span className="flbl">to go</span> : null}
         </>
       ) : null}
     </div>
@@ -109,7 +136,9 @@ function VendorFoot({
 }
 
 function VendorHead({ panel, last }: { panel: VendorPanel; last: boolean }) {
-  const cur = CURRENCY[panel.currency];
+  const payLabels = panelCurrencies(panel)
+    .map((c) => CURRENCY[c]?.label)
+    .filter(Boolean);
   return (
     <div className={clsx("vhead", last && "lastcol")}>
       <div className="h1">
@@ -133,10 +162,10 @@ function VendorHead({ panel, last }: { panel: VendorPanel; last: boolean }) {
             <span className="hloc">{panel.location ?? panel.character}</span>
           </>
         ) : null}
-        {cur ? (
+        {payLabels.length > 0 ? (
           <>
             <span className="hdot">·</span>
-            <span className="htl">pays {cur.label}</span>
+            <span className="htl">pays {payLabels.join(" · ")}</span>
           </>
         ) : null}
       </div>
@@ -149,6 +178,7 @@ function VendorCell({
   row,
   rowIndex,
   rowCount,
+  showUnit,
   last,
   onOpen,
 }: {
@@ -156,6 +186,7 @@ function VendorCell({
   row: VendorIntelRow | undefined;
   rowIndex: number;
   rowCount: number;
+  showUnit: boolean;
   last: boolean;
   onOpen: (slug: string) => void;
 }) {
@@ -176,7 +207,7 @@ function VendorCell({
     );
   }
 
-  const cur = CURRENCY[panel.currency];
+  const cur = CURRENCY[row.currency] ?? CURRENCY[panel.currency];
   const owned = row.check_source === "owned";
 
   return (
@@ -206,7 +237,10 @@ function VendorCell({
           }
         />
       </div>
-      <span className={clsx("vcost num", cur?.cls)}>{row.cost != null ? fmt(row.cost) : ""}</span>
+      <span className={clsx("vcost num", cur?.cls)}>
+        {row.cost != null ? fmt(row.cost) : ""}
+        {showUnit && row.cost != null && cur ? <span className="vunit">{cur.unit}</span> : null}
+      </span>
       <input
         type="checkbox"
         checked={row.checked}

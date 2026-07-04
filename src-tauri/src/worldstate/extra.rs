@@ -55,9 +55,11 @@ pub struct VendorItem {
     /// DE `uniqueName` — the stable id we resolve to a market slug via `game_ref`
     /// (the display `item` string is often mangled, e.g. "M P V Equinox Prime …").
     pub unique_name: Option<String>,
-    /// Baro: ducats. Varzia: the wrapper reuses this key for the AYA cost —
-    /// the UI labels it accordingly.
+    /// Baro: ducats. Varzia: the wrapper puts DE's `PrimePrice` here — that is
+    /// **Regal Aya** (verified 2026-07-02 vs DE raw `PrimeVaultTraders[].Manifest`).
     pub ducats: Option<i64>,
+    /// Baro: the credits component. Varzia: DE's `RegularPrice` = **Aya** (relics).
+    /// `db/vendor.rs::enrich` resolves the per-item currency from this pair.
     pub credits: Option<i64>,
 }
 
@@ -270,6 +272,36 @@ pub(super) fn steel_path_from(v: Option<Value>) -> Option<SteelPath> {
     })
 }
 
+/// Varzia's aya-priced relics come through as raw projection names —
+/// "T1 Void Projection Wukong Equinox Vault A Bronze". Rewrite to the in-game
+/// vocabulary: "Lith Relic (Vault A)". T1..T4 = Lith/Meso/Neo/Axi; the trailing
+/// refinement is always Bronze (= Intact), so it's dropped. Which *specific*
+/// relic (e.g. "Lith W1") is not encoded anywhere in the payload. Returns None
+/// for anything that isn't a projection name (leaves the item untouched).
+fn prettify_relic_projection(name: &str) -> Option<String> {
+    let rest = name.strip_prefix("T").and_then(|s| {
+        let (tier, rest) = s.split_once(" Void Projection ")?;
+        Some((tier, rest))
+    });
+    let (tier, rest) = rest?;
+    let era = match tier {
+        "1" => "Lith",
+        "2" => "Meso",
+        "3" => "Neo",
+        "4" => "Axi",
+        _ => return None,
+    };
+    // "…theme… Vault A Bronze" → keep the vault letter, drop theme + refinement.
+    let vault = rest
+        .rsplit_once(" Vault ")
+        .map(|(_, tail)| tail.split_whitespace().next().unwrap_or(""))
+        .filter(|l| !l.is_empty());
+    Some(match vault {
+        Some(letter) => format!("{era} Relic (Vault {letter})"),
+        None => format!("{era} Relic"),
+    })
+}
+
 pub(super) fn trader_from(v: Option<Value>) -> Option<Trader> {
     let raw: RawTrader = serde_json::from_value(v?).ok()?;
     let now = Utc::now();
@@ -294,6 +326,7 @@ pub(super) fn trader_from(v: Option<Value>) -> Option<Trader> {
                 // Varzia's vault packs come through name-mangled ("M P V Rhino
                 // Prime Single Pack") — drop the internal MPV prefix.
                 let item = item.strip_prefix("M P V ").unwrap_or(&item).to_string();
+                let item = prettify_relic_projection(&item).unwrap_or(item);
                 Some(VendorItem {
                     item,
                     unique_name: i.unique_name,
@@ -431,15 +464,31 @@ mod tests {
             "character": "Varzia", "location": "Maroo's Bazaar (Mars)",
             "inventory": [
                 {"uniqueName": "/x", "item": "M P V Rhino Prime Single Pack", "ducats": 6, "credits": null},
-                {"uniqueName": "/y", "item": "Boltor Prime", "ducats": 2, "credits": null}
+                {"uniqueName": "/y", "item": "Boltor Prime", "ducats": 2, "credits": null},
+                {"uniqueName": "/z", "item": "T1 Void Projection Wukong Equinox Vault A Bronze", "ducats": null, "credits": 1}
             ]
         })))
         .expect("varzia");
         assert!(t.active); // now is inside the window
         assert_eq!(t.inventory[0].item, "Rhino Prime Single Pack");
         assert_eq!(t.inventory[1].item, "Boltor Prime");
-        assert_eq!(t.inventory[0].ducats, Some(6)); // aya, labeled by the UI
+        assert_eq!(t.inventory[0].ducats, Some(6)); // Regal Aya (DE PrimePrice)
         assert_eq!(t.inventory[1].unique_name.as_deref(), Some("/y")); // captured for game_ref resolution
+                                                                       // Aya-priced relic projection: readable name, credits carries the aya cost.
+        assert_eq!(t.inventory[2].item, "Lith Relic (Vault A)");
+        assert_eq!(t.inventory[2].credits, Some(1));
+        assert_eq!(t.inventory[2].unique_name.as_deref(), Some("/z")); // item_ref unchanged
+    }
+
+    #[test]
+    fn prettifies_relic_projections_only() {
+        assert_eq!(
+            prettify_relic_projection("T4 Void Projection Wukong Equinox Vault B Bronze")
+                .as_deref(),
+            Some("Axi Relic (Vault B)")
+        );
+        assert_eq!(prettify_relic_projection("Boltor Prime"), None);
+        assert_eq!(prettify_relic_projection("Tipedo Prime Weapon"), None);
     }
 
     #[test]

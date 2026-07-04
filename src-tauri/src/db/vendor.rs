@@ -25,7 +25,19 @@ struct CatLite {
 /// else manual). Resolution prefers the DE `uniqueName` → slug map (`game_ref`, exact)
 /// and falls back to fuzzy display-name matching. Items that resolve to no tracked
 /// slug pass through priceless and `tradeable = false` (manual-check only).
-pub fn enrich(db: &Db, vendor_key: &str, items: &[VendorItem]) -> AppResult<Vec<VendorIntelRow>> {
+///
+/// `base_currency` is the vendor's single currency ("ducats", "steel_essence").
+/// Varzia is the exception — her stock mixes two currencies, resolved PER ITEM
+/// (verified 2026-07-02 against DE raw `PrimeVaultTraders[].Manifest`):
+/// warframestat `credits` = DE `RegularPrice` = **Aya** (relics), warframestat
+/// `ducats` = DE `PrimePrice` = **Regal Aya** (frames/packs/cosmetics). Every item
+/// has exactly one of the two.
+pub fn enrich(
+    db: &Db,
+    vendor_key: &str,
+    items: &[VendorItem],
+    base_currency: &str,
+) -> AppResult<Vec<VendorIntelRow>> {
     if items.is_empty() {
         return Ok(Vec::new());
     }
@@ -81,7 +93,11 @@ pub fn enrich(db: &Db, vendor_key: &str, items: &[VendorItem]) -> AppResult<Vec<
             let lite = slug.as_deref().and_then(|s| facts.get(s));
             let median = lite.and_then(|l| l.median);
             let owned = lite.map(|l| l.owned).unwrap_or(0);
-            let cost = it.ducats;
+            let (cost, currency) = match vendor_key {
+                "varzia" if it.credits.is_some() => (it.credits, "aya"),
+                "varzia" => (it.ducats, "regal_aya"),
+                _ => (it.ducats, base_currency),
+            };
             let cost_per_plat = match (cost, median) {
                 (Some(c), Some(m)) if m > 0 => Some(c as f64 / m as f64),
                 _ => None,
@@ -106,6 +122,7 @@ pub fn enrich(db: &Db, vendor_key: &str, items: &[VendorItem]) -> AppResult<Vec<
                 median_plat: median,
                 owned_qty: owned,
                 cost,
+                currency: currency.to_string(),
                 credits: it.credits,
                 cost_per_plat,
                 good_deal: owned == 0 && median.unwrap_or(0) >= DEAL_MIN_PLAT,

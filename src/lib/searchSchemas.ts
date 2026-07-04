@@ -450,6 +450,8 @@ export const vendorsSchema: SearchSchema<VendorIntelRow> = {
     owned: { test: (r) => r.owned_qty > 0, hint: "already in your inventory" },
     checked: { test: (r) => r.checked, hint: "grabbed (owned or ticked)" },
     tradeable: { test: (r) => r.tradeable, hint: "sells on warframe.market" },
+    aya: { test: (r) => r.currency === "aya", hint: "priced in Aya (farmable)" },
+    regal: { test: (r) => r.currency === "regal_aya", hint: "priced in Regal Aya (real money)" },
   },
   fields: {
     plat: { kind: "number", get: (r) => r.median_plat, hint: "market value (plat)" },

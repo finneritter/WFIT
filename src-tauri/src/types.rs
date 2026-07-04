@@ -82,7 +82,13 @@ pub struct VendorIntelRow {
     pub thumbnail_url: Option<String>, // catalog thumbnail when resolved
     pub median_plat: Option<i64>,      // market value, None if untracked on warframe.market
     pub owned_qty: i64,                // how many you already own (0 = don't have it)
-    pub cost: Option<i64>,             // ducats/aya/steel-essence — mirrors VendorItem.ducats
+    /// What the vendor charges, in `currency`. Varzia rows pick the one price the
+    /// item actually has (aya via `credits`, regal via `ducats`); others mirror
+    /// VendorItem.ducats.
+    pub cost: Option<i64>,
+    /// The currency `cost` is denominated in: "ducats" | "aya" | "regal_aya" |
+    /// "steel_essence". Per-ROW because Varzia mixes aya + regal aya in one stock.
+    pub currency: String,
     pub credits: Option<i64>,
     /// cost / median_plat — currency spent per plat of resale value (lower = better deal).
     pub cost_per_plat: Option<f64>,
@@ -107,7 +113,9 @@ pub struct VendorPanel {
     pub name: String, // display name
     pub character: Option<String>,
     pub location: Option<String>,
-    pub currency: String, // "ducats" | "aya" | "steel_essence"
+    /// The vendor's PRIMARY currency ("ducats" | "aya" | "steel_essence") — the
+    /// header hint. Rows carry their own `currency`; Varzia mixes aya + regal_aya.
+    pub currency: String,
     pub active: bool,
     pub activation: Option<String>, // ISO — arrival / window start
     pub expiry: Option<String>,     // ISO — departure / window end

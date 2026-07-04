@@ -545,7 +545,10 @@ export interface VendorIntelRow {
   thumbnail_url: string | null;
   median_plat: number | null;
   owned_qty: number;
-  cost: number | null; // ducats / aya / steel essence
+  cost: number | null; // what the vendor charges, denominated in `currency`
+  // "ducats" | "aya" | "regal_aya" | "steel_essence" — per ROW: Varzia mixes
+  // aya (relics) and regal aya (frames/packs/cosmetics) in one stock list.
+  currency: string;
   credits: number | null;
   cost_per_plat: number | null; // cost / median_plat (lower = better)
   good_deal: boolean;

@@ -123,6 +123,7 @@
   --ducat: #d6b748;
   --plat: #6fa8d8;
   --aya: #6fb3c9;
+  --regal: #d68a96; /* Regal Aya — real-money currency, deliberately reads warm/alien */
   --essence: #b08fd6;
   /* arbitration grade ramp — S gold, A green, B yellow, C blue, D orange, F red */
   --g-s: #d6b748;
@@ -7449,8 +7450,19 @@ button.hw-nav:hover {
 .vcell .vcost.aya {
   color: var(--aya);
 }
+.vcell .vcost.regal {
+  color: var(--regal);
+}
 .vcell .vcost.essence {
   color: var(--essence);
+}
+/* per-cell currency unit — only rendered in mixed-currency columns (Varzia) */
+.vcell .vcost .vunit {
+  margin-left: 4px;
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  opacity: 0.75;
 }
 .vcell:hover:not(.empty) {
   background: var(--hover);
@@ -7541,8 +7553,16 @@ button.hw-nav:hover {
 .vfoot .fcost.aya {
   color: var(--aya);
 }
+.vfoot .fcost.regal {
+  color: var(--regal);
+}
 .vfoot .fcost.essence {
   color: var(--essence);
+}
+.vfoot .fpart {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 .v-essence {
   color: var(--hot);

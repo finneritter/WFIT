@@ -1184,6 +1184,7 @@ function ListNextWidget({ w, h, focused, onOpen }: WidgetProps) {
 const VENDOR_CUR: Record<string, string> = {
   ducats: "ducats",
   aya: "aya",
+  regal_aya: "regal aya",
   steel_essence: "essence",
 };
 
@@ -1201,7 +1202,7 @@ function VendorPicksWidget({ w, h, focused, onOpen }: WidgetProps) {
       .flatMap((p) =>
         p.rows
           .filter((r) => !r.checked && (r.median_plat ?? 0) > 0)
-          .map((r) => ({ ...r, vendor: p.name, currency: p.currency })),
+          .map((r) => ({ ...r, vendor: p.name })),
       )
       .sort(
         (a, b) =>

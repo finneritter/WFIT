@@ -137,7 +137,9 @@ pub struct Worldstate {
     pub fissures: Vec<Fissure>,
     /// Baro Ki'Teer — `Trader` carries the inventory too (empty until active).
     pub baro: Option<Trader>,
-    /// Varzia (prime resurgence) — inventory prices are AYA in `ducats`.
+    /// Varzia (prime resurgence) — two currencies per stock list: `ducats` holds
+    /// the REGAL AYA price (DE `PrimePrice`), `credits` holds the AYA price
+    /// (DE `RegularPrice`); each item has exactly one. See `VendorItem`.
     pub varzia: Option<Trader>,
     pub sortie: Option<Sortie>,
     /// The weekly archon hunt — same shape as the sortie (no modifiers).

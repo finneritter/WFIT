@@ -1026,7 +1026,7 @@ pub async fn get_vendor_board(state: State<'_, Arc<AppState>>) -> AppResult<Vec<
             active: t.active,
             activation: t.activation.clone(),
             expiry: t.expiry.clone(),
-            rows: vendor::enrich(&state.db, "baro", &t.inventory)?,
+            rows: vendor::enrich(&state.db, "baro", &t.inventory, "ducats")?,
         });
     }
     if let Some(t) = &ws.varzia {
@@ -1039,7 +1039,7 @@ pub async fn get_vendor_board(state: State<'_, Arc<AppState>>) -> AppResult<Vec<
             active: t.active,
             activation: t.activation.clone(),
             expiry: t.expiry.clone(),
-            rows: vendor::enrich(&state.db, "varzia", &t.inventory)?,
+            rows: vendor::enrich(&state.db, "varzia", &t.inventory, "aya")?,
         });
     }
     if let Some(sp) = &ws.steel_path {
@@ -1065,7 +1065,7 @@ pub async fn get_vendor_board(state: State<'_, Arc<AppState>>) -> AppResult<Vec<
             active: true,
             activation: sp.activation.clone(),
             expiry: sp.expiry.clone(),
-            rows: vendor::enrich(&state.db, "steel_path", &items)?,
+            rows: vendor::enrich(&state.db, "steel_path", &items, "steel_essence")?,
         });
     }
 
