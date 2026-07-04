@@ -3,6 +3,13 @@
 All notable changes to WFIT are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] — 2026-07-04
+
+- Maintenance release — the first one delivered over the new auto-update
+  channel. If you're on v1.2.0 (Windows or AppImage), WFIT offers this
+  update itself: Settings › About › **Install v1.2.1**, or wait for the
+  daily check's notification. No functional changes.
+
 ## [1.2.0] — 2026-07-04 · auto-update
 
 - **The app updates itself now.** A daily background check (Settings ›
