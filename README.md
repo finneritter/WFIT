@@ -22,7 +22,8 @@ favor of **one binary + one local SQLite file**. No auth, no hosting, no deploy.
 > [open an issue](../../issues) when you hit one. Your data lives in one local SQLite file
 > (see [Layout](#layout)); nothing is uploaded anywhere.
 
-Grab the latest installer from **[Releases](../../releases/latest)**:
+Grab the latest installer from **[Releases](../../releases)** (top entry; betas are marked
+pre-release, so GitHub's `latest` alias only kicks in from the first stable release):
 
 | OS | File | Notes |
 |---|---|---|
