@@ -44,8 +44,16 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
+      # The bundle filenames embed the bare version (tag minus the "v"), so the
+      # release body's direct download links can be templated from it.
+      - name: Version from tag
+        id: ver
+        shell: bash
+        run: echo "num=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
       # Runs beforeBuildCommand (npm run build), cargo build --release, bundles,
       # and uploads every artifact to one draft release keyed by the tag.
+      # The body puts a direct-link download table front and center — the
+      # collapsed "Assets" widget alone is easy for non-developers to miss.
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -53,4 +61,19 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "WFIT ${{ github.ref_name }}"
           releaseDraft: true
-          releaseBody: "See CHANGELOG.md for what's new. Windows: the installer is unsigned; SmartScreen will warn (More info → Run anyway). Linux: the AppImage needs webkit2gtk-4.1."
+          releaseBody: |
+            ## ⬇️ Downloads
+
+            | Platform | Download | Notes |
+            |---|---|---|
+            | **Windows 10/11** | [WFIT_${{ steps.ver.outputs.num }}_x64-setup.exe](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/WFIT_${{ steps.ver.outputs.num }}_x64-setup.exe) | Recommended. Unsigned for now — SmartScreen will warn: click **More info → Run anyway**. |
+            | Windows (MSI) | [WFIT_${{ steps.ver.outputs.num }}_x64_en-US.msi](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/WFIT_${{ steps.ver.outputs.num }}_x64_en-US.msi) | Alternative installer. |
+            | **Linux — any distro** | [WFIT_${{ steps.ver.outputs.num }}_amd64.AppImage](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/WFIT_${{ steps.ver.outputs.num }}_amd64.AppImage) | `chmod +x` and run. Needs `webkit2gtk-4.1`. |
+            | Debian / Ubuntu | [WFIT_${{ steps.ver.outputs.num }}_amd64.deb](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/WFIT_${{ steps.ver.outputs.num }}_amd64.deb) | `sudo apt install ./WFIT_${{ steps.ver.outputs.num }}_amd64.deb` |
+            | Fedora / RHEL | [WFIT-${{ steps.ver.outputs.num }}-1.x86_64.rpm](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/WFIT-${{ steps.ver.outputs.num }}-1.x86_64.rpm) | `sudo dnf install ./WFIT-${{ steps.ver.outputs.num }}-1.x86_64.rpm` |
+
+            macOS: no prebuilt bundle — build from source on a Mac (`npm run tauri build`).
+
+            ## What's new
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md).
