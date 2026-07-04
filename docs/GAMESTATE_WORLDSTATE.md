@@ -113,6 +113,26 @@ hunt, Steel Path weekly, reset timers) · **Fissures** (the original UI, unchang
   fixed UTC rules (daily 00:00, weekly Mon 00:00, sortie 16:00) plus the data expiries
   (archon/Teshin/Baro/Varzia). Observed live: archon hunt + Teshin expire Monday 00:00 UTC.
 
+### Wave-2 vendors (2026-07-04)
+
+- **Duviri Circuit (Incarnons)** — DE raw `EndlessXpSchedule` (renamed from the old
+  `EndlessXpChoices`; parsed in `worldstate/raw.rs::circuit_week`): an array of weekly windows
+  (`Activation`/`Expiry` = Mon 00:00 UTC resets), each with `CategoryChoices` — `EXC_HARD` = the
+  Steel Path track's 5 Incarnon Genesis weapons (plain names, "Braton"), `EXC_NORMAL` = the
+  warframe track. Pick the window covering *now*, fall back to the last. DE-only: warframestat's
+  `duviriCycle.choices` rides the 2h mood cycle, not the weekly window, so `Worldstate.circuit`
+  carries the last-known week forward when DE is down (stale ≈ correct until the weekly reset).
+  Panel rows are `"<weapon> Incarnon Genesis"` — account-bound, so untracked on warframe.market:
+  no price/cost, manual check-off only (which persists across the 8-week rotation — the point).
+- **Nightwave cred shop (Nora)** — no API exposes the shop stock (DE `SeasonInfo` and
+  warframestat's `nightwave` carry challenges only), so rows come from a bundled dataset:
+  `domain/data/nightwave_offerings.tsv` (`domain::nightwave::OFFERINGS`) — the stable cross-season
+  core per wiki.warframe.com/w/Nightwave/Offerings (5x Nitain 15 · 10k Kuva 50 · built
+  Catalyst/Reactor 75 · Vauban parts 25 · the 19-aura pool 20 · 9 melee blueprints 50). Aura names
+  match warframe.market display names exactly → live prices; the rest pass through untradeable.
+  Panel shows while a season is active; expiry = season end. Per-volume cosmetics are omitted —
+  update the TSV if the stable catalog changes between seasons.
+
 ---
 
 ## 1. Two ways to get worldstate (use the parsed one)

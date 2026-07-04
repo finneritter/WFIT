@@ -176,11 +176,16 @@ Beyond the world-state clocks it answers "what should I go get right now?":
 The old Rotation "Vendors" tab is now its **own top-level screen**: a horizontally-scrolling board
 of vendor **columns** (`get_vendor_board` → `Vec<VendorPanel>`), one per rotating vendor, each with a
 live countdown header and a check-off spreadsheet of stock.
-- **Vendors (Wave 1, fully live from worldstate):** **Baro Ki'Teer** (ducats), **Varzia** (aya),
-  **Teshin / Steel Path Honors** (steel essence — this week's featured pick + the permanent
-  `evergreens` shop). Each panel: `{key, name, currency, active, activation, expiry, rows}`. Adding a
-  vendor = one more panel producer in `commands::get_vendor_board`, no UI change (Wave-2 sources that
-  need a bundled/derived dataset — Duviri Circuit, Nightwave Cred — slot in the same way).
+- **Vendors (Wave 1, fully live from worldstate):** **Baro Ki'Teer** (ducats), **Varzia** (aya +
+  regal aya, per-row), **Teshin / Steel Path Honors** (steel essence — this week's featured pick +
+  the permanent `evergreens` shop). Each panel: `{key, name, currency, active, activation, expiry,
+  rows}`. Adding a vendor = one more panel producer in `commands::get_vendor_board`, no UI change.
+- **Vendors (Wave 2, added 2026-07-04):** **The Circuit · Incarnons** (this week's 5 Steel Path
+  Incarnon Genesis choices, live from DE raw `EndlessXpSchedule` → `Worldstate.circuit`; account-
+  bound so no prices — manual check-off persists across the 8-week rotation) and **Nora · Cred
+  Offerings** (bundled stable catalog `domain/data/nightwave_offerings.tsv` — no API exposes the
+  shop; the 19-aura pool resolves to live market prices, staples pass through untradeable; panel
+  rides the active season's end). Details: `docs/GAMESTATE_WORLDSTATE.md` §Wave-2.
 - **Enrichment** (`db/vendor.rs::enrich(vendor_key, items)`): pure DB-side cross-join. Resolves each
   line to a market slug via **`game_ref` (DE `uniqueName`, exact)** first, then falls back to
   `catalog::normalize_name` fuzzy matching. Attaches market value, owned qty, cost-per-plat, the

@@ -1,0 +1,39 @@
+# Nightwave cred-shop catalog (name<TAB>cred cost). The API exposes no shop
+# stock, so this is a bundled dataset of the stable cross-season offerings
+# (wiki.warframe.com/w/Nightwave/Offerings, verified 2026-07-04). Seasonal
+# cosmetics (skins/armor/decorations) rotate per volume and are omitted.
+5x Nitain Extract	15
+10,000x Kuva	50
+Orokin Catalyst (Built)	75
+Orokin Reactor (Built)	75
+Vauban Chassis Blueprint	25
+Vauban Neuroptics Blueprint	25
+Vauban Systems Blueprint	25
+Corrosive Projection	20
+Dead Eye	20
+Dreamer's Bond	20
+EMP Aura	20
+Enemy Radar	20
+Energy Siphon	20
+Holster Amp	20
+Infested Impedance	20
+Loot Detector	20
+Physique	20
+Pistol Scavenger	20
+Rejuvenation	20
+Rifle Amp	20
+Rifle Scavenger	20
+Shield Disruption	20
+Shotgun Scavenger	20
+Sniper Scavenger	20
+Sprint Boost	20
+Steel Charge	20
+Ceramic Dagger Blueprint	50
+Dark Dagger Blueprint	50
+Dark Sword Blueprint	50
+Glaive Blueprint	50
+Heat Dagger Blueprint	50
+Heat Sword Blueprint	50
+Jaw Sword Blueprint	50
+Pangolin Sword Blueprint	50
+Plasma Sword Blueprint	50

@@ -16,6 +16,9 @@ const CURRENCY: Record<string, { cls: string; label: string; unit: string }> = {
   aya: { cls: "aya", label: "Aya", unit: "aya" },
   regal_aya: { cls: "regal", label: "Regal Aya", unit: "regal" },
   steel_essence: { cls: "essence", label: "Essence", unit: "ess" },
+  cred: { cls: "cred", label: "Creds", unit: "cr" },
+  // "none" (the Circuit — earned, not bought) is deliberately unmapped:
+  // no cost cell, no "pays X" header line.
 };
 
 /** Distinct row currencies, stable order (aya before regal). Falls back to the

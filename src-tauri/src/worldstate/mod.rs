@@ -131,6 +131,20 @@ pub fn cascade_status(fissures: &[Fissure]) -> CascadeStatus {
     }
 }
 
+/// One week of the Duviri Circuit (DE raw `EndlessXpSchedule`): the Steel Path
+/// track's Incarnon Genesis choices + the normal track's warframe choices.
+/// The window is the weekly reset (Mon 00:00 UTC → Mon 00:00 UTC).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CircuitWeek {
+    pub activation: Option<String>, // ISO — week start
+    pub expiry: Option<String>,     // ISO — next weekly reset
+    /// EXC_HARD choices — plain weapon names ("Braton"); the reward is that
+    /// weapon's Incarnon Genesis adapter.
+    pub incarnons: Vec<String>,
+    /// EXC_NORMAL choices — warframe names ("Excalibur").
+    pub frames: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Worldstate {
     pub cycles: Vec<Cycle>,
@@ -145,6 +159,10 @@ pub struct Worldstate {
     /// The weekly archon hunt — same shape as the sortie (no modifiers).
     pub archon_hunt: Option<Sortie>,
     pub steel_path: Option<SteelPath>,
+    /// This week's Duviri Circuit choices (DE raw only — warframestat's copy
+    /// rides the 2h mood cycle, not the weekly window). Carried forward from
+    /// the last successful DE fetch when DE is unreachable.
+    pub circuit: Option<CircuitWeek>,
     /// Active Nightwave season: challenges + season end (no player standing —
     /// that's account data the worldstate doesn't carry).
     pub nightwave: Option<Nightwave>,
@@ -351,6 +369,7 @@ impl WorldstateClient {
                 de.sortie.clone(),
                 de.archon_hunt.clone(),
                 de.invasions.clone(),
+                de.circuit.clone(),
             ));
         }
         let mut ws = match (ws, de) {
@@ -376,6 +395,7 @@ impl WorldstateClient {
                     varzia: prev.as_ref().and_then(|p| p.varzia.clone()),
                     sortie: prev.as_ref().and_then(|p| p.sortie.clone()),
                     archon_hunt: prev.as_ref().and_then(|p| p.archon_hunt.clone()),
+                    circuit: None, // filled from de_extras below
                     nightwave: prev.as_ref().and_then(|p| p.nightwave.clone()),
                     invasions: prev
                         .as_ref()
@@ -401,7 +421,7 @@ impl WorldstateClient {
         // those panels survive wrapper outages. warframestat wins when present
         // (friendlier modifier descriptions); DE only plugs the gaps. There is
         // no DE equivalent for Nightwave (challenge names live client-side).
-        if let Some((de_sortie, de_archon, de_invasions)) = de_extras {
+        if let Some((de_sortie, de_archon, de_invasions, de_circuit)) = de_extras {
             if ws.sortie.is_none() {
                 ws.sortie = de_sortie;
             }
@@ -411,6 +431,16 @@ impl WorldstateClient {
             if ws.invasions.is_empty() {
                 ws.invasions = de_invasions;
             }
+            ws.circuit = de_circuit; // DE-only block — warframestat never fills it
+        }
+        // Circuit data only comes from DE; when DE is down keep the last-known
+        // week (it only changes at the weekly reset, so stale ≈ correct).
+        if ws.circuit.is_none() {
+            ws.circuit = self
+                .cache
+                .lock()
+                .as_ref()
+                .and_then(|(_, w)| w.circuit.clone());
         }
         // Cycles are deterministic clocks — once we have a bounty anchor from
         // DE, derive them locally rather than trusting warframestat's snapshot
@@ -477,6 +507,7 @@ impl WorldstateClient {
             sortie: extra::sortie_from(raw.sortie),
             archon_hunt: extra::sortie_from(raw.archon_hunt),
             steel_path: extra::steel_path_from(raw.steel_path),
+            circuit: None, // DE-only; attached in fetch()
             nightwave: extra::nightwave_from(raw.nightwave),
             invasions: extra::invasions_from(raw.invasions),
             arbitration: None, // attached in fetch()

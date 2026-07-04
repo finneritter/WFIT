@@ -39,8 +39,11 @@ cheap-item exclusion. The app now has **16 screens** (Dashboard, Market, Relics,
   **World cycles are derived locally** (`worldstate/cycles.rs`: DE bounty-window anchor + deterministic
   clocks), not taken from warframestat. A 3-min backend refresher keeps it fresh even while
   the webview throttles. Fissures are grouped Normal / Steel Path / Void Storm. The screen is tabbed
-  (Overview · Fissures · Crack · Vendors): the **Crack** tab lists owned relics that drop a wanted
-  item (watch/buy list + sets within 2 parts of done), split crackable-now vs waiting-on-a-fissure.
+  (Overview · Fissures). The **Crack** planner (owned relics that drop a wanted item, split
+  crackable-now vs waiting-on-a-fissure) lives in the Relics screen; vendors live in the standalone
+  **Vendors** board (Baro · Varzia · Teshin, plus Wave-2: the Duviri **Circuit** Incarnon week from
+  DE raw `EndlessXpSchedule`, and **Nora's cred shop** from a bundled dataset —
+  `domain/data/nightwave_offerings.tsv`).
 - **`docs/ARCANE_DISSOLUTION.md`** — the Arcanes screen's domain reference (Loid Vosfor collections,
   drop tables, per-arcane Vosfor, the collection-EV + keep/dissolve methodology). Bundled dataset.
 - **`docs/PERF_OPTIMIZATION.md`** — the backend perf pass (read pool, batched valuation, pragmas).

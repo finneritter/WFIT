@@ -13,7 +13,7 @@
 //! than dropping the row — new content stays visible, just less pretty.
 
 use super::extra::{Invasion, Sortie, SortieMission};
-use super::Fissure;
+use super::{CircuitWeek, Fissure};
 use crate::error::AppResult;
 use once_cell::sync::Lazy;
 use reqwest::Client;
@@ -373,6 +373,54 @@ struct RawWorld {
     lite_sorties: Vec<RawLiteSortie>,
     #[serde(default, rename = "Invasions")]
     invasions: Vec<RawDeInvasion>,
+    // Duviri Circuit weekly choices (was `EndlessXpChoices` — DE renamed it to a
+    // windowed schedule; entries carry Activation/Expiry).
+    #[serde(default, rename = "EndlessXpSchedule")]
+    endless_xp_schedule: Vec<RawXpWeek>,
+}
+
+#[derive(Deserialize)]
+struct RawXpWeek {
+    #[serde(rename = "Activation")]
+    activation: Option<RawDate>,
+    #[serde(rename = "Expiry")]
+    expiry: Option<RawDate>,
+    #[serde(default, rename = "CategoryChoices")]
+    category_choices: Vec<RawXpCategory>,
+}
+
+#[derive(Deserialize)]
+struct RawXpCategory {
+    #[serde(rename = "Category")]
+    category: Option<String>,
+    #[serde(default, rename = "Choices")]
+    choices: Vec<String>,
+}
+
+/// Pick the schedule entry covering `now_ms` (falling back to the last one —
+/// DE has been seen serving only the current week) and decode it. EXC_HARD =
+/// the Steel Path track (Incarnon Genesis rewards), EXC_NORMAL = warframes.
+fn circuit_week(entries: Vec<RawXpWeek>, now_ms: i64) -> Option<CircuitWeek> {
+    let ms = |d: &Option<RawDate>| d.as_ref().and_then(|d| d.date.ms.parse::<i64>().ok());
+    let pos = entries
+        .iter()
+        .position(|e| ms(&e.expiry).map_or(true, |end| end > now_ms))
+        .unwrap_or(entries.len().checked_sub(1)?);
+    let e = entries.into_iter().nth(pos)?;
+    let mut week = CircuitWeek {
+        activation: to_iso(&e.activation),
+        expiry: to_iso(&e.expiry),
+        incarnons: Vec::new(),
+        frames: Vec::new(),
+    };
+    for c in e.category_choices {
+        match c.category.as_deref() {
+            Some("EXC_HARD") => week.incarnons = c.choices,
+            Some("EXC_NORMAL") => week.frames = c.choices,
+            _ => {}
+        }
+    }
+    (!week.incarnons.is_empty() || !week.frames.is_empty()).then_some(week)
 }
 
 #[derive(Deserialize)]
@@ -499,6 +547,9 @@ pub struct DeWorld {
     pub sortie: Option<Sortie>,
     pub archon_hunt: Option<Sortie>,
     pub invasions: Vec<Invasion>,
+    /// This week's Duviri Circuit choices (`EndlessXpSchedule`) — DE is the
+    /// only source; warframestat exposes them on the 2h mood cycle instead.
+    pub circuit: Option<CircuitWeek>,
 }
 
 /// Warn once when `empty` flips true (and re-arm when it heals) — every section
@@ -651,6 +702,11 @@ fn parse(raw: RawWorld) -> DeWorld {
         })
         .collect();
 
+    let circuit = circuit_week(
+        raw.endless_xp_schedule,
+        chrono::Utc::now().timestamp_millis(),
+    );
+
     DeWorld {
         time: raw.time,
         fissures,
@@ -658,6 +714,7 @@ fn parse(raw: RawWorld) -> DeWorld {
         sortie,
         archon_hunt,
         invasions,
+        circuit,
     }
 }
 
@@ -744,6 +801,41 @@ mod tests {
     }
 
     #[test]
+    fn circuit_week_picks_the_window_covering_now() {
+        let json = r#"[
+            {
+                "Activation": {"$date": {"$numberLong": "1000000000000"}},
+                "Expiry": {"$date": {"$numberLong": "1000600000000"}},
+                "CategoryChoices": [
+                    {"Category": "EXC_NORMAL", "Choices": ["Loki"]},
+                    {"Category": "EXC_HARD", "Choices": ["Boar", "Gammacor"]}
+                ]
+            },
+            {
+                "Activation": {"$date": {"$numberLong": "1000600000000"}},
+                "Expiry": {"$date": {"$numberLong": "1001200000000"}},
+                "CategoryChoices": [
+                    {"Category": "EXC_HARD", "Choices": ["Braton", "Lato"]}
+                ]
+            }
+        ]"#;
+        let entries: Vec<RawXpWeek> = serde_json::from_str(json).unwrap();
+        // Now inside the SECOND window → its choices win.
+        let w = circuit_week(entries, 1000700000000).expect("week");
+        assert_eq!(w.incarnons, vec!["Braton", "Lato"]);
+        assert!(w.frames.is_empty());
+        assert_eq!(w.expiry.as_deref(), Some("2001-09-22T23:06:40+00:00"));
+
+        // All windows expired → degrade to the last entry (stale ≈ correct
+        // until the next fetch), never None.
+        let entries: Vec<RawXpWeek> = serde_json::from_str(json).unwrap();
+        let w = circuit_week(entries, 2000000000000).expect("fallback week");
+        assert_eq!(w.incarnons, vec!["Braton", "Lato"]);
+
+        assert!(circuit_week(Vec::new(), 0).is_none());
+    }
+
+    #[test]
     fn node_map_loads() {
         assert!(NODES.len() > 400, "sol_nodes.tsv should be ~450 rows");
         assert_eq!(
@@ -789,6 +881,12 @@ mod tests {
                     for m in &a.missions {
                         println!("    {} {}", m.mission_type, m.node);
                     }
+                }
+                if let Some(c) = &de.circuit {
+                    println!(
+                        "  circuit: incarnons={:?} frames={:?} expiry={:?}",
+                        c.incarnons, c.frames, c.expiry
+                    );
                 }
                 println!("  invasions = {}", de.invasions.len());
                 for i in de.invasions.iter().take(4) {

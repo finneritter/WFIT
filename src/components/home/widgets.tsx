@@ -1186,6 +1186,7 @@ const VENDOR_CUR: Record<string, string> = {
   aya: "aya",
   regal_aya: "regal aya",
   steel_essence: "essence",
+  cred: "creds",
 };
 
 function VendorPicksWidget({ w, h, focused, onOpen }: WidgetProps) {

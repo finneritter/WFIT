@@ -125,6 +125,7 @@
   --aya: #6fb3c9;
   --regal: #d68a96; /* Regal Aya — real-money currency, deliberately reads warm/alien */
   --essence: #b08fd6;
+  --cred: #c0c7ce; /* Nightwave creds — silvery, matches the in-game coin */
   /* arbitration grade ramp — S gold, A green, B yellow, C blue, D orange, F red */
   --g-s: #d6b748;
   --g-a: #5fc27e;
@@ -7456,6 +7457,9 @@ button.hw-nav:hover {
 .vcell .vcost.essence {
   color: var(--essence);
 }
+.vcell .vcost.cred {
+  color: var(--cred);
+}
 /* per-cell currency unit — only rendered in mixed-currency columns (Varzia) */
 .vcell .vcost .vunit {
   margin-left: 4px;
@@ -7558,6 +7562,9 @@ button.hw-nav:hover {
 }
 .vfoot .fcost.essence {
   color: var(--essence);
+}
+.vfoot .fcost.cred {
+  color: var(--cred);
 }
 .vfoot .fpart {
   display: inline-flex;

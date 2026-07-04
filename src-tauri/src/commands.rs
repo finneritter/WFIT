@@ -1068,6 +1068,63 @@ pub async fn get_vendor_board(state: State<'_, Arc<AppState>>) -> AppResult<Vec<
             rows: vendor::enrich(&state.db, "steel_path", &items, "steel_essence")?,
         });
     }
+    // The Circuit (Duviri, Steel Path track): this week's Incarnon Genesis
+    // choices, live from DE's `EndlessXpSchedule`. There is no purchase — you
+    // earn the chosen adapter at tier 10 — and adapters are account-bound, so
+    // rows carry no cost/price and exist for their check-off state, which
+    // persists across the rotation (the point: track which of the pool you
+    // still need as the weeks cycle).
+    if let Some(cw) = &ws.circuit {
+        if !cw.incarnons.is_empty() {
+            let items: Vec<crate::worldstate::VendorItem> = cw
+                .incarnons
+                .iter()
+                .map(|w| crate::worldstate::VendorItem {
+                    item: format!("{w} Incarnon Genesis"),
+                    unique_name: None,
+                    ducats: None,
+                    credits: None,
+                })
+                .collect();
+            panels.push(VendorPanel {
+                key: "circuit".into(),
+                name: "The Circuit · Incarnons".into(),
+                character: Some("Teshin".into()),
+                location: Some("Duviri (Steel Path)".into()),
+                currency: "none".into(), // earned, not bought — no cost column
+                active: true,
+                activation: cw.activation.clone(),
+                expiry: cw.expiry.clone(),
+                rows: vendor::enrich(&state.db, "circuit", &items, "none")?,
+            });
+        }
+    }
+    // Nora's cred shop. No API exposes the stock, so rows come from the bundled
+    // stable catalog (domain::nightwave); the aura pool resolves to live market
+    // prices, the account-bound staples pass through manual-check only. The
+    // panel rides the active season's end date.
+    if let Some(nw) = &ws.nightwave {
+        let items: Vec<crate::worldstate::VendorItem> = crate::domain::nightwave::OFFERINGS
+            .iter()
+            .map(|o| crate::worldstate::VendorItem {
+                item: o.name.to_string(),
+                unique_name: None,
+                ducats: Some(o.cost),
+                credits: None,
+            })
+            .collect();
+        panels.push(VendorPanel {
+            key: "nightwave".into(),
+            name: "Nora · Cred Offerings".into(),
+            character: Some("Nora Night".into()),
+            location: Some("Nightwave".into()),
+            currency: "cred".into(),
+            active: true,
+            activation: None,
+            expiry: nw.expiry.clone(),
+            rows: vendor::enrich(&state.db, "nightwave", &items, "cred")?,
+        });
+    }
 
     Ok(panels)
 }

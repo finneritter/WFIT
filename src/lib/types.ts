@@ -758,6 +758,14 @@ export interface CascadeStatus {
   omnia_reset: string | null; // RFC3339 — "time till reset" when inactive
 }
 
+/** One week of the Duviri Circuit (mirrors worldstate::CircuitWeek). */
+export interface CircuitWeek {
+  activation: string | null; // ISO — week start
+  expiry: string | null; // ISO — next weekly reset
+  incarnons: string[]; // EXC_HARD choices — plain weapon names ("Braton")
+  frames: string[]; // EXC_NORMAL choices — warframe names
+}
+
 export interface Worldstate {
   cycles: Cycle[];
   fissures: Fissure[];
@@ -766,6 +774,7 @@ export interface Worldstate {
   sortie: Sortie | null;
   archon_hunt: Sortie | null;
   steel_path: SteelPath | null;
+  circuit: CircuitWeek | null; // DE-only; carried forward when DE is down
   nightwave: Nightwave | null;
   invasions: Invasion[];
   arbitration: ArbitrationBlock | null;
