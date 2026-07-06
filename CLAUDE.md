@@ -39,8 +39,11 @@ cheap-item exclusion. The app now has **16 screens** (Dashboard, Market, Relics,
   **World cycles are derived locally** (`worldstate/cycles.rs`: DE bounty-window anchor + deterministic
   clocks), not taken from warframestat. A 3-min backend refresher keeps it fresh even while
   the webview throttles. Fissures are grouped Normal / Steel Path / Void Storm. The screen is tabbed
-  (Overview · Fissures). The **Crack** planner (owned relics that drop a wanted item, split
-  crackable-now vs waiting-on-a-fissure) lives in the Relics screen; vendors live in the standalone
+  (Overview · Fissures). The **Relics** screen is a full-catalog spreadsheet browser (every known
+  relic, owned or not; squad-aware best-of-N drop EV + ducat EV via `domain/relic.rs::squad_ev`;
+  burn-order default sort with set/wanted/crackable-now signals from `wanted::crack_signals`;
+  vaulted + protected/do-not-burn flags; row click → `RelicDrawer` with per-refinement EV/ROI and
+  per-drop ownership — see `db/relics.rs::browser_rows`/`detail`); vendors live in the standalone
   **Vendors** board (Baro · Varzia · Teshin, plus Wave-2: the Duviri **Circuit** Incarnon week from
   DE raw `EndlessXpSchedule`, and **Nora's cred shop** from a bundled dataset —
   `domain/data/nightwave_offerings.tsv`).

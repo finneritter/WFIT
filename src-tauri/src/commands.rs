@@ -1242,34 +1242,6 @@ pub async fn get_wanted_now(state: State<'_, Arc<AppState>>) -> AppResult<Vec<Wa
 // ===========================================================================
 
 #[tauri::command]
-pub fn get_relics(state: State<'_, Arc<AppState>>) -> AppResult<Vec<RelicRow>> {
-    relics::owned_relics(&state.db)
-}
-
-/// Every known relic (tier + name), for the manual-add picker. Static reference data.
-#[tauri::command]
-pub fn list_relic_choices() -> Vec<RelicChoice> {
-    relics::list_choices()
-}
-
-#[tauri::command]
-pub fn add_relic(
-    state: State<'_, Arc<AppState>>,
-    tier: String,
-    name: String,
-    refinement: Option<String>,
-    qty: Option<i64>,
-) -> AppResult<()> {
-    relics::add(
-        &state.db,
-        &tier,
-        &name,
-        refinement.as_deref(),
-        qty.unwrap_or(1),
-    )
-}
-
-#[tauri::command]
 pub fn set_relic_qty(
     state: State<'_, Arc<AppState>>,
     tier: String,
@@ -1280,26 +1252,57 @@ pub fn set_relic_qty(
     relics::set_qty(&state.db, &tier, &name, refinement.as_deref(), qty)
 }
 
-#[tauri::command]
-pub fn remove_relic(
-    state: State<'_, Arc<AppState>>,
-    tier: String,
-    name: String,
-    refinement: Option<String>,
-) -> AppResult<()> {
-    relics::remove(&state.db, &tier, &name, refinement.as_deref())
+/// Live fissure tiers for crack-now flags. Soft-fails to empty — the relic browser
+/// must render offline (unlike the old crack plan, this backs the whole screen).
+async fn live_fissure_tiers(state: &AppState) -> std::collections::HashSet<String> {
+    match state.worldstate.get().await {
+        Ok(ws) => ws.fissures.iter().map(|f| f.tier.clone()).collect(),
+        Err(_) => std::collections::HashSet::new(),
+    }
 }
 
-/// Owned relics worth cracking next, ranked by a combined priority (completes a
-/// near-complete set → drops a watch/buy-list item → drops a vaulted part →
-/// crackable now → EV). Powers the Relics screen "To crack" tab.
+/// Every known relic — owned or not — with squad-aware drop EV, ducat EV, burn
+/// signals, ownership stacks, and the protected flag. Powers the Relics browser.
 #[tauri::command]
-pub async fn get_crack_plan(state: State<'_, Arc<AppState>>) -> AppResult<Vec<CrackPlanRow>> {
-    let ws = state.worldstate.get().await?;
-    let live_tiers: std::collections::HashSet<String> =
-        ws.fissures.iter().map(|f| f.tier.clone()).collect();
+pub async fn get_relic_browser(
+    state: State<'_, Arc<AppState>>,
+    squad_size: u32,
+) -> AppResult<Vec<RelicBrowserRow>> {
+    let live_tiers = live_fissure_tiers(&state).await;
     let signals = wanted::crack_signals(&state.db)?;
-    relics::crack_plan(&state.db, &live_tiers, &signals)
+    relics::browser_rows(&state.db, &live_tiers, &signals, squad_size)
+}
+
+/// Per-refinement economics + full drop table for one relic (the relic drawer).
+#[tauri::command]
+pub fn get_relic_detail(
+    state: State<'_, Arc<AppState>>,
+    tier: String,
+    relic_name: String,
+    squad_size: u32,
+) -> AppResult<RelicDetail> {
+    let signals = wanted::crack_signals(&state.db)?;
+    relics::detail(&state.db, &tier, &relic_name, &signals, squad_size)
+}
+
+/// Flip a relic's do-not-burn flag.
+#[tauri::command]
+pub fn set_relic_protected(
+    state: State<'_, Arc<AppState>>,
+    tier: String,
+    relic_name: String,
+    protected: bool,
+) -> AppResult<()> {
+    relics::set_protected(&state.db, &tier, &relic_name, protected)
+}
+
+/// Relics that drop an item — the item Drawer's reverse lookup.
+#[tauri::command]
+pub fn get_relic_sources(
+    state: State<'_, Arc<AppState>>,
+    slug: String,
+) -> AppResult<Vec<RelicSourceRow>> {
+    relics::sources_for(&state.db, &slug)
 }
 
 // ===========================================================================

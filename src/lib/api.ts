@@ -12,7 +12,6 @@ import type {
   CascadeStatus,
   CatalogRow,
   CodexData,
-  CrackPlanRow,
   DucatRow,
   GameDataUpdate,
   GameScanStatus,
@@ -27,8 +26,9 @@ import type {
   OverlayPrefs,
   PricingProgress,
   RecommendationRow,
-  RelicChoice,
-  RelicRow,
+  RelicBrowserRow,
+  RelicDetail,
+  RelicSourceRow,
   RepriceApply,
   RepriceRow,
   ResourceRow,
@@ -191,16 +191,17 @@ export const clearVendorChecks = (vendorKey: string) =>
 // Wanted items (watchlist + missing set parts) farmable from a live reward source.
 export const getWantedNow = () => invoke<WantedNowRow[]>("get_wanted_now");
 
-// relics (owned void relics — drop-EV valued)
-export const getRelics = () => invoke<RelicRow[]>("get_relics");
-export const listRelicChoices = () => invoke<RelicChoice[]>("list_relic_choices");
-export const addRelic = (tier: string, name: string, refinement?: string, qty?: number) =>
-  invoke<void>("add_relic", { tier, name, refinement: refinement ?? null, qty: qty ?? null });
+// relics (full-catalog browser — drop-EV valued, squad-aware)
+export const getRelicBrowser = (squadSize: number) =>
+  invoke<RelicBrowserRow[]>("get_relic_browser", { squadSize });
+export const getRelicDetail = (tier: string, relicName: string, squadSize: number) =>
+  invoke<RelicDetail>("get_relic_detail", { tier, relicName, squadSize });
+export const setRelicProtected = (tier: string, relicName: string, protected_: boolean) =>
+  invoke<void>("set_relic_protected", { tier, relicName, protected: protected_ });
+export const getRelicSources = (slug: string) =>
+  invoke<RelicSourceRow[]>("get_relic_sources", { slug });
 export const setRelicQty = (tier: string, name: string, refinement: string | null, qty: number) =>
   invoke<void>("set_relic_qty", { tier, name, refinement, qty });
-export const removeRelic = (tier: string, name: string, refinement: string | null) =>
-  invoke<void>("remove_relic", { tier, name, refinement });
-export const getCrackPlan = () => invoke<CrackPlanRow[]>("get_crack_plan");
 export const importScannedRelics = () => invoke<number>("import_scanned_relics");
 
 // wfm account

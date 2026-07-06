@@ -53,9 +53,10 @@ export const keys = {
   worldstate: ["worldstate"] as const,
   vendorBoard: ["vendorBoard"] as const,
   wantedNow: ["wantedNow"] as const,
-  relics: ["relics"] as const,
-  relicChoices: ["relicChoices"] as const,
-  crackPlan: ["crackPlan"] as const,
+  relicBrowser: (squad: number) => ["relicBrowser", squad] as const,
+  relicDetail: (tier: string, name: string, squad: number) =>
+    ["relicDetail", tier, name, squad] as const,
+  relicSources: (slug: string) => ["relicSources", slug] as const,
   pricingProgress: ["pricingProgress"] as const,
   wfmAccount: ["wfmAccount"] as const,
   listings: ["listings"] as const,
@@ -236,34 +237,33 @@ export const useWantedNow = () =>
   });
 
 // ---- relics ----
-export const useRelics = () => useQuery({ queryKey: keys.relics, queryFn: api.getRelics });
-// Static reference list (all known relics) — cached long for the add picker.
-export const useRelicChoices = () =>
+// The full-catalog relic browser — refreshes on the crack-now cadence (live
+// fissures flip crackable_now) and on any relic mutation via invalidateRelics.
+export const useRelicBrowser = (squad: number) =>
   useQuery({
-    queryKey: keys.relicChoices,
-    queryFn: api.listRelicChoices,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-// The Relics "To crack" ranking — refreshes on the same cadence as crack-now (live
-// fissures flip crackable_now), and on any relic mutation via invalidateRelics.
-export const useCrackPlan = () =>
-  useQuery({
-    queryKey: keys.crackPlan,
-    queryFn: api.getCrackPlan,
+    queryKey: keys.relicBrowser(squad),
+    queryFn: () => api.getRelicBrowser(squad),
     refetchInterval: 60_000,
     refetchIntervalInBackground: true,
   });
-function invalidateRelics(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: keys.relics });
-  qc.invalidateQueries({ queryKey: keys.crackPlan });
-}
-export function useAddRelic() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (a: { tier: string; name: string; refinement?: string; qty?: number }) =>
-      api.addRelic(a.tier, a.name, a.refinement, a.qty),
-    onSuccess: () => invalidateRelics(qc),
+// The relic drawer's detail (per-refinement EV/ROI + drop table with ownership).
+export const useRelicDetail = (tier: string, name: string, squad: number) =>
+  useQuery({
+    queryKey: keys.relicDetail(tier, name, squad),
+    queryFn: () => api.getRelicDetail(tier, name, squad),
   });
+// Relics that drop an item — the item Drawer's reverse lookup (static per catalog
+// refresh, so cache long; ownership changes invalidate via invalidateRelics).
+export const useRelicSources = (slug: string) =>
+  useQuery({
+    queryKey: keys.relicSources(slug),
+    queryFn: () => api.getRelicSources(slug),
+    staleTime: 10 * 60_000,
+  });
+function invalidateRelics(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["relicBrowser"] });
+  qc.invalidateQueries({ queryKey: ["relicDetail"] });
+  qc.invalidateQueries({ queryKey: ["relicSources"] });
 }
 export function useSetRelicQty() {
   const qc = useQueryClient();
@@ -273,11 +273,11 @@ export function useSetRelicQty() {
     onSuccess: () => invalidateRelics(qc),
   });
 }
-export function useRemoveRelic() {
+export function useSetRelicProtected() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (a: { tier: string; name: string; refinement: string | null }) =>
-      api.removeRelic(a.tier, a.name, a.refinement),
+    mutationFn: (a: { tier: string; name: string; protected: boolean }) =>
+      api.setRelicProtected(a.tier, a.name, a.protected),
     onSuccess: () => invalidateRelics(qc),
   });
 }
@@ -550,6 +550,9 @@ export function useLivePriceEvents() {
       qc.invalidateQueries({ queryKey: ["itemSellers"], refetchType: "active" });
       qc.invalidateQueries({ queryKey: ["recommendedPrice"], refetchType: "active" });
       qc.invalidateQueries({ queryKey: ["collectionBreakdown"], refetchType: "active" });
+      // Relic EVs are derived from the same price caches; refresh what's on screen.
+      qc.invalidateQueries({ queryKey: ["relicBrowser"], refetchType: "active" });
+      qc.invalidateQueries({ queryKey: ["relicDetail"], refetchType: "active" });
     });
     return () => {
       un.then((f) => f());

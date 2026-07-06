@@ -123,9 +123,15 @@ impl RelicData {
             .filter(|v| v.vaulted)
             .map(|v| vault_key(&v.tier, &v.relic_name))
             .collect();
+        // Identity = ids ∪ drop tables: a relic can have a reward table without a
+        // projection id (2026's Requiem Eterna ships drops-only in WFCD data) and
+        // must still be known/browsable.
         let mut all: BTreeSet<(String, String)> = BTreeSet::new();
         for r in ids {
             all.insert((r.tier.clone(), r.relic_name.clone()));
+        }
+        for d in drops {
+            all.insert((d.tier.clone(), d.relic_name.clone()));
         }
         RelicData {
             by_unique,
@@ -234,6 +240,74 @@ pub fn all_relics() -> Vec<(String, String)> {
     current().all.clone()
 }
 
+// ---------------------------------------------------------------------------
+// Squad (radshare) math. `rewards` = (chance in percent, value) pairs from one
+// relic's reward table at one refinement. Chances may sum to less than 100
+// (the 2026 Requiem Eterna table sums to 76) — the residual mass is a 0-value
+// outcome. Values are whatever unit the caller prices in (plat, ducats).
+
+/// Expected value of the squad's best pick when `squad` players crack a copy of
+/// the same relic together and everyone claims the highest-value reveal.
+/// Order statistics on the per-roll value distribution: E[max] =
+/// Σᵢ vᵢ·(F(vᵢ)ᴺ − F(vᵢ₋₁)ᴺ) over distinct values ascending. `squad == 1` is
+/// exactly the linear EV Σ chance × value.
+pub fn squad_ev(rewards: &[(f64, i64)], squad: u32) -> f64 {
+    let n = squad.max(1) as i32;
+    // Collapse to a value → probability distribution (rewards can tie in value).
+    let mut mass: HashMap<i64, f64> = HashMap::new();
+    let mut total = 0.0;
+    for &(chance, value) in rewards {
+        let p = (chance / 100.0).max(0.0);
+        *mass.entry(value.max(0)).or_default() += p;
+        total += p;
+    }
+    if total <= 0.0 {
+        return 0.0;
+    }
+    // Residual (unlisted/short) probability mass reveals nothing of value.
+    if total < 1.0 {
+        *mass.entry(0).or_default() += 1.0 - total;
+    } else if total > 1.0 {
+        // Chances are data, not axioms — renormalize a table that oversums.
+        for p in mass.values_mut() {
+            *p /= total;
+        }
+    }
+    let mut values: Vec<i64> = mass.keys().copied().collect();
+    values.sort_unstable();
+    let mut ev = 0.0;
+    let mut cdf_prev = 0.0f64;
+    let mut cum = 0.0f64;
+    for v in values {
+        cum += mass[&v];
+        let cdf = cum.min(1.0);
+        ev += v as f64 * (cdf.powi(n) - cdf_prev.powi(n));
+        cdf_prev = cdf;
+    }
+    ev
+}
+
+/// Probability that at least one of `squad` same-relic rolls reveals a reward
+/// from the relic's rarest chance group (the rewards tied at the lowest listed
+/// chance — the single 2%/4%/6%/10% rare on a standard relic): 1 − (1−p)ᴺ.
+pub fn p_rare_at_least_one(rewards: &[(f64, i64)], squad: u32) -> f64 {
+    let Some(min_chance) = rewards
+        .iter()
+        .map(|&(c, _)| c)
+        .filter(|c| *c > 0.0)
+        .min_by(|a, b| a.total_cmp(b))
+    else {
+        return 0.0;
+    };
+    let p_rare: f64 = rewards
+        .iter()
+        .filter(|(c, _)| (c - min_chance).abs() < 1e-9)
+        .map(|(c, _)| c / 100.0)
+        .sum();
+    let p_rare = p_rare.clamp(0.0, 1.0);
+    1.0 - (1.0 - p_rare).powi(squad.max(1) as i32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,6 +353,82 @@ mod tests {
                 v.tier,
                 v.relic_name
             );
+        }
+    }
+
+    #[test]
+    fn squad_of_one_is_exactly_linear_ev() {
+        // Standard Intact table: 3 commons / 2 uncommons / 1 rare, per-item chances.
+        let rewards = [
+            (25.33, 3),
+            (25.33, 5),
+            (25.34, 0), // Forma-style unpriced common
+            (11.0, 12),
+            (11.0, 8),
+            (2.0, 90),
+        ];
+        let linear: f64 = rewards.iter().map(|&(c, v)| c / 100.0 * v as f64).sum();
+        assert!((squad_ev(&rewards, 1) - linear).abs() < 1e-9);
+    }
+
+    #[test]
+    fn radshare_rare_union_matches_known_probability() {
+        // 4-player radiant share: P(≥1 rare) = 1 − 0.9⁴ = 0.3439.
+        let rewards = [
+            (16.67, 3),
+            (16.67, 5),
+            (16.66, 0),
+            (20.0, 12),
+            (20.0, 8),
+            (10.0, 90),
+        ];
+        assert!((p_rare_at_least_one(&rewards, 4) - 0.3439).abs() < 1e-4);
+        assert!((p_rare_at_least_one(&rewards, 1) - 0.10).abs() < 1e-9);
+    }
+
+    #[test]
+    fn best_of_two_on_a_coin_flip_table() {
+        // Two equally likely outcomes 0 and 100: E[max of 2] = 100·(1−0.25) = 75.
+        let rewards = [(50.0, 0), (50.0, 100)];
+        assert!((squad_ev(&rewards, 1) - 50.0).abs() < 1e-9);
+        assert!((squad_ev(&rewards, 2) - 75.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn duplicate_values_group_before_order_statistics() {
+        // Two distinct rewards worth the same plat must merge into one outcome:
+        // max of N over a single-value distribution is that value.
+        let rewards = [(50.0, 10), (50.0, 10)];
+        for n in 1..=4 {
+            assert!((squad_ev(&rewards, n) - 10.0).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn requiem_style_short_table_puts_residual_at_zero() {
+        // Requiem Eterna: 8 equal ~9.5% rewards, Σ = 76% — the missing 24% is a
+        // 0-value outcome, and N=1 still equals the linear EV.
+        let rewards: Vec<(f64, i64)> = (0..8).map(|i| (9.5, i * 2)).collect();
+        let linear: f64 = rewards.iter().map(|&(c, v)| c / 100.0 * v as f64).sum();
+        assert!((squad_ev(&rewards, 1) - linear).abs() < 1e-9);
+        assert!(squad_ev(&rewards, 4).is_finite());
+    }
+
+    #[test]
+    fn squad_ev_is_monotone_in_squad_size() {
+        let rewards = [
+            (25.33, 3),
+            (25.33, 5),
+            (25.34, 1),
+            (11.0, 12),
+            (11.0, 8),
+            (2.0, 90),
+        ];
+        let mut prev = 0.0;
+        for n in 1..=4 {
+            let ev = squad_ev(&rewards, n);
+            assert!(ev >= prev - 1e-9, "EV decreased at squad {n}");
+            prev = ev;
         }
     }
 

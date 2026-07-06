@@ -13,13 +13,12 @@ import {
   useArcaneDashboard,
   useBudget,
   useBuyList,
-  useCrackPlan,
   useDucats,
   useInventory,
   useListingRecommendations,
   useListings,
   useNotifications,
-  useRelics,
+  useRelicBrowser,
   useRivenSearches,
   useSales,
   useSearchCatalog,
@@ -359,39 +358,38 @@ function MoversWidget({ w, h, focused, onOpen }: WidgetProps) {
 }
 
 function RelicsWidget({ w, h, focused, onNavigate }: WidgetProps) {
-  const relics = useRelics();
-  const plan = useCrackPlan();
-  const { totalEv, totalQty } = useMemo(() => {
-    const rows = relics.data ?? [];
-    return {
-      totalEv: rows.reduce((s, r) => s + r.ev_plat * r.qty, 0),
-      totalQty: rows.reduce((s, r) => s + r.qty, 0),
-    };
-  }, [relics.data]);
-  // The crack queue: what to crack next, crackable-right-now first.
+  const browser = useRelicBrowser(1);
+  // Owned relics only — the widget is a glance at your holdings, not the catalog.
+  const owned = useMemo(() => (browser.data ?? []).filter((r) => r.qty > 0), [browser.data]);
+  const { totalEv, totalQty } = useMemo(
+    () => ({
+      totalEv: owned.reduce((s, r) => s + r.ev_plat * r.qty, 0),
+      totalQty: owned.reduce((s, r) => s + r.qty, 0),
+    }),
+    [owned],
+  );
+  // The crack queue: what to burn next — crackable-right-now first, protected out.
   const queue = useMemo(
     () =>
-      [...(plan.data ?? [])]
+      owned
+        .filter((r) => !r.protected)
         .sort((a, b) => Number(b.crackable_now) - Number(a.crackable_now) || b.score - a.score)
         .slice(0, ROW_POOL),
-    [plan.data],
+    [owned],
   );
-  const crackable = useMemo(
-    () => (plan.data ?? []).filter((r) => r.crackable_now).length,
-    [plan.data],
-  );
-  const loading = relics.isLoading || plan.isLoading;
+  const crackable = useMemo(() => owned.filter((r) => r.crackable_now).length, [owned]);
+  const loading = browser.isLoading;
   return (
     <WidgetBody
       w={w}
       h={h}
       focused={focused}
       loading={loading}
-      error={relics.isError && !relics.data}
+      error={browser.isError && !browser.data}
       big={`~${fmtK(totalEv)}`}
       unit="p"
       sub={`${fmt(totalQty)} relics · expected`}
-      empty={!loading && (relics.data ?? []).length === 0 ? "No relics tracked yet." : undefined}
+      empty={!loading && owned.length === 0 ? "No relics tracked yet." : undefined}
       cells={[
         { k: "Relics", v: fmt(totalQty) },
         { k: "Crackable", v: fmt(crackable), tone: crackable ? "pos" : undefined },
@@ -399,10 +397,10 @@ function RelicsWidget({ w, h, focused, onNavigate }: WidgetProps) {
       ]}
       rows={queue.map((r) => (
         <HwRow
-          key={`${r.tier}-${r.relic_name}-${r.refinement}`}
+          key={`${r.tier}-${r.relic_name}`}
           name={r.display_name}
           plat={r.ev_plat}
-          sub={`×${r.qty} · ${r.refinement}`}
+          sub={`×${r.qty}`}
           right={`${fmt(r.ev_plat)}p`}
           tone={r.crackable_now ? "pos" : undefined}
           onClick={() => onNavigate("relics")}

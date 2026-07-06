@@ -5096,8 +5096,9 @@ button.fgroup-h:hover .fg-go {
   padding: 0 3px;
   letter-spacing: .04em;
 }
-/* VAULT marker inside the shared data table (All-relics list). */
-.dtable .nm .vault {
+/* VAULT marker inside the shared data table (relics browser) + drawers. */
+.dtable .nm .vault,
+.drawer .nm .vault {
   color: var(--accent);
   font-size: 9px;
   margin-left: 5px;
@@ -7573,4 +7574,122 @@ button.hw-nav:hover {
 }
 .v-essence {
   color: var(--hot);
+}
+
+/* ---- Relics browser (.rtable) — the vendors board's full-screen ruled-grid
+   treatment as a sortable row table: sticky header + summary footer, per-cell
+   gridlines (border-collapse: separate keeps sticky borders working in
+   WebKitGTK), body fills the content area and scrolls inside .rtable-scroll. */
+.rtable-wrap {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.rtable-filters {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+  align-items: center;
+}
+.rt-squad {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rt-squad-lbl {
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-size: 8.5px;
+}
+.rtable-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border-bottom: 1px solid var(--line);
+}
+.rtable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.rtable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+.rtable thead th:last-child {
+  border-right: none;
+}
+.rtable tbody td {
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  padding: 7px 12px;
+}
+.rtable tbody td:last-child {
+  border-right: none;
+}
+.rtable tbody tr.rt-row {
+  cursor: pointer;
+}
+.rtable tbody tr.rt-row:hover td {
+  background: var(--bg-2);
+}
+.rtable tbody tr.rt-unowned .nm {
+  color: var(--muted);
+}
+.rtable tbody tr.rt-protected .nm {
+  color: var(--faint);
+}
+.rtable tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--bg);
+  border-top: 1px solid var(--line-2);
+  padding: 9px 16px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.rtable .num.ducat,
+.rd-ref .num.ducat,
+.rd-drops .num.ducat {
+  color: var(--ducat);
+}
+.rt-signals {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+/* PROT badge — same chip shape as .vault, protective green. */
+.dtable .nm .prot,
+.drawer .nm .prot {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 4px;
+  border: 1px solid var(--pos);
+  color: var(--pos);
+  font-size: 8.5px;
+  letter-spacing: .06em;
+  vertical-align: 1px;
+}
+/* Relic drawer body + sections */
+.drawer .drawer-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rd-refsel {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+.rd-refsel .chip {
+  padding: 1px 6px;
+  font-size: 9px;
 }

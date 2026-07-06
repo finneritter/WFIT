@@ -291,12 +291,11 @@ pub fn run() {
             commands::clear_vendor_checks,
             commands::get_wanted_now,
             // relics
-            commands::get_relics,
-            commands::list_relic_choices,
-            commands::add_relic,
             commands::set_relic_qty,
-            commands::remove_relic,
-            commands::get_crack_plan,
+            commands::get_relic_browser,
+            commands::get_relic_detail,
+            commands::set_relic_protected,
+            commands::get_relic_sources,
             commands::import_scanned_relics,
             // wfm account
             commands::get_wfm_account,

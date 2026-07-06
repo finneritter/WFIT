@@ -132,34 +132,6 @@ pub struct WantedNowRow {
     pub eta: Option<String>,  // ISO expiry/eta of the source, when known
 }
 
-/// One owned void relic, valued by the expected plat of its drops (relics aren't
-/// traded on warframe.market, so worth is inferred from the bundled drop tables).
-/// Powers the Relics screen.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RelicRow {
-    pub tier: String,
-    pub relic_name: String,   // "A1"
-    pub refinement: String,   // Intact | Exceptional | Flawless | Radiant
-    pub display_name: String, // "Lith A1"
-    pub qty: i64,
-    pub ev_plat: f64,                  // expected plat per relic at this refinement
-    pub best_reward: Option<String>,   // highest-value drop's display name
-    pub best_reward_plat: Option<i64>, // and its market price
-    pub priced_drops: i64,             // how many of its drops have a market price
-    pub total_drops: i64,              // total drops in the table
-    pub relic_vaulted: bool,           // the relic itself is vaulted (no longer farmable)
-    pub source: String,                // manual | de_scan
-    pub first_added_at: String,
-}
-
-/// A known relic offered in the manual-add picker (no ownership yet).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RelicChoice {
-    pub tier: String,
-    pub relic_name: String,
-    pub display_name: String, // "Lith A1"
-}
-
 /// Progress tick for the "Update game data" action, emitted on the
 /// `game-data-progress` Tauri event so the UI can show a live bar. `total` 0 means
 /// indeterminate (show a sweeping bar); otherwise `current`/`total` is a fraction.
@@ -186,18 +158,6 @@ pub struct GameDataUpdate {
     pub manifest_refreshed: bool, // item manifest fetched from WFCD this run
 }
 
-/// One reward row inside a [`CrackPlanRow`]'s drop table (for the expandable detail).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CrackDrop {
-    pub reward_name: String,         // catalog display name
-    pub chance: f64,                 // drop chance for this refinement, percent
-    pub plat: Option<i64>,           // effective price, None if unpriceable (Forma/Kuva/etc.)
-    pub wanted: bool,                // on the watch/buy list
-    pub set: bool,                   // a missing part of a one-away set
-    pub reward_slug: Option<String>, // catalog slug, for deep-linking to the item Drawer
-    pub set_slug: Option<String>,    // the set this part completes (set-part drops only)
-}
-
 /// A set a relic helps finish (one part away) — a backlink target on the Sets screen.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrackSet {
@@ -205,24 +165,101 @@ pub struct CrackSet {
     pub name: String,
 }
 
-/// A prioritized "what to crack next" row for the Relics screen "To crack" tab. A relic
-/// appears only if it completes a one-away set, drops a watch/buy-list item, or returns
-/// at least `MIN_EV_PLAT` per crack; `score` ranks completes-a-set → wanted → crackable
-/// now → EV. `relic_vaulted` is an informational tag only (never lists or ranks a relic).
-/// `drops` is the full reward table; `sets` are the one-away sets for the why-backlinks.
+/// One owned stack of a relic at a refinement (relics are stored per refinement;
+/// the browser aggregates them into one row per relic identity).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CrackPlanRow {
+pub struct RelicStack {
+    pub refinement: String, // Intact | Exceptional | Flawless | Radiant
+    pub qty: i64,
+    pub source: String, // manual | de_scan
+}
+
+/// One relic identity (tier + name) in the full-catalog relic browser — owned or
+/// not. EV is drop-based (relics aren't traded), squad-aware (best-of-N radshare),
+/// computed fresh per call from the preloaded price maps. Powers the Relics screen.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelicBrowserRow {
+    pub tier: String,
+    pub relic_name: String,          // "A1"
+    pub display_name: String,        // "Axi A1"
+    pub vaulted: bool,               // no longer farmable (data-driven; Resurgence can undo it)
+    pub protected: bool,             // user's do-not-burn flag
+    pub qty: i64,                    // total owned across refinements (0 = catalog-only row)
+    pub stacks: Vec<RelicStack>,     // owned per-refinement breakdown
+    pub ev_plat: f64, // qty-weighted EV across owned stacks at squad size; Intact when unowned
+    pub ducat_ev: f64, // linear ducat EV per crack (all N squad rewards are dissolvable)
+    pub drops_owned: i64, // slug-resolvable rewards the user owns ≥1 of…
+    pub drops_total: i64, // …out of the slug-resolvable rewards (Forma etc. excluded)
+    pub drop_names: Vec<String>, // reward display names, for drops:/text search
+    pub sets: Vec<CrackSet>, // one-away sets this relic can finish
+    pub wanted: bool, // drops a watch/buy-list item
+    pub crackable_now: bool, // a live fissure can crack this tier right now
+    pub best_reward: Option<String>, // highest-value priced drop
+    pub best_reward_plat: Option<i64>,
+    pub score: f64, // burn-order priority (set > wanted > now > EV); protection is applied UI-side
+}
+
+/// A drop chance at one refinement (drop tables are per refinement; Requiem
+/// relics may list fewer than four).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RefinementChance {
+    pub refinement: String,
+    pub chance: f64, // percent
+}
+
+/// One reward row in the relic drawer's drop table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelicDetailDrop {
+    pub reward_name: String,
+    pub reward_slug: Option<String>, // None = untradeable (Forma, Requiem mods)
+    pub chances: Vec<RefinementChance>,
+    pub plat: Option<i64>,   // effective price
+    pub ducats: Option<i64>, // catalog ducat value
+    pub owned_qty: i64,      // from inventory_items
+    pub wanted: bool,
+    pub set: bool, // completes a one-away set
+    pub set_slug: Option<String>,
+}
+
+/// Per-refinement economics for the relic drawer: EV, radshare odds, and the
+/// refine-or-not ROI vs Intact (trace costs are cumulative from Intact).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelicRefinementInfo {
+    pub refinement: String,
+    pub owned_qty: i64,
+    pub ev_plat: f64, // at the requested squad size
+    pub ev_solo: f64, // linear single-player EV
+    pub ducat_ev: f64,
+    pub p_rare: f64,                      // P(≥1 rare across the squad), 0–1
+    pub trace_cost: Option<i64>,          // from Intact: Exc 25 / Flw 50 / Rad 100; None for Intact
+    pub ev_delta: Option<f64>,            // ev_plat − Intact ev_plat
+    pub plat_per_100_traces: Option<f64>, // ev_delta / trace_cost × 100
+}
+
+/// Everything the relic drawer shows for one relic identity.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelicDetail {
     pub tier: String,
     pub relic_name: String,
-    pub refinement: String,
     pub display_name: String,
-    pub qty: i64,
-    pub ev_plat: f64,
-    pub relic_vaulted: bool, // the relic itself is vaulted (no longer farmable) — tag only
-    pub crackable_now: bool, // a live fissure of this relic's tier is up right now
-    pub drops: Vec<CrackDrop>, // full reward table (highest-value first)
-    pub sets: Vec<CrackSet>, // one-away sets this relic helps finish (why-summary backlinks)
-    pub score: f64,          // combined priority (higher = crack sooner)
+    pub vaulted: bool,
+    pub protected: bool,
+    pub squad_size: i64,
+    pub stacks: Vec<RelicStack>,
+    pub refinements: Vec<RelicRefinementInfo>, // only refinements with a drop table
+    pub drops: Vec<RelicDetailDrop>,           // highest-value first
+}
+
+/// A relic that drops a given item — the item Drawer's reverse lookup.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelicSourceRow {
+    pub tier: String,
+    pub relic_name: String,
+    pub display_name: String,
+    pub vaulted: bool,
+    pub owned_qty: i64,              // total owned across refinements
+    pub chance_intact: Option<f64>,  // percent, when the relic has an Intact table
+    pub chance_radiant: Option<f64>, // percent, when it has a Radiant table
 }
 
 /// Progress of the throttled owned-item price refresh — drives the "pricing…"

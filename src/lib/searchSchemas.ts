@@ -6,14 +6,13 @@ import type { AnySearchSchema, FieldDef, SearchSchema } from "./searchQuery";
 import type {
   BuyRow,
   CatalogRow,
-  CrackPlanRow,
   DucatRow,
   GearRow,
   InventoryRow,
   ListingRow,
   OwnedArcane,
   RecommendationRow,
-  RelicRow,
+  RelicBrowserRow,
   ResourceRow,
   RivenResult,
   SaleRow,
@@ -234,43 +233,33 @@ export const arcanesSchema: SearchSchema<OwnedArcane> = {
 };
 
 const RELIC_TIERS = ["lith", "meso", "neo", "axi", "requiem"] as const;
-const REFINEMENTS = ["intact", "exceptional", "flawless", "radiant"] as const;
 
-export const relicsSchema: SearchSchema<RelicRow> = {
-  text: (r) => `${r.display_name} ${r.tier} ${r.refinement} ${r.best_reward ?? ""}`,
+export const relicsSchema: SearchSchema<RelicBrowserRow> = {
+  text: (r) => `${r.display_name} ${r.tier} ${r.drop_names.join(" ")}`,
   is: {
-    scanned: { test: (r) => r.source === "de_scan", hint: "imported from the game" },
-    vaulted: { test: (r) => r.relic_vaulted, hint: "a vaulted (unfarmable) relic" },
-  },
-  fields: {
-    tier: { kind: "enum", get: (r) => r.tier, values: RELIC_TIERS, hint: "relic tier" },
-    refinement: {
-      kind: "enum",
-      get: (r) => r.refinement,
-      values: REFINEMENTS,
-      hint: "refinement level",
-    },
-    qty: { kind: "number", get: (r) => r.qty, hint: "owned count" },
-    ev: { kind: "number", get: (r) => r.ev_plat, hint: "expected plat per relic" },
-    value: { kind: "number", get: (r) => r.ev_plat * r.qty, hint: "total expected plat" },
-  },
-};
-
-// The Relics "To crack" tab compiles this against the topbar query (the screen's
-// registered autocomplete schema stays `relicsSchema`, for the All-relics table).
-export const crackPlanSchema: SearchSchema<CrackPlanRow> = {
-  text: (r) =>
-    `${r.display_name} ${r.tier} ${r.refinement} ${r.drops.map((d) => d.reward_name).join(" ")}`,
-  is: {
-    now: { test: (r) => r.crackable_now, hint: "a live fissure can crack it now" },
+    owned: { test: (r) => r.qty > 0, hint: "you hold at least one" },
+    vaulted: { test: (r) => r.vaulted, hint: "a vaulted (unfarmable) relic" },
+    protected: { test: (r) => r.protected, hint: "flagged do-not-burn" },
     set: { test: (r) => r.sets.length > 0, hint: "completes a one-away set" },
-    wanted: { test: (r) => r.drops.some((d) => d.wanted), hint: "drops a watch/buy-list item" },
-    vaulted: { test: (r) => r.relic_vaulted, hint: "a vaulted (unfarmable) relic" },
+    wanted: { test: (r) => r.wanted, hint: "drops a watch/buy-list item" },
+    now: { test: (r) => r.crackable_now, hint: "a live fissure can crack it now" },
+    scanned: {
+      test: (r) => r.stacks.some((s) => s.source === "de_scan"),
+      hint: "imported from the game",
+    },
   },
   fields: {
     tier: { kind: "enum", get: (r) => r.tier, values: RELIC_TIERS, hint: "relic tier" },
     qty: { kind: "number", get: (r) => r.qty, hint: "owned count" },
-    ev: { kind: "number", get: (r) => r.ev_plat, hint: "expected plat per relic" },
+    ev: { kind: "number", get: (r) => r.ev_plat, hint: "expected plat per crack" },
+    ducats: { kind: "number", get: (r) => r.ducat_ev, hint: "expected ducats per crack" },
+    value: { kind: "number", get: (r) => r.ev_plat * r.qty, hint: "total expected plat" },
+    drops: {
+      kind: "text",
+      get: (r) => r.drop_names.join(" "),
+      hint: "reward name (reverse lookup)",
+    },
+    owned: { kind: "number", get: (r) => r.drops_owned, hint: "drops you already own" },
   },
 };
 
@@ -484,7 +473,7 @@ export const PAGE_PLACEHOLDER: Partial<Record<ScreenId, string>> = {
   sets: "Search sets…  try is:complete missing=1",
   ducats: "Search parts…  try verdict:ducat dp>=10",
   arcanes: "Search arcanes…  try rarity:legendary verdict:sell",
-  relics: "Search relics…  try tier:axi ev>30 is:scanned",
+  relics: "Search relics…  try is:owned tier:axi ev>30 drops:nova",
   sold: "Search sales…  try days<7 unit>20",
   listings: "Search listings…  try is:undercut",
   rivens: "Filter results…  try is:exact plat<100 grade>80 polarity:madurai rerolls<5",

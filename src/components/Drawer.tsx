@@ -5,6 +5,7 @@ import {
   useItemDetail,
   useItemOrders,
   useRecordSale,
+  useRelicSources,
   useRemoveItem,
   useWfmAccount,
 } from "../hooks/queries";
@@ -18,6 +19,54 @@ import { Scrim } from "./ui";
 
 const TF = ["24h", "7d", "30d", "90d"] as const;
 const TF_DAYS: Record<string, number> = { "24h": 2, "7d": 7, "30d": 30, "90d": 90 };
+
+/** Reverse lookup: which relics drop this item (owned first). Renders nothing
+ *  for items no relic drops — most of the catalog — so it costs one cached
+ *  query and zero space in the common case. */
+function RelicSourcesBox({ slug }: { slug: string }) {
+  const { data: sources = [] } = useRelicSources(slug);
+  if (sources.length === 0) return null;
+  return (
+    <div className="rankbox">
+      <div className="rankbox-h">Drops from relics</div>
+      <table className="dtable">
+        <thead>
+          <tr>
+            <th>Relic</th>
+            <th className="r" title="drop chance, Intact → Radiant">
+              Int → Rad
+            </th>
+            <th className="r">You own</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sources.map((s) => (
+            <tr key={`${s.tier}-${s.relic_name}`}>
+              <td>
+                <span className="nm">
+                  {s.display_name}
+                  {s.vaulted ? (
+                    <span className="vault" title="vaulted relic — no longer farmable">
+                      VAULT
+                    </span>
+                  ) : null}
+                </span>
+              </td>
+              <td className="r num">
+                {s.chance_intact != null ? `${s.chance_intact.toFixed(1)}%` : "—"}
+                {" → "}
+                {s.chance_radiant != null ? `${s.chance_radiant.toFixed(1)}%` : "—"}
+              </td>
+              <td className={clsx("r num", s.owned_qty === 0 && "muted")}>
+                {s.owned_qty > 0 ? `×${s.owned_qty}` : "—"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 /** A history row → candle, falling back to the median when OHLC is absent
  *  (older cached rows pre-date OHLC capture and draw as flat ticks). */
@@ -336,6 +385,8 @@ export function Drawer({
             </table>
           </div>
         ) : null}
+
+        <RelicSourcesBox slug={slug} />
 
         <div className="drawer-actions">
           {owned ? (

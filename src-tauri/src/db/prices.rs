@@ -148,9 +148,24 @@ pub struct PriceMaps {
 
 /// Load `PriceMaps` for every owned item (qty > 0) in three joined queries.
 pub fn load_owned_price_maps(c: &Connection) -> AppResult<PriceMaps> {
+    // Inner-join filter to the owned set; the all-variant drops it.
+    load_price_maps(
+        c,
+        "JOIN inventory_items ii ON ii.slug = t.slug AND ii.qty > 0",
+    )
+}
+
+/// Load `PriceMaps` for the whole catalog (three full-table reads — a few
+/// thousand rows). Used where valuation covers non-owned slugs too, e.g. the
+/// relic browser pricing every relic's drops.
+pub fn load_price_maps_all(c: &Connection) -> AppResult<PriceMaps> {
+    load_price_maps(c, "")
+}
+
+fn load_price_maps(c: &Connection, join: &str) -> AppResult<PriceMaps> {
     let mut m = PriceMaps::default();
-    let by_pair = |sql: &str, into: &mut HashMap<String, Vec<(i64, i64)>>| -> AppResult<()> {
-        let mut stmt = c.prepare(sql)?;
+    let by_pair = |sql: String, into: &mut HashMap<String, Vec<(i64, i64)>>| -> AppResult<()> {
+        let mut stmt = c.prepare(&sql)?;
         let rows = stmt.query_map([], |r| {
             Ok((
                 r.get::<_, String>(0)?,
@@ -165,20 +180,17 @@ pub fn load_owned_price_maps(c: &Connection) -> AppResult<PriceMaps> {
         Ok(())
     };
     by_pair(
-        "SELECT oc.slug, oc.rank, oc.sell FROM order_cache oc
-         JOIN inventory_items ii ON ii.slug = oc.slug WHERE ii.qty > 0",
+        format!("SELECT t.slug, t.rank, t.sell FROM order_cache t {join}"),
         &mut m.orders,
     )?;
     by_pair(
-        "SELECT pr.slug, pr.rank, pr.median FROM price_rank pr
-         JOIN inventory_items ii ON ii.slug = pr.slug WHERE ii.qty > 0",
+        format!("SELECT t.slug, t.rank, t.median FROM price_rank t {join}"),
         &mut m.ranks,
     )?;
-    let mut stmt = c.prepare(
-        "SELECT pc.slug, pc.median_plat FROM price_cache pc
-         JOIN inventory_items ii ON ii.slug = pc.slug
-         WHERE ii.qty > 0 AND pc.median_plat IS NOT NULL",
-    )?;
+    let mut stmt = c.prepare(&format!(
+        "SELECT t.slug, t.median_plat FROM price_cache t {join}
+         WHERE t.median_plat IS NOT NULL",
+    ))?;
     let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
     for row in rows {
         let (slug, med) = row?;
@@ -728,6 +740,32 @@ mod tests {
             for rank in ranks {
                 let sql = effective_price(&c, slug, rank).unwrap();
                 let mem = effective_price_from(&maps, slug, rank);
+                assert_eq!(sql, mem, "slug={slug} rank={rank:?}");
+            }
+        }
+    }
+
+    // The all-catalog maps must value slugs the owned maps filter out (the relic
+    // browser prices drops the user doesn't own), with identical twin semantics.
+    #[test]
+    fn load_price_maps_all_covers_non_owned_slugs() {
+        let c = fixture();
+        c.execute_batch(
+            "INSERT INTO inventory_items VALUES ('owned', 1);
+             INSERT INTO order_cache VALUES ('owned', -1, 40), ('ghost', -1, 60);
+             INSERT INTO price_rank VALUES ('ghostmed', 0, 22);
+             INSERT INTO price_cache VALUES ('owned', 35), ('ghost', 55), ('ghostmed', 20);",
+        )
+        .unwrap();
+
+        let owned = load_owned_price_maps(&c).unwrap();
+        assert_eq!(effective_price_from(&owned, "ghost", None), None);
+
+        let all = load_price_maps_all(&c).unwrap();
+        for slug in ["owned", "ghost", "ghostmed"] {
+            for rank in [None, Some(0)] {
+                let sql = effective_price(&c, slug, rank).unwrap();
+                let mem = effective_price_from(&all, slug, rank);
                 assert_eq!(sql, mem, "slug={slug} rank={rank:?}");
             }
         }

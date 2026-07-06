@@ -576,26 +576,85 @@ export interface WantedNowRow {
   source_label: string;
   eta: string | null;
 }
-// Owned void relic, valued by expected drop plat (Relics screen).
-export interface RelicRow {
+// One owned stack of a relic at a refinement (storage is per refinement; the
+// browser aggregates stacks into one row per relic identity).
+export interface RelicStack {
+  refinement: string;
+  qty: number;
+  source: string; // manual | de_scan
+}
+// One relic identity in the full-catalog relic browser — owned or not. EV is
+// drop-based and squad-aware (best-of-N radshare). Powers the Relics screen.
+export interface RelicBrowserRow {
   tier: string;
   relic_name: string;
-  refinement: string;
   display_name: string;
-  qty: number;
-  ev_plat: number;
+  vaulted: boolean;
+  protected: boolean;
+  qty: number; // total owned across refinements (0 = catalog-only row)
+  stacks: RelicStack[];
+  ev_plat: number; // qty-weighted across owned stacks at squad size; Intact when unowned
+  ducat_ev: number; // linear ducat EV per crack
+  drops_owned: number; // slug-resolvable rewards owned ≥1…
+  drops_total: number; // …of the slug-resolvable rewards (Forma excluded)
+  drop_names: string[]; // reward names, for drops:/text search
+  sets: CrackSet[]; // one-away sets this relic can finish
+  wanted: boolean; // drops a watch/buy-list item
+  crackable_now: boolean;
   best_reward: string | null;
   best_reward_plat: number | null;
-  priced_drops: number;
-  total_drops: number;
-  relic_vaulted: boolean;
-  source: string;
-  first_added_at: string;
+  score: number; // burn priority (set > wanted > now > EV); protection applied UI-side
 }
-export interface RelicChoice {
+// A drop chance at one refinement (Requiem relics may list fewer than four).
+export interface RefinementChance {
+  refinement: string;
+  chance: number; // percent
+}
+// One reward row in the relic drawer's drop table.
+export interface RelicDetailDrop {
+  reward_name: string;
+  reward_slug: string | null; // null = untradeable (Forma, Requiem mods)
+  chances: RefinementChance[];
+  plat: number | null;
+  ducats: number | null;
+  owned_qty: number;
+  wanted: boolean;
+  set: boolean;
+  set_slug: string | null;
+}
+// Per-refinement economics for the relic drawer: EV, radshare odds, refine-ROI.
+export interface RelicRefinementInfo {
+  refinement: string;
+  owned_qty: number;
+  ev_plat: number; // at the requested squad size
+  ev_solo: number; // linear single-player EV
+  ducat_ev: number;
+  p_rare: number; // P(≥1 rare across the squad), 0–1
+  trace_cost: number | null; // from Intact: 25 / 50 / 100; null for Intact
+  ev_delta: number | null; // ev_plat − Intact ev_plat
+  plat_per_100_traces: number | null;
+}
+// Everything the relic drawer shows for one relic identity.
+export interface RelicDetail {
   tier: string;
   relic_name: string;
   display_name: string;
+  vaulted: boolean;
+  protected: boolean;
+  squad_size: number;
+  stacks: RelicStack[];
+  refinements: RelicRefinementInfo[]; // only refinements with a drop table
+  drops: RelicDetailDrop[]; // highest-value first
+}
+// A relic that drops a given item — the item Drawer's reverse lookup.
+export interface RelicSourceRow {
+  tier: string;
+  relic_name: string;
+  display_name: string;
+  vaulted: boolean;
+  owned_qty: number;
+  chance_intact: number | null; // percent
+  chance_radiant: number | null;
 }
 // Live progress tick for "Update game data" (game-data-progress event). total 0 =
 // indeterminate (sweeping bar); otherwise current/total is a fraction.
@@ -618,36 +677,10 @@ export interface GameDataUpdate {
   manifest_total: number;
   manifest_refreshed: boolean;
 }
-// One reward in a relic's drop table (for the To-crack expandable detail).
-export interface CrackDrop {
-  reward_name: string;
-  chance: number;
-  plat: number | null;
-  wanted: boolean; // on the watch/buy list
-  set: boolean; // a missing part of a one-away set
-  reward_slug: string | null; // catalog slug → item Drawer
-  set_slug: string | null; // the set this part completes → Sets page
-}
 // A set this relic helps finish (one part away) — a backlink target on the Sets screen.
 export interface CrackSet {
   slug: string;
   name: string;
-}
-// A prioritized "what to crack next" row for the Relics "To crack" tab. A relic appears
-// only if it completes a one-away set, drops a watch/buy item, or returns ≥15p/crack.
-// `relic_vaulted` is an informational tag only. `sets` are the one-away set backlinks.
-export interface CrackPlanRow {
-  tier: string;
-  relic_name: string;
-  refinement: string;
-  display_name: string;
-  qty: number;
-  ev_plat: number;
-  relic_vaulted: boolean;
-  crackable_now: boolean;
-  drops: CrackDrop[];
-  sets: CrackSet[];
-  score: number;
 }
 export interface SortieMission {
   node: string;

@@ -5,6 +5,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Icon } from "./components/Icon";
 import { LiveBadge } from "./components/LiveBadge";
 import { NotificationCenter } from "./components/NotificationCenter";
+import { RelicDrawer } from "./components/RelicDrawer";
 import { ResizeGrips } from "./components/ResizeGrips";
 import { RivenSavedSidebar } from "./components/RivenSavedSidebar";
 import { type ScreenId, Sidebar } from "./components/Sidebar";
@@ -91,6 +92,9 @@ export default function App() {
   // (Market's screener registers itself via useSearchKeys).
   const searchKeysRef = useRef<SearchKeyHandler | null>(null);
   const [drawer, setDrawer] = useState<string | null>(null);
+  // The relic drawer (Relics browser row click). The item Drawer stacks on top of
+  // it — a drop name opens the item without losing the relic context underneath.
+  const [relicDrawer, setRelicDrawer] = useState<{ tier: string; name: string } | null>(null);
   const [adding, setAdding] = useState(false);
   // The user's explicit collapse choice (persisted). On narrow windows the
   // sidebar auto-collapses regardless; widening again restores this preference.
@@ -129,6 +133,7 @@ export default function App() {
   // Stable identity so memoized rows in every screen don't re-render when App
   // re-renders (e.g. the summary badge updating every 2s during a price sync).
   const open = useCallback((slug: string) => setDrawer(slug), []);
+  const openRelic = useCallback((tier: string, name: string) => setRelicDrawer({ tier, name }), []);
 
   // Single navigation entry point: switch screen, clear the page search, and set
   // which Listings tab to land on (defaults to "mine" so only explicit links go
@@ -278,7 +283,10 @@ export default function App() {
           </div>
 
           <div
-            className={clsx("content", screen === "vendors" && "content-flush")}
+            className={clsx(
+              "content",
+              (screen === "vendors" || screen === "relics") && "content-flush",
+            )}
             ref={contentRef}
           >
             <SearchProvider query={pageQuery} keysRef={searchKeysRef}>
@@ -310,7 +318,7 @@ export default function App() {
                 {screen === "listings" && <Listings onOpen={open} initialTab={listingsTab} />}
                 {screen === "ducats" && <Ducats onOpen={open} />}
                 {screen === "arcanes" && <Arcanes onOpen={open} />}
-                {screen === "relics" && <Relics onOpen={open} onNavigate={navigate} />}
+                {screen === "relics" && <Relics onOpenRelic={openRelic} />}
                 {screen === "rotation" && <Rotation onOpen={open} />}
                 {screen === "vendors" && <Vendors onOpen={open} />}
                 {screen === "account" && <Account onOpen={open} onNavigate={navigate} />}
@@ -323,6 +331,21 @@ export default function App() {
 
         {screen === "rivens" ? <RivenSavedSidebar onLoad={requestRivenLoad} /> : null}
 
+        {/* Mounted before the item Drawer so the item Drawer stacks on top (a drop
+            name opened from here keeps the relic context underneath). */}
+        {relicDrawer ? (
+          <RelicDrawer
+            tier={relicDrawer.tier}
+            name={relicDrawer.name}
+            active={drawer == null}
+            onClose={() => setRelicDrawer(null)}
+            onOpen={open}
+            onNavigate={(s, opts) => {
+              setRelicDrawer(null);
+              navigate(s, opts);
+            }}
+          />
+        ) : null}
         {drawer ? (
           <Drawer
             slug={drawer}
