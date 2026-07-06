@@ -18,7 +18,7 @@ const TIER_ORDER: Record<string, number> = Object.fromEntries(TIERS.map((t, i) =
 const TIER_OPTIONS = [["all", "All tiers"], ...TIERS.map((t) => [t, t] as const)] as const;
 const SQUADS = ["1", "2", "3", "4"] as const;
 
-// Short refinement labels for the owned-stacks sub-line ("Int ×3 · Rad ×2").
+// Short refinement labels for the Qty column's per-stack lines ("Int ×3").
 const REF_ABBR: Record<string, string> = {
   Intact: "Int",
   Exceptional: "Exc",
@@ -73,15 +73,6 @@ function matchesSignal(r: RelicBrowserRow, s: Signal): boolean {
       return r.vaulted;
   }
 }
-
-// Rare-drop price floor presets ("only show relics whose gold drop is worth it").
-const RARE_MIN_OPTIONS = [
-  ["0", "Rare: any"],
-  ["10", "Rare > 10p"],
-  ["30", "Rare > 30p"],
-  ["50", "Rare > 50p"],
-  ["100", "Rare > 100p"],
-] as const;
 
 export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
   const [squadStr, setSquad] = usePersisted<(typeof SQUADS)[number]>("wfit-relic-squad", "1");
@@ -145,12 +136,17 @@ export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
           Owned
         </Chip>
         <Dropdown value={tierFilter} options={TIER_OPTIONS} onChange={setTierFilter} title="Tier" />
-        <Dropdown
-          value={rareMinStr}
-          options={RARE_MIN_OPTIONS}
-          onChange={setRareMin}
-          title="Only relics whose gold (rare) drop sells above this"
-        />
+        <label className="rt-raremin" title="Only relics whose gold (rare) drop sells above this">
+          rare &gt;
+          <input
+            type="number"
+            min={0}
+            placeholder="0"
+            value={rareMinStr === "0" ? "" : rareMinStr}
+            onChange={(e) => setRareMin(e.target.value.trim() || "0")}
+          />
+          p
+        </label>
         {SIGNAL_CHIPS.map(([s, label]) => (
           <Chip key={s} active={active.has(s)} onClick={() => toggleSignal(s)}>
             {label}
@@ -247,9 +243,6 @@ export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
 
 function RelicRow({ r, onOpenRelic }: { r: RelicBrowserRow; onOpenRelic: OpenRelicFn }) {
   const scanned = r.stacks.some((s) => s.source === "de_scan");
-  // Refinements only — the Qty column carries the counts (per-stack ×n lives in
-  // the drawer's refinement table).
-  const stackLine = r.stacks.map((s) => REF_ABBR[s.refinement] ?? s.refinement).join(" · ");
   return (
     <tr
       className={clsx("rt-row", r.qty === 0 && "rt-unowned", r.protected && "rt-protected")}
@@ -275,22 +268,34 @@ function RelicRow({ r, onOpenRelic }: { r: RelicBrowserRow; onOpenRelic: OpenRel
               </span>
             ) : null}
           </span>
-          <span className="sub">
-            {r.qty > 0 ? (
-              stackLine
-            ) : r.best_reward ? (
-              <>
-                best: {r.best_reward}
-                {r.best_reward_plat != null ? ` · ${fmt(r.best_reward_plat)}p` : ""}
-              </>
-            ) : (
-              <span className="muted">no priced drops</span>
-            )}
-          </span>
+          {r.qty === 0 ? (
+            <span className="sub">
+              {r.best_reward ? (
+                <>
+                  best: {r.best_reward}
+                  {r.best_reward_plat != null ? ` · ${fmt(r.best_reward_plat)}p` : ""}
+                </>
+              ) : (
+                <span className="muted">no priced drops</span>
+              )}
+            </span>
+          ) : null}
         </span>
       </td>
       <td className={clsx("relic-tier", r.tier.toLowerCase())}>{r.tier}</td>
-      <td className={clsx("r num", r.qty === 0 && "muted")}>×{r.qty}</td>
+      {/* One line per owned refinement stack — stacked vertically, never joined
+          side by side. Int/Exc/Flw/Rad = Intact/Exceptional/Flawless/Radiant. */}
+      <td className="r num rt-qty">
+        {r.qty === 0 ? (
+          <span className="muted">×0</span>
+        ) : (
+          r.stacks.map((s) => (
+            <div key={s.refinement} title={s.refinement}>
+              <span className="rt-ref">{REF_ABBR[s.refinement] ?? s.refinement}</span> ×{s.qty}
+            </div>
+          ))
+        )}
+      </td>
       <td className={clsx("r num", r.ev_plat === 0 && "muted")}>~{fmt(Math.round(r.ev_plat))}p</td>
       <td className="r num">
         {r.rare_plat != null ? (
