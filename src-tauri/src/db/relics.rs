@@ -22,11 +22,11 @@ fn display_name(tier: &str, name: &str) -> String {
 
 /// Combined-priority weights for the burn-order score. Each tier dwarfs the next so
 /// the categorical signals strictly order relics and EV only breaks ties: completes a
-/// one-away set → drops a watch/buy-list item → crackable now → expected value. Vaulted
-/// is NOT a factor (it's a display tag only), and protection demotes UI-side only.
+/// one-away set → drops a watch/buy-list item → expected value. Vaulted is NOT a
+/// factor (it's a display tag only), and protection demotes UI-side only. There is
+/// no crackable-now signal: Omnia fissures take any tier, so it's always true.
 const W_SET: f64 = 1_000_000.0; // × count of one-away set parts dropped
 const W_WANTED: f64 = 100_000.0; // × min(count, 3)
-const W_NOW: f64 = 10_000.0;
 
 // ===========================================================================
 // Full-catalog relic browser (the reworked Relics screen): every known relic,
@@ -210,12 +210,7 @@ fn base_refinement(tier: &str, name: &str) -> Option<&'static str> {
 /// Every known relic as a browser row: catalog facts + ownership + squad-aware EV +
 /// burn signals. Row EV is the qty-weighted mean over owned refinement stacks
 /// (what your actual holdings return per crack); base-refinement EV when unowned.
-pub fn browser_rows(
-    db: &Db,
-    live_tiers: &HashSet<String>,
-    sig: &CrackSignals,
-    squad: u32,
-) -> AppResult<Vec<RelicBrowserRow>> {
+pub fn browser_rows(db: &Db, sig: &CrackSignals, squad: u32) -> AppResult<Vec<RelicBrowserRow>> {
     let name_to_slug = catalog::name_slug_map(db)?;
     db.read(|c| {
         let ctx = load_ctx(c, name_to_slug)?;
@@ -277,11 +272,8 @@ pub fn browser_rows(
                     }
                 }
             }
-            let crackable_now = live_tiers.contains(&tier);
-            let score = W_SET * set_count as f64
-                + W_WANTED * (wanted_count.min(3) as f64)
-                + W_NOW * (crackable_now as i64 as f64)
-                + ev_plat;
+            let score =
+                W_SET * set_count as f64 + W_WANTED * (wanted_count.min(3) as f64) + ev_plat;
             let (best_reward, best_reward_plat) = match base.best {
                 Some((n, p)) => (Some(n), Some(p)),
                 None => (None, None),
@@ -303,7 +295,6 @@ pub fn browser_rows(
                 drop_names,
                 sets,
                 wanted: wanted_count > 0,
-                crackable_now,
                 best_reward,
                 best_reward_plat,
                 rare_reward,
@@ -648,7 +639,7 @@ mod tests {
     }
 
     fn s1_row(db: &Db, sig: &CrackSignals, squad: u32) -> RelicBrowserRow {
-        browser_rows(db, &HashSet::new(), sig, squad)
+        browser_rows(db, sig, squad)
             .unwrap()
             .into_iter()
             .find(|r| r.tier == "Lith" && r.relic_name == "S1")
@@ -755,7 +746,7 @@ mod tests {
         assert_eq!(row.rare_reward.as_deref(), Some("Spira Prime Pouch"));
         assert_eq!(row.rare_plat, Some(90));
 
-        let eterna = browser_rows(&db, &HashSet::new(), &no_signals(), 1)
+        let eterna = browser_rows(&db, &no_signals(), 1)
             .unwrap()
             .into_iter()
             .find(|r| r.tier == "Requiem" && r.relic_name == "ETERNA")
@@ -804,15 +795,6 @@ mod tests {
         let wanted_row = s1_row(&db, &sig, 1);
         assert!(wanted_row.wanted);
         assert!(wanted_row.score >= W_WANTED && wanted_row.score < W_SET);
-
-        let now_rows =
-            browser_rows(&db, &HashSet::from(["Lith".to_string()]), &no_signals(), 1).unwrap();
-        let now_row = now_rows
-            .iter()
-            .find(|r| r.tier == "Lith" && r.relic_name == "S1")
-            .unwrap();
-        assert!(now_row.crackable_now);
-        assert!(now_row.score >= W_NOW && now_row.score < W_WANTED);
     }
 
     // The drawer's refine-ROI: trace costs are cumulative from Intact and the
@@ -856,7 +838,7 @@ mod tests {
         assert_eq!(det.refinements.len(), 1);
         assert_eq!(det.refinements[0].refinement, "Intact");
         assert_eq!(det.drops.len(), 8);
-        let row = browser_rows(&db, &HashSet::new(), &no_signals(), 4)
+        let row = browser_rows(&db, &no_signals(), 4)
             .unwrap()
             .into_iter()
             .find(|r| r.tier == "Requiem" && r.relic_name == "ETERNA")
@@ -877,7 +859,7 @@ mod tests {
             return;
         };
         let db = Db::open(std::path::Path::new(&path)).unwrap();
-        let rows = browser_rows(&db, &HashSet::new(), &no_signals(), 1).unwrap();
+        let rows = browser_rows(&db, &no_signals(), 1).unwrap();
         let owned: Vec<_> = rows.iter().filter(|r| r.qty > 0).collect();
         println!("{} catalog relics, {} owned", rows.len(), owned.len());
         assert!(rows.len() > 500, "expected the full relic catalog");

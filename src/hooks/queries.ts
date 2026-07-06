@@ -237,14 +237,12 @@ export const useWantedNow = () =>
   });
 
 // ---- relics ----
-// The full-catalog relic browser — refreshes on the crack-now cadence (live
-// fissures flip crackable_now) and on any relic mutation via invalidateRelics.
+// The full-catalog relic browser — refetches on relic mutations (invalidateRelics)
+// and on the price heartbeat (useLivePriceEvents); no interval of its own.
 export const useRelicBrowser = (squad: number) =>
   useQuery({
     queryKey: keys.relicBrowser(squad),
     queryFn: () => api.getRelicBrowser(squad),
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: true,
   });
 // The relic drawer's detail (per-refinement EV/ROI + drop table with ownership).
 export const useRelicDetail = (tier: string, name: string, squad: number) =>

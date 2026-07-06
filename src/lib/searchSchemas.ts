@@ -242,7 +242,6 @@ export const relicsSchema: SearchSchema<RelicBrowserRow> = {
     protected: { test: (r) => r.protected, hint: "flagged do-not-burn" },
     set: { test: (r) => r.sets.length > 0, hint: "completes a one-away set" },
     wanted: { test: (r) => r.wanted, hint: "drops a watch/buy-list item" },
-    now: { test: (r) => r.crackable_now, hint: "a live fissure can crack it now" },
     scanned: {
       test: (r) => r.stacks.some((s) => s.source === "de_scan"),
       hint: "imported from the game",
@@ -474,7 +473,7 @@ export const PAGE_PLACEHOLDER: Partial<Record<ScreenId, string>> = {
   sets: "Search sets…  try is:complete missing=1",
   ducats: "Search parts…  try verdict:ducat dp>=10",
   arcanes: "Search arcanes…  try rarity:legendary verdict:sell",
-  relics: "Search relics…  try is:owned tier:axi ev>30 drops:nova",
+  relics: "Search relics…  try is:owned tier:axi rare>30 drops:nova",
   sold: "Search sales…  try days<7 unit>20",
   listings: "Search listings…  try is:undercut",
   rivens: "Filter results…  try is:exact plat<100 grade>80 polarity:madurai rerolls<5",

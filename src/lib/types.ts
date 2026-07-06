@@ -600,7 +600,6 @@ export interface RelicBrowserRow {
   drop_names: string[]; // reward names, for drops:/text search
   sets: CrackSet[]; // one-away sets this relic can finish
   wanted: boolean; // drops a watch/buy-list item
-  crackable_now: boolean;
   best_reward: string | null;
   best_reward_plat: number | null;
   rare_reward: string | null; // the gold-tier (lowest-chance) drop; null on flat tables

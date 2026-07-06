@@ -1252,25 +1252,15 @@ pub fn set_relic_qty(
     relics::set_qty(&state.db, &tier, &name, refinement.as_deref(), qty)
 }
 
-/// Live fissure tiers for crack-now flags. Soft-fails to empty — the relic browser
-/// must render offline (unlike the old crack plan, this backs the whole screen).
-async fn live_fissure_tiers(state: &AppState) -> std::collections::HashSet<String> {
-    match state.worldstate.get().await {
-        Ok(ws) => ws.fissures.iter().map(|f| f.tier.clone()).collect(),
-        Err(_) => std::collections::HashSet::new(),
-    }
-}
-
 /// Every known relic — owned or not — with squad-aware drop EV, ducat EV, burn
 /// signals, ownership stacks, and the protected flag. Powers the Relics browser.
 #[tauri::command]
-pub async fn get_relic_browser(
+pub fn get_relic_browser(
     state: State<'_, Arc<AppState>>,
     squad_size: u32,
 ) -> AppResult<Vec<RelicBrowserRow>> {
-    let live_tiers = live_fissure_tiers(&state).await;
     let signals = wanted::crack_signals(&state.db)?;
-    relics::browser_rows(&state.db, &live_tiers, &signals, squad_size)
+    relics::browser_rows(&state.db, &signals, squad_size)
 }
 
 /// Per-refinement economics + full drop table for one relic (the relic drawer).

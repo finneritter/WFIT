@@ -368,16 +368,17 @@ function RelicsWidget({ w, h, focused, onNavigate }: WidgetProps) {
     }),
     [owned],
   );
-  // The crack queue: what to burn next — crackable-right-now first, protected out.
+  // The crack queue: what to burn next by score, protected out. (No crackable-now
+  // signal — Omnia fissures take any tier, so everything is crackable.)
   const queue = useMemo(
     () =>
       owned
         .filter((r) => !r.protected)
-        .sort((a, b) => Number(b.crackable_now) - Number(a.crackable_now) || b.score - a.score)
+        .sort((a, b) => b.score - a.score)
         .slice(0, ROW_POOL),
     [owned],
   );
-  const crackable = useMemo(() => owned.filter((r) => r.crackable_now).length, [owned]);
+  const protectedCount = useMemo(() => owned.filter((r) => r.protected).length, [owned]);
   const loading = browser.isLoading;
   return (
     <WidgetBody
@@ -392,8 +393,8 @@ function RelicsWidget({ w, h, focused, onNavigate }: WidgetProps) {
       empty={!loading && owned.length === 0 ? "No relics tracked yet." : undefined}
       cells={[
         { k: "Relics", v: fmt(totalQty) },
-        { k: "Crackable", v: fmt(crackable), tone: crackable ? "pos" : undefined },
-        { k: "Best", v: `${fmt(queue[0]?.ev_plat)}p` },
+        { k: "Distinct", v: fmt(owned.length) },
+        { k: "Protected", v: fmt(protectedCount), tone: protectedCount ? "pos" : undefined },
       ]}
       rows={queue.map((r) => (
         <HwRow
@@ -402,7 +403,6 @@ function RelicsWidget({ w, h, focused, onNavigate }: WidgetProps) {
           plat={r.ev_plat}
           sub={`×${r.qty}`}
           right={`${fmt(r.ev_plat)}p`}
-          tone={r.crackable_now ? "pos" : undefined}
           onClick={() => onNavigate("relics")}
         />
       ))}

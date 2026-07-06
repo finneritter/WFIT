@@ -53,11 +53,10 @@ function burnOrder(a: RelicBrowserRow, b: RelicBrowserRow): number {
   return cmp || a.display_name.localeCompare(b.display_name);
 }
 
-type Signal = "set" | "wanted" | "now" | "protected" | "vaulted";
+type Signal = "set" | "wanted" | "protected" | "vaulted";
 const SIGNAL_CHIPS: [Signal, string, string][] = [
   ["set", "Completes a set", "shows relics that finish a one-away set"],
   ["wanted", "Wanted", "drops a watch/buy-list item"],
-  ["now", "Crackable now", "a live fissure matches the tier"],
   ["protected", "Protected", "flagged do-not-burn"],
   ["vaulted", "Vaulted", "no longer farmable"],
 ];
@@ -68,14 +67,21 @@ function matchesSignal(r: RelicBrowserRow, s: Signal): boolean {
       return r.sets.length > 0;
     case "wanted":
       return r.wanted;
-    case "now":
-      return r.crackable_now;
     case "protected":
       return r.protected;
     case "vaulted":
       return r.vaulted;
   }
 }
+
+// Rare-drop price floor presets ("only show relics whose gold drop is worth it").
+const RARE_MIN_OPTIONS = [
+  ["0", "Rare: any"],
+  ["10", "Rare > 10p"],
+  ["30", "Rare > 30p"],
+  ["50", "Rare > 50p"],
+  ["100", "Rare > 100p"],
+] as const;
 
 export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
   const [squadStr, setSquad] = usePersisted<(typeof SQUADS)[number]>("wfit-relic-squad", "1");
@@ -86,6 +92,8 @@ export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
 
   const [ownedOnly, setOwnedOnly] = usePersisted<"1" | "0">("wfit-relic-owned", "0");
   const [tierFilter, setTierFilter] = usePersisted<string>("wfit-relic-tier", "all");
+  const [rareMinStr, setRareMin] = usePersisted<string>("wfit-relic-rare-min", "0");
+  const rareMin = Number(rareMinStr) || 0;
   const [signals, setSignals] = usePersisted<string>("wfit-relic-signals", "");
   const active = useMemo(() => new Set(signals.split(",").filter(Boolean) as Signal[]), [signals]);
   const toggleSignal = (s: Signal) => {
@@ -104,11 +112,12 @@ export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
         test(r) &&
         (ownedOnly === "0" || r.qty > 0) &&
         (tierFilter === "all" || r.tier === tierFilter) &&
+        (rareMin === 0 || (r.rare_plat ?? 0) > rareMin) &&
         [...active].every((s) => matchesSignal(r, s)),
     );
     // No column sort chosen → burn order (the whole point of the screen).
     return sort.sort ? sort.apply(filtered) : [...filtered].sort(burnOrder);
-  }, [rows, test, ownedOnly, tierFilter, active, sort.sort, sort.apply]);
+  }, [rows, test, ownedOnly, tierFilter, rareMin, active, sort.sort, sort.apply]);
 
   const totals = useMemo(() => {
     let ownedRelics = 0;
@@ -136,6 +145,12 @@ export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
           Owned
         </Chip>
         <Dropdown value={tierFilter} options={TIER_OPTIONS} onChange={setTierFilter} title="Tier" />
+        <Dropdown
+          value={rareMinStr}
+          options={RARE_MIN_OPTIONS}
+          onChange={setRareMin}
+          title="Only relics whose gold (rare) drop sells above this"
+        />
         {SIGNAL_CHIPS.map(([s, label]) => (
           <Chip key={s} active={active.has(s)} onClick={() => toggleSignal(s)}>
             {label}
@@ -232,9 +247,9 @@ export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
 
 function RelicRow({ r, onOpenRelic }: { r: RelicBrowserRow; onOpenRelic: OpenRelicFn }) {
   const scanned = r.stacks.some((s) => s.source === "de_scan");
-  const stackLine = r.stacks
-    .map((s) => `${REF_ABBR[s.refinement] ?? s.refinement} ×${s.qty}`)
-    .join(" · ");
+  // Refinements only — the Qty column carries the counts (per-stack ×n lives in
+  // the drawer's refinement table).
+  const stackLine = r.stacks.map((s) => REF_ABBR[s.refinement] ?? s.refinement).join(" · ");
   return (
     <tr
       className={clsx("rt-row", r.qty === 0 && "rt-unowned", r.protected && "rt-protected")}
@@ -300,7 +315,6 @@ function RelicRow({ r, onOpenRelic }: { r: RelicBrowserRow; onOpenRelic: OpenRel
         <span className="rt-signals">
           {r.sets.length > 0 ? <span className="crk-badge set">SET</span> : null}
           {r.wanted ? <span className="crk-badge wanted">WANTED</span> : null}
-          {r.crackable_now ? <span className="crk-badge now">NOW</span> : null}
         </span>
       </td>
     </tr>

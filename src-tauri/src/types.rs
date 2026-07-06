@@ -193,7 +193,6 @@ pub struct RelicBrowserRow {
     pub drop_names: Vec<String>, // reward display names, for drops:/text search
     pub sets: Vec<CrackSet>, // one-away sets this relic can finish
     pub wanted: bool, // drops a watch/buy-list item
-    pub crackable_now: bool, // a live fissure can crack this tier right now
     pub best_reward: Option<String>, // highest-value priced drop
     pub best_reward_plat: Option<i64>,
     pub rare_reward: Option<String>, // the gold-tier (lowest-chance) drop; None on flat tables
