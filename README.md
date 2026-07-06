@@ -2,8 +2,7 @@
 
 A desktop app for Warframe traders. It tracks what you own, prices it against live
 [warframe.market](https://warframe.market) data, and tells you the things I always wanted a tool
-to tell me: what my stock is *actually* worth if I tried to sell it, which relics are worth
-cracking, what to convert when Baro shows up, and whether that riven is a deal.
+to tell me: provides the user with real time price information and a more streamlined method for buying and selling items.
 
 I originally built this as a React + Supabase web app, then got tired of maintaining a cloud
 backend for what is fundamentally a single-player tool. So it's now one binary and one SQLite
