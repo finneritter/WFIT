@@ -24,9 +24,10 @@ target/
 .env.local
 .env.*.local
 
-# Personal Claude instructions (not shared)
+# Local development notes and assistant config (not shared)
+CLAUDE.md
 CLAUDE.local.md
-.claude/settings.local.json
+.claude/
 
 # Editors / IDEs
 .vscode/

@@ -2,7 +2,7 @@
 
 A focused pass to make the app feel instant with a **large real inventory (800+ items, lots of
 mods)**. Two compounding problems were fixed: (1) the UI froze whenever a market price sync ran,
-and (2) reads and renders were heavy at scale. Read with `CLAUDE.md` and `docs/HANDOFF.md`.
+and (2) reads and renders were heavy at scale. Companion to `docs/ARCHITECTURE.md`.
 
 **Branch:** `perf/responsiveness`. **Status:** all gates green; backend changes proven
 value-preserving against the live 655-item DB. Not yet merged to `main`.

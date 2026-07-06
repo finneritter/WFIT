@@ -3,8 +3,8 @@
 **Read this before building any feature.** It encodes how WFIT is actually built so new
 work matches the existing app instead of re-inventing patterns or duplicating logic that
 later drifts. It is derived from the live code; when code and this doc disagree, fix
-whichever is wrong (and update the other). `CLAUDE.md` is the project's hard constraints;
-this is the *how-to-add-a-feature* companion.
+whichever is wrong (and update the other). `docs/ARCHITECTURE.md` covers the system as a
+whole; this is the *how-to-add-a-feature* companion.
 
 Golden rule: **reuse the shared helper, don't reimplement it.** Most bugs this project hit
 came from two copies of "the same" logic diverging (rank pricing, exclusions, valuation).
@@ -135,7 +135,7 @@ number reads as a bug to the user.
 ## E. Pointers
 
 - Hard constraints, schema, pricing model: `CLAUDE.md` (read first).
-- Current running state: `docs/HANDOFF.md`.
+- System overview: `docs/ARCHITECTURE.md`.
 - Data contract / endpoints: `docs/DATA_SOURCING_MASTER_PLAN.md`.
 - Valuation economics: `docs/PERF_OPTIMIZATION.md`, `docs/archive/CLAUDE_ECONOMIC_RESEARCH/` (historical).
 - Design target: `reference/design_handoff_wfit_update1/`.

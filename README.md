@@ -13,6 +13,21 @@ favor of **one binary + one local SQLite file**. No auth, no hosting, no deploy.
 - **Design:** dense, square, monochrome "trading terminal" aesthetic — hairline borders, tabular
   mono numbers, semantic-only color (`docs/ROTATION_PAGE_DESIGN.md` documents the visual language).
 
+![WFIT home dashboard](docs/screenshots/home.png)
+
+<details>
+<summary><b>More screenshots</b> — inventory, relics, rivens, trends, vendors, rotation, arcanes</summary>
+<br>
+
+| | |
+|---|---|
+| **Inventory** — realizable (liquidation-adjusted) portfolio value ![Inventory](docs/screenshots/inventory.png) | **Relics** — full-catalog browser, squad-size EV, burn order ![Relics](docs/screenshots/relics.png) |
+| **Riven Search** — auction screener + value estimator ![Riven Search](docs/screenshots/riven-search.png) | **Trends** — market index + your holdings' movers ![Trends](docs/screenshots/trends.png) |
+| **Vendors** — Baro/Varzia/Teshin/Circuit/Nora check-off board ![Vendors](docs/screenshots/vendors.png) | **Rotation** — world state, fissures, arbitrations, Nightwave ![Rotation](docs/screenshots/rotation.png) |
+| **Arcanes** — Vosfor dissolution EV ![Arcanes](docs/screenshots/arcanes.png) | |
+
+</details>
+
 ---
 
 ## Download
@@ -350,17 +365,17 @@ The local database lives at `$APPDATA/dev.finn.wfit/wfit.sqlite` (e.g.
 
 ## Docs
 
-- `docs/HANDOFF.md` — **current-state handoff; read first.**
-- `CLAUDE.md` — working guidance, hard constraints, and the pricing/valuation model.
+- `docs/ARCHITECTURE.md` — **the system overview; read first.** Module map, DB model, data
+  sources, pricing/valuation, frontend contracts, testing, releasing.
+- `docs/FEATURE_PLAYBOOK.md` — conventions and checklists for adding a feature.
 - `docs/DATA_SOURCING_MASTER_PLAN.md` — the warframe.market data contract.
 - `docs/GAMESTATE_WORLDSTATE.md` — world-state sources (DE raw, derived cycles, arbitrations).
 - `docs/ROTATION_PAGE_DESIGN.md` — the visual design language (tokens, rules, components).
 - `docs/ARCANE_DISSOLUTION.md` — the Vosfor/collection-EV methodology.
 - `docs/GAME_INVENTORY_IMPORT.md` / `docs/WFM_ACCOUNT_SIGNIN.md` — import + account-connect specs.
-- `docs/archive/` — historical design/spec docs (DESKTOP_REWRITE_PRD, INVENTORY_REDESIGN,
-  CLAUDE_ECONOMIC_RESEARCH — the economics behind realizable valuation).
-- `reference/` — code scaffolds (prior-tauri-attempt, market-proxy) + retired/target design handoffs.
-- `.claude/plans/` — historical design notes (game-inventory-import, pricing-rework, etc.).
+- `docs/PERF_OPTIMIZATION.md` — the backend performance pass (read pool, batched valuation).
+- `docs/archive/` — historical design/spec docs.
+- `reference/` — code scaffolds and design wireframes kept for context.
 - `CHANGELOG.md` — release notes.
 
 ## License
