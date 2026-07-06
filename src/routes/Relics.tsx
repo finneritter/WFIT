@@ -18,14 +18,6 @@ const TIER_ORDER: Record<string, number> = Object.fromEntries(TIERS.map((t, i) =
 const TIER_OPTIONS = [["all", "All tiers"], ...TIERS.map((t) => [t, t] as const)] as const;
 const SQUADS = ["1", "2", "3", "4"] as const;
 
-// Short refinement labels for the Qty column's per-stack lines ("Int ×3").
-const REF_ABBR: Record<string, string> = {
-  Intact: "Int",
-  Exceptional: "Exc",
-  Flawless: "Flw",
-  Radiant: "Rad",
-};
-
 export type OpenRelicFn = (tier: string, name: string) => void;
 
 type Col = "name" | "tier" | "qty" | "ev" | "rare" | "ducats" | "owned" | "score";
@@ -284,14 +276,14 @@ function RelicRow({ r, onOpenRelic }: { r: RelicBrowserRow; onOpenRelic: OpenRel
       </td>
       <td className={clsx("relic-tier", r.tier.toLowerCase())}>{r.tier}</td>
       {/* One line per owned refinement stack — stacked vertically, never joined
-          side by side. Int/Exc/Flw/Rad = Intact/Exceptional/Flawless/Radiant. */}
+          side by side. Full refinement names so the label needs no decoding. */}
       <td className="r num rt-qty">
         {r.qty === 0 ? (
           <span className="muted">×0</span>
         ) : (
           r.stacks.map((s) => (
-            <div key={s.refinement} title={s.refinement}>
-              <span className="rt-ref">{REF_ABBR[s.refinement] ?? s.refinement}</span> ×{s.qty}
+            <div key={s.refinement}>
+              <span className="rt-ref">{s.refinement}</span> ×{s.qty}
             </div>
           ))
         )}

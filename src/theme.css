@@ -7634,10 +7634,8 @@ button.hw-nav:hover {
   line-height: 1.5;
 }
 .rt-qty .rt-ref {
-  color: var(--faint);
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: .05em;
+  color: var(--muted);
+  font-size: 11px;
 }
 .rt-squad-lbl {
   color: var(--faint);
