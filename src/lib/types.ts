@@ -603,6 +603,8 @@ export interface RelicBrowserRow {
   crackable_now: boolean;
   best_reward: string | null;
   best_reward_plat: number | null;
+  rare_reward: string | null; // the gold-tier (lowest-chance) drop; null on flat tables
+  rare_plat: number | null; // its price, null when unpriced
   score: number; // burn priority (set > wanted > now > EV); protection applied UI-side
 }
 // A drop chance at one refinement (Requiem relics may list fewer than four).
@@ -621,6 +623,7 @@ export interface RelicDetailDrop {
   wanted: boolean;
   set: boolean;
   set_slug: string | null;
+  rare: boolean; // the gold-tier (lowest-chance) reward
 }
 // Per-refinement economics for the relic drawer: EV, radshare odds, refine-ROI.
 export interface RelicRefinementInfo {

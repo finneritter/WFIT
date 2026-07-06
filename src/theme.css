@@ -7693,3 +7693,17 @@ button.hw-nav:hover {
   padding: 1px 6px;
   font-size: 9px;
 }
+/* Gold-tier (rare) drop accents — the relic browser's Rare column and the
+   drawer's rare reward row. Gold, like the in-game rarity. */
+.rt-rare {
+  color: var(--ducat);
+}
+.rd-rare-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 3px;
+  border: 1px solid var(--ducat);
+  color: var(--ducat);
+  font-size: 8.5px;
+  letter-spacing: .06em;
+}

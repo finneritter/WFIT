@@ -300,14 +300,21 @@ export function RelicDrawer({
                         {drop.reward_slug ? (
                           <button
                             type="button"
-                            className="crk-link"
+                            className={clsx("crk-link", drop.rare && "rt-rare")}
                             onClick={() => onOpen(drop.reward_slug as string)}
                           >
                             {drop.reward_name}
                           </button>
                         ) : (
-                          <span className="cd-nm">{drop.reward_name}</span>
+                          <span className={clsx("cd-nm", drop.rare && "rt-rare")}>
+                            {drop.reward_name}
+                          </span>
                         )}
+                        {drop.rare ? (
+                          <span className="rd-rare-tag" title="gold-tier (rare) reward">
+                            RARE
+                          </span>
+                        ) : null}
                         {drop.set && drop.set_slug ? (
                           <button
                             type="button"

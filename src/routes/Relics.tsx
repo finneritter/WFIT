@@ -28,12 +28,13 @@ const REF_ABBR: Record<string, string> = {
 
 export type OpenRelicFn = (tier: string, name: string) => void;
 
-type Col = "name" | "tier" | "qty" | "ev" | "ducats" | "owned" | "score";
+type Col = "name" | "tier" | "qty" | "ev" | "rare" | "ducats" | "owned" | "score";
 const CMP: Record<Col, (a: RelicBrowserRow, b: RelicBrowserRow) => number> = {
   name: (a, b) => a.display_name.localeCompare(b.display_name),
   tier: (a, b) => (TIER_ORDER[a.tier] ?? 9) - (TIER_ORDER[b.tier] ?? 9),
   qty: (a, b) => a.qty - b.qty,
   ev: (a, b) => a.ev_plat - b.ev_plat,
+  rare: (a, b) => (a.rare_plat ?? -1) - (b.rare_plat ?? -1),
   ducats: (a, b) => a.ducat_ev - b.ducat_ev,
   owned: (a, b) => a.drops_owned - b.drops_owned,
   score: (a, b) => a.score - b.score,
@@ -176,6 +177,13 @@ export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
                 onSort={sort.cycle}
                 right
               />
+              <SortTh<Col>
+                label="Rare drop"
+                col="rare"
+                sort={sort.sort}
+                onSort={sort.cycle}
+                right
+              />
               <SortTh<Col> label="Ducats" col="ducats" sort={sort.sort} onSort={sort.cycle} right />
               <SortTh<Col>
                 label="Drops owned"
@@ -190,7 +198,7 @@ export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
           <tbody>
             {isLoading || isError || view.length === 0 ? (
               <TableStatus
-                span={7}
+                span={8}
                 loading={isLoading}
                 error={isError}
                 emptyText={
@@ -207,7 +215,7 @@ export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={7}>
+              <td colSpan={8}>
                 <span className="num">{fmt(view.length)}</span> relics ·{" "}
                 <span className="num">{fmt(totals.ownedRelics)}</span> owned (
                 <span className="num">×{fmt(totals.ownedQty)}</span>) · expected{" "}
@@ -269,6 +277,15 @@ function RelicRow({ r, onOpenRelic }: { r: RelicBrowserRow; onOpenRelic: OpenRel
       <td className={clsx("relic-tier", r.tier.toLowerCase())}>{r.tier}</td>
       <td className={clsx("r num", r.qty === 0 && "muted")}>×{r.qty}</td>
       <td className={clsx("r num", r.ev_plat === 0 && "muted")}>~{fmt(Math.round(r.ev_plat))}p</td>
+      <td className="r num">
+        {r.rare_plat != null ? (
+          <span className="rt-rare" title={r.rare_reward ?? undefined}>
+            {fmt(r.rare_plat)}p
+          </span>
+        ) : (
+          <span className="muted">—</span>
+        )}
+      </td>
       <td className={clsx("r num", r.ducat_ev === 0 && "muted")}>{fmt(Math.round(r.ducat_ev))}</td>
       <td className={clsx("r num", r.drops_total === 0 && "muted")}>
         {r.drops_total > 0 ? (

@@ -252,6 +252,7 @@ export const relicsSchema: SearchSchema<RelicBrowserRow> = {
     tier: { kind: "enum", get: (r) => r.tier, values: RELIC_TIERS, hint: "relic tier" },
     qty: { kind: "number", get: (r) => r.qty, hint: "owned count" },
     ev: { kind: "number", get: (r) => r.ev_plat, hint: "expected plat per crack" },
+    rare: { kind: "number", get: (r) => r.rare_plat, hint: "the gold (rare) drop's price" },
     ducats: { kind: "number", get: (r) => r.ducat_ev, hint: "expected ducats per crack" },
     value: { kind: "number", get: (r) => r.ev_plat * r.qty, hint: "total expected plat" },
     drops: {

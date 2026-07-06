@@ -588,11 +588,32 @@ pub(crate) async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()>
 
     // 1.6) Relic reference data: seed the DB tables from the bundled snapshot (or
     // re-seed if a newer bundle shipped), then mirror the DB into the in-memory store.
-    // Live relic updates come via the "Update game data" action, not on launch.
     if let Err(e) = relic_data::seed_if_empty_or_stale(&state.db)
         .and_then(|()| relic_data::load_into_memory(&state.db))
     {
         tracing::warn!(error = %e, "relic data load failed; using bundled defaults");
+    }
+    // …then refresh from live WFCD when the last sync is older than the TTL. Vault
+    // status rotates with every Prime Access / Resurgence cycle, so a bundled or
+    // months-old snapshot shows the currently-farmable relics as VAULT. Best-effort
+    // (own host, not the warframe.market throttle); failure keeps existing data.
+    {
+        const RELIC_REF_TTL_DAYS: i64 = 3;
+        let need = match meta::get(&state.db, meta::KEY_LAST_RELIC_SYNC)? {
+            Some(ts) => DateTime::parse_from_rfc3339(&ts)
+                .map(|t| {
+                    Utc::now().signed_duration_since(t.with_timezone(&Utc))
+                        > Duration::days(RELIC_REF_TTL_DAYS)
+                })
+                .unwrap_or(true),
+            None => true,
+        };
+        if need {
+            tracing::info!("launch: refreshing relic data from WFCD");
+            if let Err(e) = relic_data::refresh(&state.db).await {
+                tracing::warn!(error = %e, "relic data refresh failed; keeping existing data");
+            }
+        }
     }
 
     // 1.7) Item manifest (Account screen's non-tradeable name/icon/mastery source):

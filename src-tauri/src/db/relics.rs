@@ -162,6 +162,43 @@ fn eval_refinement(
     })
 }
 
+/// The gold-tier (rare) rewards of a table: those at the lowest listed chance.
+/// A flat table (Requiem Eterna — every reward equal) has no rarity tiers → empty.
+fn rare_names(drops: &[relic::RelicReward]) -> HashSet<String> {
+    let positive = drops.iter().map(|d| d.chance).filter(|c| *c > 0.0);
+    let (Some(min), Some(max)) = (
+        positive.clone().min_by(f64::total_cmp),
+        positive.max_by(f64::total_cmp),
+    ) else {
+        return HashSet::new();
+    };
+    if (max - min).abs() < 1e-9 {
+        return HashSet::new();
+    }
+    drops
+        .iter()
+        .filter(|d| (d.chance - min).abs() < 1e-9)
+        .map(|d| d.reward_name.clone())
+        .collect()
+}
+
+/// The rare drop to headline for a relic: the highest-valued member of the
+/// rare group (in practice the single gold reward), with its price.
+fn rare_of(ctx: &BrowserCtx, drops: &[relic::RelicReward]) -> Option<(String, Option<i64>)> {
+    let rare = rare_names(drops);
+    drops
+        .iter()
+        .filter(|d| rare.contains(&d.reward_name))
+        .map(|d| {
+            let plat = ctx
+                .name_to_slug
+                .get(&catalog::normalize_name(&d.reward_name))
+                .and_then(|s| prices::effective_price_from(&ctx.prices, s, None));
+            (d.reward_name.clone(), plat)
+        })
+        .max_by_key(|(_, plat)| plat.unwrap_or(-1))
+}
+
 /// The first refinement a relic actually has a drop table for (normally Intact).
 fn base_refinement(tier: &str, name: &str) -> Option<&'static str> {
     relic::REFINEMENTS
@@ -249,6 +286,10 @@ pub fn browser_rows(
                 Some((n, p)) => (Some(n), Some(p)),
                 None => (None, None),
             };
+            let (rare_reward, rare_plat) = match rare_of(&ctx, &drops) {
+                Some((n, p)) => (Some(n), p),
+                None => (None, None),
+            };
             out.push(RelicBrowserRow {
                 display_name: display_name(&tier, &name),
                 vaulted: relic::is_vaulted(&tier, &name),
@@ -265,6 +306,8 @@ pub fn browser_rows(
                 crackable_now,
                 best_reward,
                 best_reward_plat,
+                rare_reward,
+                rare_plat,
                 score,
                 tier,
                 relic_name: name,
@@ -336,6 +379,11 @@ pub fn detail(
                 plat_per_100_traces,
             });
         }
+        // Gold-tier rewards (for the drawer's rare highlight), from the base table.
+        let rare = base_refinement(tier, name)
+            .and_then(|br| relic::drops_for(tier, name, br))
+            .map(|d| rare_names(&d))
+            .unwrap_or_default();
         // Drop table: union rewards across refinements (chances vary per refinement).
         let mut order: Vec<String> = Vec::new();
         let mut by_reward: HashMap<String, Vec<RefinementChance>> = HashMap::new();
@@ -371,6 +419,7 @@ pub fn detail(
             drops.push(RelicDetailDrop {
                 set: one_away.is_some(),
                 set_slug: one_away.map(|(s, _)| s.clone()),
+                rare: rare.contains(&reward_name),
                 reward_name,
                 reward_slug: slug,
                 chances,
@@ -697,6 +746,29 @@ mod tests {
         assert_eq!(row.drop_names.len(), 6, "search haystack keeps all rewards");
     }
 
+    // The gold-tier drop: the lowest-chance reward, priced separately; flat tables
+    // (Requiem Eterna) have no rarity tiers and no rare.
+    #[test]
+    fn rare_drop_is_the_lowest_chance_reward() {
+        let db = fixture();
+        let row = s1_row(&db, &no_signals(), 1);
+        assert_eq!(row.rare_reward.as_deref(), Some("Spira Prime Pouch"));
+        assert_eq!(row.rare_plat, Some(90));
+
+        let eterna = browser_rows(&db, &HashSet::new(), &no_signals(), 1)
+            .unwrap()
+            .into_iter()
+            .find(|r| r.tier == "Requiem" && r.relic_name == "ETERNA")
+            .unwrap();
+        assert_eq!(eterna.rare_reward, None);
+        assert_eq!(eterna.rare_plat, None);
+
+        let det = detail(&db, "Lith", "S1", &no_signals(), 1).unwrap();
+        let rare_flags: Vec<_> = det.drops.iter().filter(|d| d.rare).collect();
+        assert_eq!(rare_flags.len(), 1);
+        assert_eq!(rare_flags[0].reward_name, "Spira Prime Pouch");
+    }
+
     // The do-not-burn flag lives on the identity: it survives the stack going to 0.
     #[test]
     fn protected_survives_qty_zero() {
@@ -811,7 +883,7 @@ mod tests {
         assert!(rows.len() > 500, "expected the full relic catalog");
         for r in &owned {
             println!(
-                "{:<12} qty {:>3}  ev {:>7.1}p  duc {:>6.1}  drops {}/{}  vaulted {}  best {:?}",
+                "{:<12} qty {:>3}  ev {:>7.1}p  duc {:>6.1}  drops {}/{}  vaulted {}  rare {:?} {:?}",
                 r.display_name,
                 r.qty,
                 r.ev_plat,
@@ -819,9 +891,44 @@ mod tests {
                 r.drops_owned,
                 r.drops_total,
                 r.vaulted,
-                r.best_reward
+                r.rare_reward,
+                r.rare_plat
             );
         }
+    }
+
+    // Companion to the spot check: exercise the WFCD relic refresh (the same path
+    // the launch TTL gate and "Update game data" call) against a DB copy, then
+    // report the vault split — catches a stale bundled snapshot marking the
+    // currently-farmable relics as vaulted.
+    #[tokio::test]
+    #[ignore = "network; needs WFIT_LIVE_DB pointing at a COPY of the real database"]
+    async fn live_db_refresh_from_wfcd() {
+        let Some(path) = std::env::var_os("WFIT_LIVE_DB") else {
+            return;
+        };
+        let db = Db::open(std::path::Path::new(&path)).unwrap();
+        let ok = crate::db::relic_data::refresh(&db).await.unwrap();
+        assert!(ok, "WFCD Relics.json fetch failed");
+        let (total, unvaulted) = db
+            .read(|c| {
+                Ok((
+                    c.query_row("SELECT COUNT(*) FROM relic_vaults", [], |r| {
+                        r.get::<_, i64>(0)
+                    })?,
+                    c.query_row(
+                        "SELECT COUNT(*) FROM relic_vaults WHERE vaulted = 0",
+                        [],
+                        |r| r.get::<_, i64>(0),
+                    )?,
+                ))
+            })
+            .unwrap();
+        println!("after WFCD refresh: {total} relics, {unvaulted} unvaulted");
+        assert!(
+            unvaulted > 0,
+            "every relic vaulted after refresh — data bug"
+        );
     }
 
     // Reverse lookup: the rare's chance shifts 2% → 10% Intact → Radiant.

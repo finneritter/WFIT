@@ -196,6 +196,8 @@ pub struct RelicBrowserRow {
     pub crackable_now: bool, // a live fissure can crack this tier right now
     pub best_reward: Option<String>, // highest-value priced drop
     pub best_reward_plat: Option<i64>,
+    pub rare_reward: Option<String>, // the gold-tier (lowest-chance) drop; None on flat tables
+    pub rare_plat: Option<i64>,      // its price, None when unpriced
     pub score: f64, // burn-order priority (set > wanted > now > EV); protection is applied UI-side
 }
 
@@ -219,6 +221,7 @@ pub struct RelicDetailDrop {
     pub wanted: bool,
     pub set: bool, // completes a one-away set
     pub set_slug: Option<String>,
+    pub rare: bool, // the gold-tier (lowest-chance) reward
 }
 
 /// Per-refinement economics for the relic drawer: EV, radshare odds, and the
