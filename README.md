@@ -117,6 +117,11 @@ opt-in, typed-consent-gated, and never logs in (it reads the session the game al
 Linux and Windows only; macOS's SIP blocks cross-process reads. Details in
 `docs/GAME_INVENTORY_IMPORT.md`.
 
+The session-reuse technique here is a native Rust reimplementation of the approach pioneered by
+[gjrud/warframe-helper](https://github.com/gjrud/warframe-helper) and
+[Sainan/warframe-api-helper](https://github.com/Sainan/warframe-api-helper) — credit to both for
+working it out and for the typed-consent pattern this mirrors.
+
 ## Building it yourself
 
 ```bash
