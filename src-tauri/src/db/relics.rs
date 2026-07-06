@@ -210,7 +210,13 @@ fn base_refinement(tier: &str, name: &str) -> Option<&'static str> {
 /// Every known relic as a browser row: catalog facts + ownership + squad-aware EV +
 /// burn signals. Row EV is the qty-weighted mean over owned refinement stacks
 /// (what your actual holdings return per crack); base-refinement EV when unowned.
-pub fn browser_rows(db: &Db, sig: &CrackSignals, squad: u32) -> AppResult<Vec<RelicBrowserRow>> {
+/// `aya` = identities currently sold by Varzia for Aya (vaulted-but-buyable).
+pub fn browser_rows(
+    db: &Db,
+    sig: &CrackSignals,
+    aya: &HashSet<(String, String)>,
+    squad: u32,
+) -> AppResult<Vec<RelicBrowserRow>> {
     let name_to_slug = catalog::name_slug_map(db)?;
     db.read(|c| {
         let ctx = load_ctx(c, name_to_slug)?;
@@ -285,6 +291,7 @@ pub fn browser_rows(db: &Db, sig: &CrackSignals, squad: u32) -> AppResult<Vec<Re
             out.push(RelicBrowserRow {
                 display_name: display_name(&tier, &name),
                 vaulted: relic::is_vaulted(&tier, &name),
+                aya: aya.contains(&(tier.clone(), name.clone())),
                 protected: ctx.protected.contains(&(tier.clone(), name.clone())),
                 qty,
                 stacks,
@@ -315,12 +322,14 @@ pub fn browser_rows(db: &Db, sig: &CrackSignals, squad: u32) -> AppResult<Vec<Re
 }
 
 /// Everything the relic drawer shows: per-refinement economics (EV, radshare odds,
-/// refine-ROI vs Intact) and the full drop table with ownership.
+/// refine-ROI vs Intact) and the full drop table with ownership. `aya` = currently
+/// sold by Varzia for Aya.
 pub fn detail(
     db: &Db,
     tier: &str,
     name: &str,
     sig: &CrackSignals,
+    aya: bool,
     squad: u32,
 ) -> AppResult<RelicDetail> {
     if !relic::is_known(tier, name) {
@@ -426,6 +435,7 @@ pub fn detail(
             relic_name: name.to_string(),
             display_name: display_name(tier, name),
             vaulted: relic::is_vaulted(tier, name),
+            aya,
             protected: ctx
                 .protected
                 .contains(&(tier.to_string(), name.to_string())),
@@ -639,7 +649,7 @@ mod tests {
     }
 
     fn s1_row(db: &Db, sig: &CrackSignals, squad: u32) -> RelicBrowserRow {
-        browser_rows(db, sig, squad)
+        browser_rows(db, sig, &HashSet::new(), squad)
             .unwrap()
             .into_iter()
             .find(|r| r.tier == "Lith" && r.relic_name == "S1")
@@ -678,7 +688,7 @@ mod tests {
         set_qty(&db, "Lith", "S1", Some("Intact"), 3).unwrap();
         set_qty(&db, "Lith", "S1", Some("Radiant"), 1).unwrap();
         let sig = no_signals();
-        let det = detail(&db, "Lith", "S1", &sig, 1).unwrap();
+        let det = detail(&db, "Lith", "S1", &sig, false, 1).unwrap();
         let ev_of = |r: &str| {
             det.refinements
                 .iter()
@@ -746,7 +756,7 @@ mod tests {
         assert_eq!(row.rare_reward.as_deref(), Some("Spira Prime Pouch"));
         assert_eq!(row.rare_plat, Some(90));
 
-        let eterna = browser_rows(&db, &no_signals(), 1)
+        let eterna = browser_rows(&db, &no_signals(), &HashSet::new(), 1)
             .unwrap()
             .into_iter()
             .find(|r| r.tier == "Requiem" && r.relic_name == "ETERNA")
@@ -754,10 +764,26 @@ mod tests {
         assert_eq!(eterna.rare_reward, None);
         assert_eq!(eterna.rare_plat, None);
 
-        let det = detail(&db, "Lith", "S1", &no_signals(), 1).unwrap();
+        let det = detail(&db, "Lith", "S1", &no_signals(), false, 1).unwrap();
         let rare_flags: Vec<_> = det.drops.iter().filter(|d| d.rare).collect();
         assert_eq!(rare_flags.len(), 1);
         assert_eq!(rare_flags[0].reward_name, "Spira Prime Pouch");
+    }
+
+    // Varzia's current Resurgence stock marks matching identities as aya-buyable.
+    #[test]
+    fn aya_set_marks_matching_rows() {
+        let db = fixture();
+        let aya = HashSet::from([("Lith".to_string(), "S1".to_string())]);
+        let rows = browser_rows(&db, &no_signals(), &aya, 1).unwrap();
+        let s1 = rows
+            .iter()
+            .find(|r| r.tier == "Lith" && r.relic_name == "S1")
+            .unwrap();
+        assert!(s1.aya);
+        assert!(rows.iter().filter(|r| r.aya).count() == 1);
+        let det = detail(&db, "Lith", "S1", &no_signals(), true, 1).unwrap();
+        assert!(det.aya);
     }
 
     // The do-not-burn flag lives on the identity: it survives the stack going to 0.
@@ -802,7 +828,7 @@ mod tests {
     #[test]
     fn detail_roi_is_ev_delta_vs_intact_over_trace_cost() {
         let db = fixture();
-        let det = detail(&db, "Lith", "S1", &no_signals(), 1).unwrap();
+        let det = detail(&db, "Lith", "S1", &no_signals(), false, 1).unwrap();
         assert_eq!(det.refinements.len(), 4);
         let intact = &det.refinements[0];
         assert_eq!(intact.refinement, "Intact");
@@ -819,7 +845,7 @@ mod tests {
         // 100 traces → plat/100tr equals the delta itself.
         assert!((radiant.plat_per_100_traces.unwrap() - round1(delta)).abs() < 1e-9);
         // Radshare: solo Radiant rare odds are 10%.
-        let det4 = detail(&db, "Lith", "S1", &no_signals(), 4).unwrap();
+        let det4 = detail(&db, "Lith", "S1", &no_signals(), false, 4).unwrap();
         let rad4 = det4
             .refinements
             .iter()
@@ -834,11 +860,11 @@ mod tests {
     #[test]
     fn requiem_eterna_renders_without_all_refinements() {
         let db = fixture();
-        let det = detail(&db, "Requiem", "ETERNA", &no_signals(), 4).unwrap();
+        let det = detail(&db, "Requiem", "ETERNA", &no_signals(), false, 4).unwrap();
         assert_eq!(det.refinements.len(), 1);
         assert_eq!(det.refinements[0].refinement, "Intact");
         assert_eq!(det.drops.len(), 8);
-        let row = browser_rows(&db, &no_signals(), 4)
+        let row = browser_rows(&db, &no_signals(), &HashSet::new(), 4)
             .unwrap()
             .into_iter()
             .find(|r| r.tier == "Requiem" && r.relic_name == "ETERNA")
@@ -859,7 +885,7 @@ mod tests {
             return;
         };
         let db = Db::open(std::path::Path::new(&path)).unwrap();
-        let rows = browser_rows(&db, &no_signals(), 1).unwrap();
+        let rows = browser_rows(&db, &no_signals(), &HashSet::new(), 1).unwrap();
         let owned: Vec<_> = rows.iter().filter(|r| r.qty > 0).collect();
         println!("{} catalog relics, {} owned", rows.len(), owned.len());
         assert!(rows.len() > 500, "expected the full relic catalog");

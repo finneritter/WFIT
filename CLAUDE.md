@@ -41,9 +41,12 @@ cheap-item exclusion. The app now has **16 screens** (Dashboard, Market, Relics,
   the webview throttles. Fissures are grouped Normal / Steel Path / Void Storm. The screen is tabbed
   (Overview · Fissures). The **Relics** screen is a full-catalog spreadsheet browser (every known
   relic, owned or not; squad-aware best-of-N drop EV + ducat EV via `domain/relic.rs::squad_ev`;
-  burn-order default sort with set/wanted/crackable-now signals from `wanted::crack_signals`;
-  vaulted + protected/do-not-burn flags; row click → `RelicDrawer` with per-refinement EV/ROI and
-  per-drop ownership — see `db/relics.rs::browser_rows`/`detail`); vendors live in the standalone
+  burn-order default sort with set/wanted signals from `wanted::crack_signals` — no crackable-now,
+  Omnia fissures take any tier; rare-drop price column + `rare > Np` filter; VAULT / AYA (Varzia's
+  current Resurgence stock, resolved from worldstate projections) / protected do-not-burn tags;
+  relic reference data auto-refreshes from WFCD on launch when >3 days stale; row click →
+  `RelicDrawer` with per-refinement EV/ROI and per-drop ownership — see
+  `db/relics.rs::browser_rows`/`detail`); vendors live in the standalone
   **Vendors** board (Baro · Varzia · Teshin, plus Wave-2: the Duviri **Circuit** Incarnon week from
   DE raw `EndlessXpSchedule`, and **Nora's cred shop** from a bundled dataset —
   `domain/data/nightwave_offerings.tsv`).

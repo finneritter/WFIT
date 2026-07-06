@@ -10,8 +10,9 @@ earlier ones; prior sessions are condensed at the bottom.
 Everything below is **merged to `main`** (`github.com/finneritter/WFIT`) and the installed desktop app
 is on this code. The session feature branches (`perf/responsiveness`, `feat/animations`,
 `feat/arcanes`) were merged and **deleted**. The 16 screens: Dashboard (home + customizable widget
-grid), Inventory, Market (screener), **Riven Search** (auctions + value estimator), Relics (owned +
-"To crack"), Sets, Trends, Watchlist, Buy List, Listings, Ducats, Arcanes, Rotation, Sold History,
+grid), Inventory, Market (screener), **Riven Search** (auctions + value estimator), Relics
+(full-catalog spreadsheet browser + RelicDrawer), Sets, Trends, Watchlist, Buy List, Listings,
+Ducats, Arcanes, Rotation, Sold History,
 Account (Tenno profile), Settings — plus a global-hotkey Void Cascade HUD overlay window. (This handoff
 was written at the 11-screen mark; the newer screens are summarized under "Since this handoff" below.)
 
@@ -221,8 +222,22 @@ the current-state index.
 - **Market — item screener** (2026-06-12; `routes/Market.tsx`). Category/price/volume filters, seller
   order books with bid ladders, market link + copy-to-clipboard whisper. In-app market nav from the buy
   list (2026-06-19) and budget UX.
-- **Relics screen** (2026-06-15; `routes/Relics.tsx`, migrations `0011_owned_relics` + `0012_relic_data`).
-  Owned relics with refinement levels and a "To crack" tab (crackable-now vs waiting-on-a-fissure).
+- **Relics screen** (2026-06-15; reworked 2026-07-06 into a full-catalog spreadsheet browser;
+  `routes/Relics.tsx` + `components/RelicDrawer.tsx`, migrations `0011_owned_relics` +
+  `0012_relic_data` + `0018_relic_prefs`). Every known relic (~770, owned or not) in one
+  Vendors-style ruled grid: burn-order default sort (one-away set > wanted > EV; protected demoted,
+  unowned last), **squad-size 1–4 best-of-N EV** (`domain/relic.rs::squad_ev`, order statistics),
+  ducat EV, a sortable **Rare drop** price column + custom `rare > Np` filter, per-stack refinement
+  counts in the Qty column, and VAULT / **AYA** (in Varzia's current Resurgence stock, resolved from
+  worldstate projections) / PROT tags. Row click opens the **RelicDrawer**: per-refinement
+  EV/ducats/rare-odds/refine-ROI (plat per 100 traces) with qty steppers, Protect (do-not-burn)
+  toggle, and the drop table with per-drop ownership; drop names stack the item Drawer on top. The
+  item Drawer gained a "Drops from relics" reverse lookup (`db/relics.rs::sources_for`), and the
+  topbar grammar a `drops:<name>` field. Relic reference data (drop tables + vault flags, WFCD
+  `Relics.json`) now auto-refreshes on launch when >3 days stale — the bundled snapshot ages with
+  every Prime Access/Resurgence rotation and used to show currently-farmable relics as vaulted.
+  Replaced the two-tab owned-only screen (`get_crack_plan`/`get_relics` and the crackable-now
+  signal are gone — Omnia fissures accept any tier, so it carried no information).
 - **Account — Tenno trader profile** (2026-06-18; `routes/Account.tsx`, migration `0013_account`, see
   `docs/WFM_ACCOUNT_SIGNIN.md`). Scan-populated sections plus a sales-backed Overview that works without
   a game scan.
@@ -251,7 +266,8 @@ the current-state index.
   `0006_buy_orders` · `0007_mod_rarity` (`catalog_items.mod_rarity` + bundled `mod_rarity.tsv`) ·
   `0008_vault_status` (`vault_status` table, WFCD-sourced, `db/vault.rs`) · `0009_perf_indexes` ·
   `0010_order_fetch_meta` · `0011_owned_relics` · `0012_relic_data` · `0013_account` · `0014_rivens` ·
-  `0015_riven_search_thresholds` · `0016_app_notifications` · `0017_vendor_checkoff`. (`SCHEMA_VERSION = 17`.)
+  `0015_riven_search_thresholds` · `0016_app_notifications` · `0017_vendor_checkoff` ·
+  `0018_relic_prefs` (per-relic protected/do-not-burn flag). (`SCHEMA_VERSION = 18`.)
 - **DB connection model** (`db/mod.rs`): one writer `Arc<Mutex<Connection>>` (`with`/`with_mut`) + an
   r2d2 read pool (`read()`). All tuned by `tune()`.
 - **Pricing path:** `market.rs` → `db/prices.rs` (`effective_price` + the batched `PriceMaps` /

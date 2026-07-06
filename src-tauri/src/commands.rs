@@ -1252,27 +1252,52 @@ pub fn set_relic_qty(
     relics::set_qty(&state.db, &tier, &name, refinement.as_deref(), qty)
 }
 
+/// Relic identities Varzia currently sells for Aya (vaulted-but-buyable this
+/// Resurgence rotation). Her stock lists store projections
+/// ("/Lotus/StoreItems/Types/Game/Projections/…"); stripping `StoreItems/`
+/// yields the DE projection id `relic::ident_for` resolves. Soft-fails to empty —
+/// the browser must render offline.
+async fn varzia_relics(state: &AppState) -> std::collections::HashSet<(String, String)> {
+    let Ok(ws) = state.worldstate.get().await else {
+        return Default::default();
+    };
+    let Some(varzia) = ws.varzia.as_ref().filter(|v| v.active) else {
+        return Default::default();
+    };
+    varzia
+        .inventory
+        .iter()
+        .filter_map(|i| i.unique_name.as_deref())
+        .filter_map(|un| crate::domain::relic::ident_for(&un.replace("/StoreItems", "")))
+        .map(|id| (id.tier, id.name))
+        .collect()
+}
+
 /// Every known relic — owned or not — with squad-aware drop EV, ducat EV, burn
 /// signals, ownership stacks, and the protected flag. Powers the Relics browser.
 #[tauri::command]
-pub fn get_relic_browser(
+pub async fn get_relic_browser(
     state: State<'_, Arc<AppState>>,
     squad_size: u32,
 ) -> AppResult<Vec<RelicBrowserRow>> {
+    let aya = varzia_relics(&state).await;
     let signals = wanted::crack_signals(&state.db)?;
-    relics::browser_rows(&state.db, &signals, squad_size)
+    relics::browser_rows(&state.db, &signals, &aya, squad_size)
 }
 
 /// Per-refinement economics + full drop table for one relic (the relic drawer).
 #[tauri::command]
-pub fn get_relic_detail(
+pub async fn get_relic_detail(
     state: State<'_, Arc<AppState>>,
     tier: String,
     relic_name: String,
     squad_size: u32,
 ) -> AppResult<RelicDetail> {
+    let aya = varzia_relics(&state)
+        .await
+        .contains(&(tier.clone(), relic_name.clone()));
     let signals = wanted::crack_signals(&state.db)?;
-    relics::detail(&state.db, &tier, &relic_name, &signals, squad_size)
+    relics::detail(&state.db, &tier, &relic_name, &signals, aya, squad_size)
 }
 
 /// Flip a relic's do-not-burn flag.

@@ -249,6 +249,14 @@ function RelicRow({ r, onOpenRelic }: { r: RelicBrowserRow; onOpenRelic: OpenRel
                 VAULT
               </span>
             ) : null}
+            {r.aya ? (
+              <span
+                className="aya-tag"
+                title="in Varzia's current Prime Resurgence stock — buyable for Aya"
+              >
+                AYA
+              </span>
+            ) : null}
             {r.protected ? (
               <span className="prot" title="protected — flagged do-not-burn">
                 PROT

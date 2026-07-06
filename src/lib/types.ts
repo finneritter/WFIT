@@ -590,6 +590,7 @@ export interface RelicBrowserRow {
   relic_name: string;
   display_name: string;
   vaulted: boolean;
+  aya: boolean; // in Varzia's current Prime Resurgence stock (buyable for Aya)
   protected: boolean;
   qty: number; // total owned across refinements (0 = catalog-only row)
   stacks: RelicStack[];
@@ -642,6 +643,7 @@ export interface RelicDetail {
   relic_name: string;
   display_name: string;
   vaulted: boolean;
+  aya: boolean; // in Varzia's current Resurgence stock
   protected: boolean;
   squad_size: number;
   stacks: RelicStack[];

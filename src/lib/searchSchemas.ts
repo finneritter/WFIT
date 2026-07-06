@@ -239,6 +239,7 @@ export const relicsSchema: SearchSchema<RelicBrowserRow> = {
   is: {
     owned: { test: (r) => r.qty > 0, hint: "you hold at least one" },
     vaulted: { test: (r) => r.vaulted, hint: "a vaulted (unfarmable) relic" },
+    aya: { test: (r) => r.aya, hint: "buyable from Varzia this Resurgence" },
     protected: { test: (r) => r.protected, hint: "flagged do-not-burn" },
     set: { test: (r) => r.sets.length > 0, hint: "completes a one-away set" },
     wanted: { test: (r) => r.wanted, hint: "drops a watch/buy-list item" },

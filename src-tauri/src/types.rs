@@ -183,6 +183,7 @@ pub struct RelicBrowserRow {
     pub relic_name: String,          // "A1"
     pub display_name: String,        // "Axi A1"
     pub vaulted: bool,               // no longer farmable (data-driven; Resurgence can undo it)
+    pub aya: bool,                   // in Varzia's CURRENT Resurgence stock (buyable for Aya)
     pub protected: bool,             // user's do-not-burn flag
     pub qty: i64,                    // total owned across refinements (0 = catalog-only row)
     pub stacks: Vec<RelicStack>,     // owned per-refinement breakdown
@@ -245,6 +246,7 @@ pub struct RelicDetail {
     pub relic_name: String,
     pub display_name: String,
     pub vaulted: bool,
+    pub aya: bool, // in Varzia's current Resurgence stock
     pub protected: bool,
     pub squad_size: i64,
     pub stacks: Vec<RelicStack>,

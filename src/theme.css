@@ -7705,6 +7705,18 @@ button.hw-nav:hover {
   gap: 4px;
   flex-wrap: wrap;
 }
+/* AYA badge — in Varzia's current Resurgence stock (vaulted but buyable). */
+.dtable .nm .aya-tag,
+.drawer .nm .aya-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 4px;
+  border: 1px solid var(--aya);
+  color: var(--aya);
+  font-size: 8.5px;
+  letter-spacing: .06em;
+  vertical-align: 1px;
+}
 /* PROT badge — same chip shape as .vault, protective green. */
 .dtable .nm .prot,
 .drawer .nm .prot {

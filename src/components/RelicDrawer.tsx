@@ -148,6 +148,14 @@ export function RelicDrawer({
                   VAULT
                 </span>
               ) : null}
+              {d.aya ? (
+                <span
+                  className="aya-tag"
+                  title="in Varzia's current Prime Resurgence stock — buyable for Aya"
+                >
+                  AYA
+                </span>
+              ) : null}
               {d.protected ? (
                 <span className="prot" title="protected — flagged do-not-burn">
                   PROT
