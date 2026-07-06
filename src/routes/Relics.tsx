@@ -309,10 +309,14 @@ function RelicRow({ r, onOpenRelic }: { r: RelicBrowserRow; onOpenRelic: OpenRel
         )}
       </td>
       <td>
-        <span className="rt-signals">
-          {r.sets.length > 0 ? <span className="crk-badge set">SET</span> : null}
-          {r.wanted ? <span className="crk-badge wanted">WANTED</span> : null}
-        </span>
+        {r.sets.length > 0 || r.wanted ? (
+          <span className="rt-signals">
+            {r.sets.length > 0 ? <span className="crk-badge set">SET</span> : null}
+            {r.wanted ? <span className="crk-badge wanted">WANTED</span> : null}
+          </span>
+        ) : (
+          <span className="muted">~</span>
+        )}
       </td>
     </tr>
   );
