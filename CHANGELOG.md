@@ -3,6 +3,35 @@
 All notable changes to WFIT are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] — 2026-07-06 · relic browser
+
+- **The Relics screen is a full-catalog browser now.** Every known relic
+  (~770, owned or not) in one full-screen spreadsheet, default-sorted by
+  burn priority (completes a one-away set → drops a wanted item → EV);
+  protected relics demoted, the unowned catalog last. Filters: owned,
+  tier, signal chips, a custom **rare > N p** price floor, and the topbar
+  grammar grew `is:owned/vaulted/protected/set/wanted/aya`, `rare>N`,
+  `ducats>N`, and `drops:<name>` (reverse lookup by reward).
+- **Squad-size EV (1–4).** Expected plat per crack computed as a true
+  best-of-N radshare (order statistics over the drop value distribution),
+  not naive averages — the 1/2/3/4 toggle recalculates the whole table.
+  Ducat EV stays per-crack (every squad member dissolves their own pick).
+- **Rare drop column.** The gold-tier reward's price, sortable, shown in
+  gold; the drawer tags the rare reward.
+- **Relic drawer.** Click any relic: per-refinement EV / ducats / rare
+  odds / refine-ROI (plat per 100 traces, with a "worth radianting?"
+  verdict), quantity steppers per refinement, a **Protect (do-not-burn)**
+  flag, and the full drop table with per-drop ownership. Drop names open
+  the item drawer on top; items gained a "Drops from relics" section.
+- **Vault data stays fresh.** Relic reference data (drop tables + vault
+  flags) auto-refreshes from WFCD on launch when older than 3 days — the
+  bundled snapshot aged with every Prime Access rotation and showed
+  currently-farmable relics as vaulted. Relics in Varzia's current Prime
+  Resurgence stock now carry a gold **AYA** tag (vaulted but buyable).
+- Removed: the old two-tab owned-only Relics screen, the manual add-relic
+  modal (the catalog + drawer steppers replace it), and the crackable-now
+  signal (Omnia fissures take any tier, so it was always on).
+
 ## [1.2.1] — 2026-07-04
 
 - Maintenance release — the first one delivered over the new auto-update
