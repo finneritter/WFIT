@@ -18,6 +18,10 @@ const REF_ABBR: Record<string, string> = {
   Radiant: "Rad",
 };
 
+/// Narrowest the drawer can be dragged: below this the refinement table (6 cols
+/// + qty steppers) crushes and wraps. Tables also scroll sideways past this.
+const MIN_WIDTH = 480;
+
 export function RelicDrawer({
   tier,
   name,
@@ -45,7 +49,7 @@ export function RelicDrawer({
   // Resizable width — same affordance as the item Drawer, own persistence key.
   const [width, setWidth] = useState<number>(() => {
     const saved = Number(localStorage.getItem("wfit.relicDrawerWidth"));
-    return Number.isFinite(saved) && saved >= 360 ? saved : 480;
+    return Number.isFinite(saved) && saved >= MIN_WIDTH ? saved : 520;
   });
   const widthRef = useRef(width);
   widthRef.current = width;
@@ -53,7 +57,10 @@ export function RelicDrawer({
     e.preventDefault();
     e.stopPropagation();
     const onMove = (ev: PointerEvent) => {
-      const w = Math.min(Math.max(window.innerWidth - ev.clientX, 360), window.innerWidth - 80);
+      const w = Math.min(
+        Math.max(window.innerWidth - ev.clientX, MIN_WIDTH),
+        window.innerWidth - 80,
+      );
       widthRef.current = w;
       setWidth(w);
     };
@@ -178,80 +185,83 @@ export function RelicDrawer({
                 · EV{squad > 1 ? ` (squad of ${squad})` : ""} · rare odds · refine ROI
               </span>
             </div>
-            <table className="dtable rd-ref">
-              <thead>
-                <tr>
-                  <th>Refinement</th>
-                  <th className="r">Owned</th>
-                  <th className="r">EV</th>
-                  <th className="r">Ducats</th>
-                  <th className="r">Rare</th>
-                  <th className="r" title="EV gained over Intact per 100 traces spent">
-                    p/100tr
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {refinements.map((r) => (
-                  <tr key={r.refinement}>
-                    <td>{r.refinement}</td>
-                    <td className="r num">
-                      <span className="qty-step">
-                        <button
-                          type="button"
-                          className="qb"
-                          title="Remove one"
-                          disabled={r.owned_qty === 0}
-                          onClick={() =>
-                            setQty.mutate({
-                              tier: d.tier,
-                              name: d.relic_name,
-                              refinement: r.refinement,
-                              qty: r.owned_qty - 1,
-                            })
-                          }
-                        >
-                          −
-                        </button>
-                        <b>×{r.owned_qty}</b>
-                        <button
-                          type="button"
-                          className="qb"
-                          title="Add one"
-                          onClick={() =>
-                            setQty.mutate({
-                              tier: d.tier,
-                              name: d.relic_name,
-                              refinement: r.refinement,
-                              qty: r.owned_qty + 1,
-                            })
-                          }
-                        >
-                          +
-                        </button>
-                      </span>
-                    </td>
-                    <td className="r num">
-                      ~{fmt(Math.round(r.ev_plat))}p
-                      {squad > 1 ? (
-                        <span className="muted"> ({fmt(Math.round(r.ev_solo))} solo)</span>
-                      ) : null}
-                    </td>
-                    <td className="r num ducat">{fmt(Math.round(r.ducat_ev))}</td>
-                    <td className="r num">{(r.p_rare * 100).toFixed(1)}%</td>
-                    <td
-                      className={clsx(
-                        "r num",
-                        r.plat_per_100_traces != null &&
-                          (r.plat_per_100_traces > 0 ? "pos" : "neg"),
-                      )}
-                    >
-                      {r.plat_per_100_traces != null ? fmt1(r.plat_per_100_traces) : "—"}
-                    </td>
+            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard-scrollable overflow region */}
+            <div className="rd-scroll" tabIndex={0}>
+              <table className="dtable rd-ref">
+                <thead>
+                  <tr>
+                    <th>Refinement</th>
+                    <th className="r">Owned</th>
+                    <th className="r">EV</th>
+                    <th className="r">Ducats</th>
+                    <th className="r">Rare</th>
+                    <th className="r" title="EV gained over Intact per 100 traces spent">
+                      p/100tr
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {refinements.map((r) => (
+                    <tr key={r.refinement}>
+                      <td>{r.refinement}</td>
+                      <td className="r num">
+                        <span className="qty-step">
+                          <button
+                            type="button"
+                            className="qb"
+                            title="Remove one"
+                            disabled={r.owned_qty === 0}
+                            onClick={() =>
+                              setQty.mutate({
+                                tier: d.tier,
+                                name: d.relic_name,
+                                refinement: r.refinement,
+                                qty: r.owned_qty - 1,
+                              })
+                            }
+                          >
+                            −
+                          </button>
+                          <b>×{r.owned_qty}</b>
+                          <button
+                            type="button"
+                            className="qb"
+                            title="Add one"
+                            onClick={() =>
+                              setQty.mutate({
+                                tier: d.tier,
+                                name: d.relic_name,
+                                refinement: r.refinement,
+                                qty: r.owned_qty + 1,
+                              })
+                            }
+                          >
+                            +
+                          </button>
+                        </span>
+                      </td>
+                      <td className="r num">
+                        ~{fmt(Math.round(r.ev_plat))}p
+                        {squad > 1 ? (
+                          <span className="muted"> ({fmt(Math.round(r.ev_solo))} solo)</span>
+                        ) : null}
+                      </td>
+                      <td className="r num ducat">{fmt(Math.round(r.ducat_ev))}</td>
+                      <td className="r num">{(r.p_rare * 100).toFixed(1)}%</td>
+                      <td
+                        className={clsx(
+                          "r num",
+                          r.plat_per_100_traces != null &&
+                            (r.plat_per_100_traces > 0 ? "pos" : "neg"),
+                        )}
+                      >
+                        {r.plat_per_100_traces != null ? fmt1(r.plat_per_100_traces) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <div className="sub" style={{ padding: "6px 2px 0" }}>
               {verdict
                 ? `Refining to ${verdict.refinement} pays best here: +${fmt1(
@@ -280,67 +290,73 @@ export function RelicDrawer({
                 ))}
               </span>
             </div>
-            <table className="dtable rd-drops">
-              <thead>
-                <tr>
-                  <th>Drop</th>
-                  <th className="r">Chance</th>
-                  <th className="r">Plat</th>
-                  <th className="r">Ducats</th>
-                  <th className="r">You own</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.drops.map((drop) => {
-                  const chance = chanceAt(drop.chances);
-                  return (
-                    <tr key={drop.reward_name} className={clsx((drop.wanted || drop.set) && "hot")}>
-                      <td>
-                        <span className="cd-mark">{drop.set ? "◆" : drop.wanted ? "★" : ""}</span>
-                        {drop.reward_slug ? (
-                          <button
-                            type="button"
-                            className={clsx("crk-link", drop.rare && "rt-rare")}
-                            onClick={() => onOpen(drop.reward_slug as string)}
-                          >
-                            {drop.reward_name}
-                          </button>
-                        ) : (
-                          <span className={clsx("cd-nm", drop.rare && "rt-rare")}>
-                            {drop.reward_name}
-                          </span>
-                        )}
-                        {drop.rare ? (
-                          <span className="rd-rare-tag" title="gold-tier (rare) reward">
-                            RARE
-                          </span>
-                        ) : null}
-                        {drop.set && drop.set_slug ? (
-                          <button
-                            type="button"
-                            className="crk-setlink"
-                            title="Completes a one-away set — go to it"
-                            onClick={() =>
-                              onNavigate("sets", { focusSetSlug: drop.set_slug as string })
-                            }
-                          >
-                            → set
-                          </button>
-                        ) : null}
-                      </td>
-                      <td className="r num">{chance != null ? `${chance.toFixed(1)}%` : "—"}</td>
-                      <td className="r num">{drop.plat != null ? `${fmt(drop.plat)}p` : "—"}</td>
-                      <td className="r num ducat">
-                        {drop.ducats != null ? fmt(drop.ducats) : "—"}
-                      </td>
-                      <td className={clsx("r num", drop.owned_qty === 0 && "muted")}>
-                        {drop.owned_qty > 0 ? `×${drop.owned_qty}` : "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard-scrollable overflow region */}
+            <div className="rd-scroll" tabIndex={0}>
+              <table className="dtable rd-drops">
+                <thead>
+                  <tr>
+                    <th>Drop</th>
+                    <th className="r">Chance</th>
+                    <th className="r">Plat</th>
+                    <th className="r">Ducats</th>
+                    <th className="r">You own</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.drops.map((drop) => {
+                    const chance = chanceAt(drop.chances);
+                    return (
+                      <tr
+                        key={drop.reward_name}
+                        className={clsx((drop.wanted || drop.set) && "hot")}
+                      >
+                        <td>
+                          <span className="cd-mark">{drop.set ? "◆" : drop.wanted ? "★" : ""}</span>
+                          {drop.reward_slug ? (
+                            <button
+                              type="button"
+                              className={clsx("crk-link", drop.rare && "rt-rare")}
+                              onClick={() => onOpen(drop.reward_slug as string)}
+                            >
+                              {drop.reward_name}
+                            </button>
+                          ) : (
+                            <span className={clsx("cd-nm", drop.rare && "rt-rare")}>
+                              {drop.reward_name}
+                            </span>
+                          )}
+                          {drop.rare ? (
+                            <span className="rd-rare-tag" title="gold-tier (rare) reward">
+                              RARE
+                            </span>
+                          ) : null}
+                          {drop.set && drop.set_slug ? (
+                            <button
+                              type="button"
+                              className="crk-setlink"
+                              title="Completes a one-away set — go to it"
+                              onClick={() =>
+                                onNavigate("sets", { focusSetSlug: drop.set_slug as string })
+                              }
+                            >
+                              → set
+                            </button>
+                          ) : null}
+                        </td>
+                        <td className="r num">{chance != null ? `${chance.toFixed(1)}%` : "—"}</td>
+                        <td className="r num">{drop.plat != null ? `${fmt(drop.plat)}p` : "—"}</td>
+                        <td className="r num ducat">
+                          {drop.ducats != null ? fmt(drop.ducats) : "—"}
+                        </td>
+                        <td className={clsx("r num", drop.owned_qty === 0 && "muted")}>
+                          {drop.owned_qty > 0 ? `×${drop.owned_qty}` : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

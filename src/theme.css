@@ -7735,6 +7735,22 @@ button.hw-nav:hover {
   padding: 1px 6px;
   font-size: 9px;
 }
+/* Relic drawer tables never crush: cells keep their natural width and the
+   wrapper scrolls sideways when the drawer is narrow. */
+.rd-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.rd-ref,
+.rd-drops {
+  min-width: 420px;
+}
+.rd-ref th,
+.rd-ref td,
+.rd-drops th,
+.rd-drops td {
+  white-space: nowrap;
+}
 /* Gold-tier (rare) drop accents — the relic browser's Rare column and the
    drawer's rare reward row. Gold, like the in-game rarity. */
 .rt-rare {
