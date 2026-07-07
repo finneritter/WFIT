@@ -16,6 +16,7 @@ pub mod catalog;
 pub mod gamescan;
 pub mod inventory;
 pub mod meta;
+pub mod nightwave_acts;
 pub mod notifications;
 pub mod prices;
 pub mod recommend;
@@ -37,7 +38,7 @@ pub mod wfm;
 /// The schema version the MIGRATIONS list produces (`PRAGMA user_version` after
 /// `to_latest`). Bump in lockstep when appending a migration — the pre-migration
 /// backup gate and its test both pin it.
-pub const SCHEMA_VERSION: i64 = 18;
+pub const SCHEMA_VERSION: i64 = 19;
 
 // Append future migrations here; never edit a shipped one.
 static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
@@ -62,6 +63,9 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         M::up(include_str!("../../migrations/0016_app_notifications.sql")),
         M::up(include_str!("../../migrations/0017_vendor_checkoff.sql")),
         M::up(include_str!("../../migrations/0018_relic_prefs.sql")),
+        M::up(include_str!(
+            "../../migrations/0019_nightwave_completions.sql"
+        )),
     ])
 });
 
