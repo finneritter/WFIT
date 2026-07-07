@@ -195,8 +195,9 @@ mod tests {
             },
         ];
 
-        // scan says: instance oid-a done; AimGlide ALSO completed long ago under a
-        // different instance (same path, other oid) — must not leak onto oid-c.
+        // scan says: AimGlide's live instance (oid-a) is done; Fresh was completed
+        // long ago under a DIFFERENT instance (same path, other oid) — that stale
+        // completion must not leak onto the current act (oid-c).
         replace(
             &db,
             &[

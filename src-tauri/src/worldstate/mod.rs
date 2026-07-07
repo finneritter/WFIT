@@ -465,6 +465,14 @@ impl WorldstateClient {
                 .as_ref()
                 .and_then(|(_, w)| w.circuit.clone());
         }
+        // Same story for the season-act bridge (DE-only): when DE is down keep
+        // the last-known acts — stale ≈ correct, since each ws_id embeds its
+        // act's expiry, so rows for ended acts are inert in the overlay join.
+        if ws.season_acts.is_empty() {
+            if let Some((_, w)) = self.cache.lock().as_ref() {
+                ws.season_acts = w.season_acts.clone();
+            }
+        }
         // Cycles are deterministic clocks — once we have a bounty anchor from
         // DE, derive them locally rather than trusting warframestat's snapshot
         // (its origin has been observed hours stale, leaving every cycle card
