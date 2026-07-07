@@ -109,11 +109,13 @@ pub struct ScanResult {
     pub inventory: RawInventory,
     pub account: account::AccountSnapshot,
     /// Completed Nightwave acts (SeasonChallengeHistory) — third parse of the blob.
+    // Consumed by the scan commands in a follow-up commit; the allow goes with it.
+    #[allow(dead_code)]
     pub season: Vec<season::CompletedAct>,
 }
 
 /// Perform a live scan: process → memory (accountId + nonce) → DE inventory endpoint →
-/// one blob parsed two ways (`RawInventory` + `AccountSnapshot`). Linux + Windows.
+/// one blob parsed three ways (`RawInventory` + `AccountSnapshot` + completed Nightwave acts). Linux + Windows.
 pub async fn scan() -> AppResult<ScanResult> {
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     {
@@ -162,10 +164,12 @@ async fn real_scan() -> AppResult<ScanResult> {
     let mut acct = account::parse_account(&json);
     acct.account_id = Some(session.account_id);
     let season = season::parse_season_history(&json);
+    let season_acts = season.len();
     tracing::info!(
         lines = inv.items.len(),
         gear = acct.gear.len(),
-        "gamescan: parsed inventory + account"
+        season_acts = season_acts,
+        "gamescan: parsed inventory + account + season"
     );
     Ok(ScanResult {
         inventory: inv,
