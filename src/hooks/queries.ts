@@ -215,7 +215,11 @@ export function useToggleVendorCheck() {
       checked: boolean;
     }) =>
       checked ? api.markVendorCheck(vendorKey, itemRef) : api.unmarkVendorCheck(vendorKey, itemRef),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.vendorBoard }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.vendorBoard });
+      // nightwave act ticks live on the worldstate payload (Rotation screen)
+      qc.invalidateQueries({ queryKey: keys.worldstate });
+    },
   });
 }
 

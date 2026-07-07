@@ -229,6 +229,12 @@ So the repo stops contradicting itself, update:
 
 Keep the listings-import path. The two coexist: listings = safe default; game scan = opt-in real sync.
 
+### Nightwave act autodetection (2026-07-07)
+
+The scan blob's `SeasonChallengeHistory` field now also feeds Nightwave act autodetection — completed
+acts found there are matched onto the current season's challenge list and locked as scan-checked on
+the Rotation screen, distinct from a player's manual check-off.
+
 ---
 
 ## 9. Platform, automation, and open items

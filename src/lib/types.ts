@@ -725,12 +725,15 @@ export interface ArbitrationBlock {
   notable: Arbitration[];
 }
 export interface NightwaveChallenge {
+  id: string; // warframestat row id — check-off identity
   title: string;
   desc: string | null;
   reputation: number;
   is_daily: boolean;
   is_elite: boolean;
   expiry: string | null;
+  checked: boolean;
+  check_source: "scan" | "manual" | null;
 }
 export interface Nightwave {
   season: number | null;

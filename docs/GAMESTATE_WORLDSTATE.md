@@ -133,6 +133,12 @@ hunt, Steel Path weekly, reset timers) · **Fissures** (the original UI, unchang
   Panel shows while a season is active; expiry = season end. Per-volume cosmetics are omitted —
   update the TSV if the stable catalog changes between seasons.
 
+### Nightwave act check-off (2026-07-07)
+
+Nightwave acts on the Rotation panel are check-off-able: scan-detected completions (from the
+gamescan `SeasonChallengeHistory` blob) lock the checkbox green, while manual ticks persist in
+`vendor_checkoff` under the `nightwave_acts` key so they survive a reload.
+
 ---
 
 ## 1. Two ways to get worldstate (use the parsed one)

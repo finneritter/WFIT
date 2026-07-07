@@ -7479,7 +7479,8 @@ button.hw-nav:hover {
   background: var(--hover);
 }
 /* custom square check — DIM-flat: bordered box, filled inner square when ticked */
-.vcell input[type="checkbox"] {
+.vcell input[type="checkbox"],
+.nw-row input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   width: 14px;
@@ -7491,25 +7492,37 @@ button.hw-nav:hover {
   background: transparent;
   transition: border-color .12s ease, background-color .12s ease;
 }
-.vcell input[type="checkbox"]:hover {
+.vcell input[type="checkbox"]:hover,
+.nw-row input[type="checkbox"]:hover {
   border-color: var(--ink);
 }
-.vcell input[type="checkbox"]:checked {
+.vcell input[type="checkbox"]:checked,
+.nw-row input[type="checkbox"]:checked {
   border-color: var(--accent);
   background: var(--accent);
   box-shadow: inset 0 0 0 3px var(--bg);
 }
-.vcell input[type="checkbox"]:disabled {
+.vcell input[type="checkbox"]:disabled,
+.nw-row input[type="checkbox"]:disabled {
   cursor: default;
 }
-.vcell input[type="checkbox"]:checked:disabled {
+.vcell input[type="checkbox"]:checked:disabled,
+.nw-row input[type="checkbox"]:checked:disabled {
   /* auto-checked from ownership — green, not clearable */
   border-color: var(--pos);
   background: var(--pos);
 }
-.vcell input[type="checkbox"]:focus-visible {
+.vcell input[type="checkbox"]:focus-visible,
+.nw-row input[type="checkbox"]:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+.nw-row input[type="checkbox"] {
+  margin: 0;
+}
+/* done rows read like grabbed vendor cells */
+.nw-row.done {
+  opacity: 0.45;
 }
 .vcell .awaynote {
   color: var(--faint);

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Countdown, TierBadge } from "../components/Countdown";
 import { BlockStatus, rowAction } from "../components/ui";
-import { useWantedNow, useWorldstate } from "../hooks/queries";
+import { useToggleVendorCheck, useWantedNow, useWorldstate } from "../hooks/queries";
 import { clsx, dayTime, fmt, glyph, hhmm, msUntil, nextUtc, tzLabel } from "../lib/format";
 import type {
   ArbitrationBlock,
@@ -211,6 +211,7 @@ function SortiePanel({ title, data }: { title: string; data: Sortie | null }) {
 /** Active Nightwave challenges, biggest standing first. Player rank/standing
  *  is account data the worldstate doesn't carry, so it isn't shown. */
 function NightwavePanel({ nw }: { nw: Nightwave | null }) {
+  const toggle = useToggleVendorCheck();
   return (
     <div className="tpanel">
       <div className="tpanel-h">
@@ -228,7 +229,26 @@ function NightwavePanel({ nw }: { nw: Nightwave | null }) {
         </div>
       ) : (
         nw.challenges.map((c) => (
-          <div className="nw-row" key={c.title} title={c.desc ?? undefined}>
+          <div
+            className={clsx("nw-row", c.checked && "done")}
+            key={c.id}
+            title={c.desc ?? undefined}
+          >
+            <input
+              type="checkbox"
+              checked={c.checked}
+              disabled={c.check_source === "scan"}
+              title={
+                c.check_source === "scan"
+                  ? "Completed in-game (game scan)"
+                  : c.checked
+                    ? "Done — click to clear"
+                    : "Mark done"
+              }
+              onChange={() =>
+                toggle.mutate({ vendorKey: "nightwave_acts", itemRef: c.id, checked: !c.checked })
+              }
+            />
             <span className={clsx("tag", !c.is_daily && "weekly")}>
               {c.is_daily ? "daily" : c.is_elite ? "elite" : "weekly"}
             </span>
