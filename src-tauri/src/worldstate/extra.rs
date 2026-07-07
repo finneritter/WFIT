@@ -75,12 +75,20 @@ pub struct Trader {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NightwaveChallenge {
+    /// warframestat row id (`<expiry ms><lowercased challenge basename>`) —
+    /// the check-off identity AND the join key to DE's SeasonInfo acts.
+    pub id: String,
     pub title: String,
     pub desc: Option<String>,
     pub reputation: i64,
     pub is_daily: bool,
     pub is_elite: bool,
     pub expiry: Option<String>,
+    /// Check-off overlay — set by the command layer (this module stays DB-free).
+    #[serde(default)]
+    pub checked: bool,
+    #[serde(default)]
+    pub check_source: Option<String>, // "scan" | "manual"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,6 +191,7 @@ struct RawNightwave {
 
 #[derive(Deserialize)]
 struct RawNwChallenge {
+    id: Option<String>,
     title: Option<String>,
     desc: Option<String>,
     reputation: Option<i64>,
@@ -344,13 +353,18 @@ pub(super) fn nightwave_from(v: Option<Value>) -> Option<Nightwave> {
         .active_challenges
         .into_iter()
         .filter_map(|c| {
+            let title = c.title?;
             Some(NightwaveChallenge {
-                title: c.title?,
+                // A missing warframestat id still yields a usable (season-unscoped) key.
+                id: c.id.unwrap_or_else(|| title.to_ascii_lowercase()),
+                title,
                 desc: c.desc,
                 reputation: c.reputation.unwrap_or(0),
                 is_daily: c.is_daily,
                 is_elite: c.is_elite,
                 expiry: c.expiry,
+                checked: false,
+                check_source: None,
             })
         })
         .collect();
@@ -496,9 +510,9 @@ mod tests {
         let nw = nightwave_from(Some(json!({
             "season": 8, "expiry": "2026-07-01T00:00:00.000Z",
             "activeChallenges": [
-                {"title": "Complete 3 different missions", "reputation": 1000, "isDaily": true},
-                {"title": "Complete 3 Sorties or Archon Hunt missions", "reputation": 7000, "isElite": true},
-                {"title": "Kill 150 enemies with a status effect", "reputation": 4500}
+                {"id": "100dailymissions", "title": "Complete 3 different missions", "reputation": 1000, "isDaily": true},
+                {"id": "100sorties", "title": "Complete 3 Sorties or Archon Hunt missions", "reputation": 7000, "isElite": true},
+                {"id": "100statuskills", "title": "Kill 150 enemies with a status effect", "reputation": 4500}
             ]
         })))
         .expect("nightwave");
@@ -506,6 +520,7 @@ mod tests {
         assert_eq!(nw.challenges.len(), 3);
         assert_eq!(nw.challenges[0].reputation, 7000); // elite first
         assert!(nw.challenges[0].is_elite);
+        assert_eq!(nw.challenges[0].id, "100sorties");
         assert!(nw.challenges[2].is_daily);
     }
 

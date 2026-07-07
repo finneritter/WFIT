@@ -34,7 +34,6 @@ pub fn replace(db: &Db, acts: &[CompletedAct]) -> AppResult<()> {
 /// What the game says is done: (instance oids, paths of entries with NO oid).
 /// Path matching is only a fallback for oid-less entries — matching every path
 /// would false-positive a daily that recurs later in the season.
-#[allow(dead_code)] // Consumed by the scan commands in a follow-up commit
 pub fn completed(db: &Db) -> AppResult<(HashSet<String>, HashSet<String>)> {
     db.read(|c| {
         let mut stmt =
@@ -58,9 +57,54 @@ pub fn completed(db: &Db) -> AppResult<(HashSet<String>, HashSet<String>)> {
     })
 }
 
+/// vendor_checkoff key for manual act ticks — distinct from the cred-shop
+/// vendor panel, which uses "nightwave".
+pub const MANUAL_KEY: &str = "nightwave_acts";
+
+/// Attach check-off state to the worldstate's nightwave challenges (the
+/// worldstate module is DB-free, so the DB join happens here — the acts
+/// sibling of `db::vendor::enrich`). Best-effort: a DB error leaves the
+/// panel unchecked rather than failing the whole worldstate payload.
+pub fn overlay(db: &Db, ws: &mut crate::worldstate::Worldstate) {
+    let bridge: std::collections::HashMap<String, (String, String)> = ws
+        .season_acts
+        .iter()
+        .map(|a| (a.ws_id.clone(), (a.oid.clone(), a.path.clone())))
+        .collect();
+    let Some(nw) = ws.nightwave.as_mut() else {
+        return;
+    };
+    let manual = match crate::db::vendor_checkoff::set_for(db, MANUAL_KEY) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(error = %e, "nightwave manual check read failed");
+            return;
+        }
+    };
+    let (oids, pathless) = match completed(db) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(error = %e, "nightwave completion read failed");
+            return;
+        }
+    };
+    for c in nw.challenges.iter_mut() {
+        let scan_done = bridge
+            .get(c.id.as_str())
+            .is_some_and(|(oid, path)| oids.contains(oid) || pathless.contains(path));
+        if scan_done {
+            c.checked = true;
+            c.check_source = Some("scan".into());
+        } else if manual.contains(&c.id) {
+            c.checked = true;
+            c.check_source = Some("manual".into());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{completed, replace};
+    use super::{completed, overlay, replace, MANUAL_KEY};
     use crate::db::testutil::test_db;
     use crate::gamescan::season::CompletedAct;
 
@@ -101,5 +145,80 @@ mod tests {
         assert_eq!(oids.len(), 1);
         assert!(oids.contains("bbb"));
         assert!(pathless.is_empty());
+    }
+
+    #[test]
+    fn overlay_marks_scan_and_manual() {
+        use crate::worldstate::{Nightwave, NightwaveChallenge, SeasonAct, Worldstate};
+        let db = test_db("nightwave-overlay");
+
+        fn ch(id: &str) -> NightwaveChallenge {
+            NightwaveChallenge {
+                id: id.into(),
+                title: id.into(),
+                desc: None,
+                reputation: 1000,
+                is_daily: true,
+                is_elite: false,
+                expiry: None,
+                checked: false,
+                check_source: None,
+            }
+        }
+        // Build a minimal Worldstate: only nightwave + season_acts matter here.
+        let mut ws: Worldstate = serde_json::from_value(serde_json::json!({
+            "cycles": [], "fissures": [], "baro": null, "varzia": null,
+            "sortie": null, "archon_hunt": null, "steel_path": null, "circuit": null,
+            "nightwave": null, "invasions": [], "arbitration": null,
+            "fetched_at": "now", "source_timestamp": null, "fissure_source": "de"
+        }))
+        .unwrap();
+        ws.nightwave = Some(Nightwave {
+            season: Some(1),
+            expiry: None,
+            challenges: vec![ch("100aimglide"), ch("200pit"), ch("300fresh")],
+        });
+        ws.season_acts = vec![
+            SeasonAct {
+                ws_id: "100aimglide".into(),
+                oid: "oid-a".into(),
+                path: "/Lotus/Daily/SeasonDailyAimGlide".into(),
+            },
+            SeasonAct {
+                ws_id: "200pit".into(),
+                oid: "oid-b".into(),
+                path: "/Lotus/Weekly/SeasonWeeklyPit".into(),
+            },
+            SeasonAct {
+                ws_id: "300fresh".into(),
+                oid: "oid-c".into(),
+                path: "/Lotus/Daily/SeasonDailyFresh".into(),
+            },
+        ];
+
+        // scan says: instance oid-a done; AimGlide ALSO completed long ago under a
+        // different instance (same path, other oid) — must not leak onto oid-c.
+        replace(
+            &db,
+            &[
+                CompletedAct {
+                    path: "/Lotus/Daily/SeasonDailyAimGlide".into(),
+                    oid: Some("oid-a".into()),
+                },
+                CompletedAct {
+                    path: "/Lotus/Daily/SeasonDailyFresh".into(),
+                    oid: Some("old-instance".into()),
+                },
+            ],
+        )
+        .unwrap();
+        crate::db::vendor_checkoff::set(&db, MANUAL_KEY, "200pit").unwrap();
+
+        overlay(&db, &mut ws);
+        let cs = &ws.nightwave.as_ref().unwrap().challenges;
+        assert_eq!(cs[0].check_source.as_deref(), Some("scan"));
+        assert!(cs[0].checked);
+        assert_eq!(cs[1].check_source.as_deref(), Some("manual"));
+        assert!(!cs[2].checked); // other-instance completion did NOT match
     }
 }

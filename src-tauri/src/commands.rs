@@ -995,7 +995,9 @@ pub async fn get_item_sellers(
 pub async fn get_worldstate(
     state: State<'_, Arc<AppState>>,
 ) -> AppResult<crate::worldstate::Worldstate> {
-    state.worldstate.get().await
+    let mut ws = state.worldstate.get().await?;
+    crate::db::nightwave_acts::overlay(&state.db, &mut ws);
+    Ok(ws)
 }
 
 /// Hard reset for the Rotation screen: discard the cached worldstate +
@@ -1004,7 +1006,9 @@ pub async fn get_worldstate(
 pub async fn force_worldstate_refresh(
     state: State<'_, Arc<AppState>>,
 ) -> AppResult<crate::worldstate::Worldstate> {
-    state.worldstate.force_refresh().await
+    let mut ws = state.worldstate.force_refresh().await?;
+    crate::db::nightwave_acts::overlay(&state.db, &mut ws);
+    Ok(ws)
 }
 
 /// The Vendors board: one panel per rotating vendor (Baro, Varzia, Teshin/Steel

@@ -16,6 +16,10 @@ mod raw;
 
 pub use arbys::ArbitrationBlock;
 pub use extra::{Invasion, Nightwave, Sortie, SteelPath, Trader, VendorItem};
+// Only referenced (so far) by `db::nightwave_acts`'s cross-module test —
+// production code reaches challenges through `Nightwave::challenges`.
+#[cfg_attr(not(test), allow(unused_imports))]
+pub use extra::NightwaveChallenge;
 pub use raw::star_chart_node_count;
 
 use crate::error::AppResult;
