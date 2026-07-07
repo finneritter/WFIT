@@ -7434,6 +7434,12 @@ button.hw-nav:hover {
 .vcell .vcell-main.static {
   cursor: default;
 }
+.vgrid .vcell-main .dnm {
+  /* flex items default to min-width:auto — without this the name can't shrink,
+     so long names paint over the cost instead of ellipsizing */
+  flex: 1;
+  min-width: 0;
+}
 .vgrid .dnm .nm {
   display: block;
   white-space: nowrap;

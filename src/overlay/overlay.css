@@ -63,9 +63,7 @@ body {
   padding: 11px 14px;
   background: var(--panel);
   border: 1px solid var(--line-2);
-  /* Neutral drop shadow only — lifts it off arbitrary game backgrounds without
-     the messy colored glow. No radius: sharp corners, app-style. */
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55);
+  /* No shadow, no radius: flat sharp-cornered panel, app-style. */
   animation: ov-in 130ms ease-out;
 }
 
