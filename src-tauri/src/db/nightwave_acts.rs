@@ -11,7 +11,6 @@ use rusqlite::params;
 use std::collections::HashSet;
 
 /// Replace the whole completion set (one scan = the full season history).
-#[allow(dead_code)] // Consumed by the scan commands in a follow-up commit
 pub fn replace(db: &Db, acts: &[CompletedAct]) -> AppResult<()> {
     db.with_mut(|c| {
         let tx = c.transaction()?;

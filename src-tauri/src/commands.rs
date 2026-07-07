@@ -1856,6 +1856,10 @@ pub async fn game_scan_preview(state: State<'_, Arc<AppState>>) -> AppResult<Vec
     if let Err(e) = account::store_snapshot(&state.db, &res.account) {
         tracing::warn!(error = %e, "account snapshot store failed during preview");
     }
+    // Same blob also carries the season's completed acts (silent — rebuildable cache).
+    if let Err(e) = crate::db::nightwave_acts::replace(&state.db, &res.season) {
+        tracing::warn!(error = %e, "nightwave completion store failed during preview");
+    }
     gamescan_db::diff(&state.db, &resolved)
 }
 
@@ -1890,7 +1894,11 @@ pub async fn import_scanned_relics(state: State<'_, Arc<AppState>>) -> AppResult
             "Warframe does not appear to be running".into(),
         ));
     }
-    let raw = gamescan::scan().await?.inventory;
+    let res = gamescan::scan().await?;
+    if let Err(e) = crate::db::nightwave_acts::replace(&state.db, &res.season) {
+        tracing::warn!(error = %e, "nightwave completion store failed during relic import");
+    }
+    let raw = res.inventory;
     let found = gamescan::map::resolve_relics(&raw.items);
     gamescan_db::record_scan(&state.db, raw.account_id.as_deref())?;
     let tuples: Vec<(&str, &str, &str, i64)> = found

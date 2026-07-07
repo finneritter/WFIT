@@ -109,8 +109,6 @@ pub struct ScanResult {
     pub inventory: RawInventory,
     pub account: account::AccountSnapshot,
     /// Completed Nightwave acts (SeasonChallengeHistory) — third parse of the blob.
-    // Consumed by the scan commands in a follow-up commit; the allow goes with it.
-    #[allow(dead_code)]
     pub season: Vec<season::CompletedAct>,
 }
 
