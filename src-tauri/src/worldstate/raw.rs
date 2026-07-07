@@ -13,7 +13,7 @@
 //! than dropping the row — new content stays visible, just less pretty.
 
 use super::extra::{Invasion, Sortie, SortieMission};
-use super::{CircuitWeek, Fissure};
+use super::{CircuitWeek, Fissure, SeasonAct};
 use crate::error::AppResult;
 use once_cell::sync::Lazy;
 use reqwest::Client;
@@ -377,6 +377,8 @@ struct RawWorld {
     // windowed schedule; entries carry Activation/Expiry).
     #[serde(default, rename = "EndlessXpSchedule")]
     endless_xp_schedule: Vec<RawXpWeek>,
+    #[serde(rename = "SeasonInfo")]
+    season_info: Option<RawSeasonInfo>,
 }
 
 #[derive(Deserialize)]
@@ -395,6 +397,28 @@ struct RawXpCategory {
     category: Option<String>,
     #[serde(default, rename = "Choices")]
     choices: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct RawSeasonInfo {
+    #[serde(default, rename = "ActiveChallenges")]
+    active_challenges: Vec<RawSeasonChallenge>,
+}
+
+#[derive(Deserialize)]
+struct RawSeasonChallenge {
+    #[serde(rename = "_id")]
+    id: Option<RawOid>,
+    #[serde(rename = "Challenge")]
+    challenge: Option<String>,
+    #[serde(rename = "Expiry")]
+    expiry: Option<RawDate>,
+}
+
+#[derive(Deserialize)]
+struct RawOid {
+    #[serde(rename = "$oid")]
+    oid: String,
 }
 
 /// Pick the schedule entry covering `now_ms` (falling back to the last one —
@@ -421,6 +445,25 @@ fn circuit_week(entries: Vec<RawXpWeek>, now_ms: i64) -> Option<CircuitWeek> {
         }
     }
     (!week.incarnons.is_empty() || !week.frames.is_empty()).then_some(week)
+}
+
+/// Decode SeasonInfo's active acts, reconstructing warframestat's row id
+/// (`<expiry ms><lowercased path basename>`) as the cross-source join key.
+fn season_acts(si: Option<RawSeasonInfo>) -> Vec<SeasonAct> {
+    si.map(|s| s.active_challenges)
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|c| {
+            let path = c.challenge?;
+            let expiry_ms: i64 = c.expiry.as_ref()?.date.ms.parse().ok()?;
+            let base = path.rsplit('/').next()?.to_ascii_lowercase();
+            Some(SeasonAct {
+                ws_id: format!("{expiry_ms}{base}"),
+                oid: c.id?.oid,
+                path,
+            })
+        })
+        .collect()
 }
 
 #[derive(Deserialize)]
@@ -550,6 +593,10 @@ pub struct DeWorld {
     /// This week's Duviri Circuit choices (`EndlessXpSchedule`) — DE is the
     /// only source; warframestat exposes them on the 2h mood cycle instead.
     pub circuit: Option<CircuitWeek>,
+    /// Active Nightwave acts (`SeasonInfo.ActiveChallenges`) — the join table
+    /// between warframestat's display rows and the game scan's completion
+    /// history.
+    pub season_acts: Vec<SeasonAct>,
 }
 
 /// Warn once when `empty` flips true (and re-arm when it heals) — every section
@@ -706,6 +753,7 @@ fn parse(raw: RawWorld) -> DeWorld {
         raw.endless_xp_schedule,
         chrono::Utc::now().timestamp_millis(),
     );
+    let season_acts = season_acts(raw.season_info);
 
     DeWorld {
         time: raw.time,
@@ -715,6 +763,7 @@ fn parse(raw: RawWorld) -> DeWorld {
         archon_hunt,
         invasions,
         circuit,
+        season_acts,
     }
 }
 
@@ -833,6 +882,27 @@ mod tests {
         assert_eq!(w.incarnons, vec!["Braton", "Lato"]);
 
         assert!(circuit_week(Vec::new(), 0).is_none());
+    }
+
+    #[test]
+    fn season_acts_build_warframestat_join_key() {
+        let si: RawSeasonInfo = serde_json::from_value(serde_json::json!({
+            "ActiveChallenges": [
+                {"_id": {"$oid": "001800130000000000000182"},
+                 "Daily": true,
+                 "Expiry": {"$date": {"$numberLong": "1783468800000"}},
+                 "Challenge": "/Lotus/Types/Challenges/Seasons/Daily/SeasonDailyKillEnemiesWithBlast"},
+                {"Challenge": "/Lotus/no/expiry/NoExpiry"}
+            ]
+        }))
+        .unwrap();
+        let acts = season_acts(Some(si));
+        assert_eq!(acts.len(), 1); // the incomplete entry is dropped
+        assert_eq!(
+            acts[0].ws_id,
+            "1783468800000seasondailykillenemieswithblast"
+        );
+        assert_eq!(acts[0].oid, "001800130000000000000182");
     }
 
     #[test]
