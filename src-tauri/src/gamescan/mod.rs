@@ -23,6 +23,8 @@ pub mod map;
 #[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
 mod scan;
 
+pub mod season;
+
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 mod api;
 
@@ -100,11 +102,14 @@ pub fn warframe_running() -> bool {
     false
 }
 
-/// One scan's two parses of the SAME inventory.php blob: the tradeable-item inventory
-/// (existing item/relic path) and the Account snapshot (Account screen).
+/// One scan's three parses of the SAME inventory.php blob: the tradeable-item inventory
+/// (existing item/relic path), the Account snapshot (Account screen), and completed
+/// Nightwave acts (SeasonChallengeHistory).
 pub struct ScanResult {
     pub inventory: RawInventory,
     pub account: account::AccountSnapshot,
+    /// Completed Nightwave acts (SeasonChallengeHistory) — third parse of the blob.
+    pub season: Vec<season::CompletedAct>,
 }
 
 /// Perform a live scan: process → memory (accountId + nonce) → DE inventory endpoint →
@@ -156,6 +161,7 @@ async fn real_scan() -> AppResult<ScanResult> {
     inv.account_id = Some(session.account_id.clone()); // trust the scanned id over the body
     let mut acct = account::parse_account(&json);
     acct.account_id = Some(session.account_id);
+    let season = season::parse_season_history(&json);
     tracing::info!(
         lines = inv.items.len(),
         gear = acct.gear.len(),
@@ -164,5 +170,6 @@ async fn real_scan() -> AppResult<ScanResult> {
     Ok(ScanResult {
         inventory: inv,
         account: acct,
+        season,
     })
 }
