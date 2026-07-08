@@ -79,18 +79,21 @@
 }
 
 :root {
-  --bg: #0c0d10;
-  --bg-2: #111216;
-  --panel: #15171b;
-  --panel-2: #1b1d22;
-  --line: #24262e;
-  --line-2: #31343d;
-  --ink: #e2e3e6;
-  --soft: #989ba2;
-  --faint: #62656d;
-  --hover: #1f2127;
-  --accent: #cfd2d8; /* neutral — no brand accent in wireframe */
-  --accent-ink: #15171b; /* text/icon color on an --accent fill */
+  /* Void blue-black neutral stack: same lightness ladder as the original gray
+     wireframe, pulled toward a cold navy cast so the colored accents (tier,
+     currency, pos/neg) do the talking against a darker field. */
+  --bg: #07080c;
+  --bg-2: #0b0d13;
+  --panel: #10131b;
+  --panel-2: #151924;
+  --line: #1e2330;
+  --line-2: #2a3040;
+  --ink: #e3e5ec;
+  --soft: #939aac;
+  --faint: #5d6375;
+  --hover: #171c28;
+  --accent: #ccd4e6; /* near-neutral cool — still no loud brand accent */
+  --accent-ink: #10131b; /* text/icon color on an --accent fill */
   --pos: #5fc27e;
   --neg: #e0685c;
   --hot: #f0a93e;
@@ -2809,7 +2812,7 @@ code {
   right: 0;
   bottom: 0;
   height: 14px;
-  background: #06070a;
+  background: #04060b;
   border-top: 1px solid var(--line-2);
   display: flex;
   align-items: center;
@@ -2840,7 +2843,7 @@ code {
   background: var(--neg);
 }
 .trend.flat {
-  background: #777;
+  background: var(--faint);
 }
 
 /* ===== Inventory display overhaul (Update 2) — additive + scoped to .inv-root ===== */

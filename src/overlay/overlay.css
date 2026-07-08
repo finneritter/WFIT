@@ -6,12 +6,12 @@
 
 :root {
   /* Mirrored from theme.css — the overlay window doesn't load the app stylesheet. */
-  --panel: #15171b;
-  --line: #24262e;
-  --line-2: #31343d;
-  --ink: #e2e3e6;
-  --soft: #989ba2;
-  --faint: #62656d;
+  --panel: #10131b;
+  --line: #1e2330;
+  --line-2: #2a3040;
+  --ink: #e3e5ec;
+  --soft: #939aac;
+  --faint: #5d6375;
   --hot: #f0a93e;
   --neg: #e0685c;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
