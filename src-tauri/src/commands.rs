@@ -1828,8 +1828,36 @@ pub fn game_scan_revoke(state: State<'_, Arc<AppState>>) -> AppResult<()> {
     gamescan_db::clear_consent(&state.db)
 }
 
-/// Read-only preview: gated on consent + a running game, scan → map → diff.
-/// Writes nothing (other than last-scan bookkeeping).
+/// Apply everything one scan snapshot refreshes besides the item inventory. All
+/// three scan commands fetch the SAME inventory.php blob, so whichever one runs,
+/// every scan-fed cache comes along: the Account snapshot, completed Nightwave
+/// acts (best-effort — a parse gap must not sink the scan), and the owned relic
+/// snapshot (authoritative for de_scan rows; see `relics::apply_scan`). Item rows
+/// are the one exception — they stay behind the preview/apply review flow.
+/// Returns the number of relic rows written or removed.
+fn apply_scan_caches(db: &crate::db::Db, res: &gamescan::ScanResult) -> AppResult<usize> {
+    account::store_snapshot(db, &res.account)?;
+    if let Err(e) = crate::db::nightwave_acts::replace(db, &res.season) {
+        tracing::warn!(error = %e, "scan: nightwave completion store failed");
+    }
+    let found = gamescan::map::resolve_relics(&res.inventory.items);
+    let tuples: Vec<(&str, &str, &str, i64)> = found
+        .iter()
+        .map(|r| {
+            (
+                r.tier.as_str(),
+                r.name.as_str(),
+                r.refinement.as_str(),
+                r.qty,
+            )
+        })
+        .collect();
+    relics::apply_scan(db, &tuples)
+}
+
+/// Preview of the ITEM diff: gated on consent + a running game, scan → map → diff.
+/// Items write nothing here (they await the review modal), but the same blob
+/// silently refreshes every other scan-fed cache (account/nightwave/relics).
 #[tauri::command]
 pub async fn game_scan_preview(state: State<'_, Arc<AppState>>) -> AppResult<Vec<ScanDiffRow>> {
     if !gamescan::is_supported() {
@@ -1852,13 +1880,9 @@ pub async fn game_scan_preview(state: State<'_, Arc<AppState>>) -> AppResult<Vec
     let map = gamescan_db::game_ref_to_slug(&state.db)?;
     let resolved = gamescan::map::resolve(&raw.items, &map);
     gamescan_db::record_scan(&state.db, raw.account_id.as_deref())?;
-    // Same blob also refreshes the Account snapshot (silent — it's a rebuildable cache).
-    if let Err(e) = account::store_snapshot(&state.db, &res.account) {
-        tracing::warn!(error = %e, "account snapshot store failed during preview");
-    }
-    // Same blob also carries the season's completed acts (silent — rebuildable cache).
-    if let Err(e) = crate::db::nightwave_acts::replace(&state.db, &res.season) {
-        tracing::warn!(error = %e, "nightwave completion store failed during preview");
+    // The diff is this command's product — cache refreshes must not sink it.
+    if let Err(e) = apply_scan_caches(&state.db, &res) {
+        tracing::warn!(error = %e, "scan cache refresh failed during preview");
     }
     gamescan_db::diff(&state.db, &resolved)
 }
@@ -1875,8 +1899,10 @@ pub fn game_scan_apply(state: State<'_, Arc<AppState>>, rows: Vec<ScanApply>) ->
 }
 
 /// Scan the running game for owned void relics and import them (source='de_scan').
-/// Consent-gated like the item scan; relics are additive (no slug diff), so this
-/// imports directly rather than through the item preview/apply split. Returns count.
+/// Consent-gated like the item scan; the relic snapshot needs no review (the scan
+/// is authoritative for de_scan rows), so this imports directly rather than through
+/// the item preview/apply split — and refreshes the other scan-fed caches
+/// (account/nightwave) from the same blob. Returns the relic rows touched.
 #[tauri::command]
 pub async fn import_scanned_relics(state: State<'_, Arc<AppState>>) -> AppResult<usize> {
     if !gamescan::is_supported() {
@@ -1895,24 +1921,8 @@ pub async fn import_scanned_relics(state: State<'_, Arc<AppState>>) -> AppResult
         ));
     }
     let res = gamescan::scan().await?;
-    if let Err(e) = crate::db::nightwave_acts::replace(&state.db, &res.season) {
-        tracing::warn!(error = %e, "nightwave completion store failed during relic import");
-    }
-    let raw = res.inventory;
-    let found = gamescan::map::resolve_relics(&raw.items);
-    gamescan_db::record_scan(&state.db, raw.account_id.as_deref())?;
-    let tuples: Vec<(&str, &str, &str, i64)> = found
-        .iter()
-        .map(|r| {
-            (
-                r.tier.as_str(),
-                r.name.as_str(),
-                r.refinement.as_str(),
-                r.qty,
-            )
-        })
-        .collect();
-    relics::apply_scan(&state.db, &tuples)
+    gamescan_db::record_scan(&state.db, res.inventory.account_id.as_deref())?;
+    apply_scan_caches(&state.db, &res)
 }
 
 // ===========================================================================
@@ -1921,8 +1931,9 @@ pub async fn import_scanned_relics(state: State<'_, Arc<AppState>>) -> AppResult
 // needs the running client. account_scan is consent + OS gated like the item scan.
 // ===========================================================================
 
-/// Full account scan: one fetch, parse the Account snapshot, store it (silent — a
-/// rebuildable cache, no review modal), and return the fresh Profile.
+/// Full account scan: one fetch, refresh every scan-fed cache from the blob
+/// (account snapshot, nightwave acts, relics — silent, rebuildable, no review
+/// modal), and return the fresh Profile.
 #[tauri::command]
 pub async fn account_scan(state: State<'_, Arc<AppState>>) -> AppResult<AccountProfile> {
     if !gamescan::is_supported() {
@@ -1942,7 +1953,7 @@ pub async fn account_scan(state: State<'_, Arc<AppState>>) -> AppResult<AccountP
     }
     let res = gamescan::scan().await?;
     gamescan_db::record_scan(&state.db, res.account.account_id.as_deref())?;
-    account::store_snapshot(&state.db, &res.account)?;
+    apply_scan_caches(&state.db, &res)?;
     account::get_profile(&state.db)
 }
 

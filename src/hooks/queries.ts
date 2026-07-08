@@ -287,7 +287,7 @@ export function useImportScannedRelics() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: api.importScannedRelics,
-    onSuccess: () => invalidateRelics(qc),
+    onSuccess: () => invalidateScanFed(qc),
   });
 }
 // Poll fast while a refresh is in flight, slow otherwise (to notice it starting).
@@ -812,8 +812,24 @@ export function useGameScanRevoke() {
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.gameScan }),
   });
 }
+// Every scan command refreshes ALL scan-fed caches backend-side (account
+// snapshot, nightwave acts, relic snapshot) from the same inventory blob —
+// so every scan mutation invalidates the same set. Item rows still only
+// change via the review flow (useGameScanApply → invalidateInventoryDerived).
+function invalidateScanFed(qc: QC) {
+  invalidateRelics(qc);
+  invalidateAccount(qc);
+  // nightwave act ticks live on the worldstate payload (Rotation screen)
+  qc.invalidateQueries({ queryKey: keys.worldstate });
+  qc.invalidateQueries({ queryKey: keys.gameScan });
+}
+
 export function useGameScanPreview() {
-  return useMutation({ mutationFn: () => api.gameScanPreview() });
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.gameScanPreview(),
+    onSuccess: () => invalidateScanFed(qc),
+  });
 }
 export function useGameScanApply() {
   const qc = useQueryClient();
@@ -853,8 +869,7 @@ export function useAccountScan() {
     mutationFn: () => api.accountScan(),
     onSuccess: (profile) => {
       qc.setQueryData(keys.accountProfile, profile);
-      invalidateAccount(qc);
-      qc.invalidateQueries({ queryKey: keys.gameScan });
+      invalidateScanFed(qc);
     },
   });
 }

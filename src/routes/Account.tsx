@@ -107,7 +107,7 @@ export function Account({ onOpen, onNavigate }: { onOpen: OpenFn; onNavigate: Na
             onClick={() => scan.mutate()}
             title={
               canScan
-                ? "Scan the running game and refresh account data"
+                ? "Scan the running game — refreshes account, relics and nightwave progress"
                 : "Needs consent + a running game (Settings → Game inventory)"
             }
           >

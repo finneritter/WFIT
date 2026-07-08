@@ -580,11 +580,21 @@ pub fn set_qty(
     })
 }
 
-/// Write scanned relics (game import): set each to its scanned qty with
-/// source='de_scan'. Authoritative for the relics it sees; leaves others untouched
-/// (so a partial scan can't silently wipe manual entries). Returns rows written.
+/// Write scanned relics (game import): the scan is a full snapshot of the game's
+/// relic inventory, so it is authoritative for source='de_scan' rows — each scanned
+/// relic is set to its scanned qty, and any prior de_scan row absent from the scan
+/// (cracked/traded away since) is deleted. Manual rows are never touched, so the
+/// scan can't silently wipe hand-entered stacks — and a scan that resolved ZERO
+/// relics skips the sweep entirely (relics have no review modal, so an upstream
+/// parse gap must not read as "you cracked everything"). Returns rows written or
+/// removed.
 pub fn apply_scan(db: &Db, items: &[(&str, &str, &str, i64)]) -> AppResult<usize> {
     let now = Utc::now().to_rfc3339();
+    let scanned: HashSet<(String, String, String)> = items
+        .iter()
+        .filter(|(_, _, _, qty)| *qty > 0)
+        .map(|(t, n, r, _)| (t.to_string(), n.to_string(), r.to_string()))
+        .collect();
     db.with_mut(|c| {
         let tx = c.transaction()?;
         let mut n = 0usize;
@@ -599,6 +609,30 @@ pub fn apply_scan(db: &Db, items: &[(&str, &str, &str, i64)]) -> AppResult<usize
                  ON CONFLICT(tier, relic_name, refinement) DO UPDATE SET
                     qty = ?4, source = 'de_scan', last_modified_at = ?5",
                 params![tier, name, refinement, qty, now],
+            )?;
+            n += 1;
+        }
+        let stale: Vec<(String, String, String)> = if scanned.is_empty() {
+            Vec::new()
+        } else {
+            let mut stmt = tx.prepare(
+                "SELECT tier, relic_name, refinement FROM owned_relics WHERE source = 'de_scan'",
+            )?;
+            let rows = stmt.query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
+            })?;
+            rows.filter_map(Result::ok)
+                .filter(|key| !scanned.contains(key))
+                .collect()
+        };
+        for (tier, name, refinement) in &stale {
+            tx.execute(
+                "DELETE FROM owned_relics WHERE tier=?1 AND relic_name=?2 AND refinement=?3",
+                params![tier, name, refinement],
             )?;
             n += 1;
         }
@@ -639,6 +673,18 @@ mod tests {
         })
         .unwrap();
         db
+    }
+
+    fn owned_qty(db: &Db, tier: &str, name: &str, refinement: &str) -> i64 {
+        db.with(|c| {
+            Ok(c.query_row(
+                "SELECT COALESCE(SUM(qty), 0) FROM owned_relics
+                 WHERE tier=?1 AND relic_name=?2 AND refinement=?3",
+                params![tier, name, refinement],
+                |r| r.get(0),
+            )?)
+        })
+        .unwrap()
     }
 
     fn no_signals() -> CrackSignals {
@@ -784,6 +830,40 @@ mod tests {
         assert!(rows.iter().filter(|r| r.aya).count() == 1);
         let det = detail(&db, "Lith", "S1", &no_signals(), true, 1).unwrap();
         assert!(det.aya);
+    }
+
+    // A scan is authoritative for de_scan rows: a relic cracked since the last
+    // scan (absent from the new snapshot) must lose its stale ownership row,
+    // while manually-entered stacks survive untouched.
+    #[test]
+    fn apply_scan_removes_cracked_de_scan_relics() {
+        let db = fixture();
+        apply_scan(
+            &db,
+            &[("Lith", "S1", "Intact", 3), ("Lith", "S1", "Radiant", 2)],
+        )
+        .unwrap();
+        set_qty(&db, "Lith", "S1", Some("Exceptional"), 1).unwrap(); // manual entry
+                                                                     // Next scan: the Radiant stack was cracked away, Intact is down to 2.
+        apply_scan(&db, &[("Lith", "S1", "Intact", 2)]).unwrap();
+        assert_eq!(owned_qty(&db, "Lith", "S1", "Intact"), 2);
+        assert_eq!(
+            owned_qty(&db, "Lith", "S1", "Radiant"),
+            0,
+            "cracked relic must be removed"
+        );
+        assert_eq!(
+            owned_qty(&db, "Lith", "S1", "Exceptional"),
+            1,
+            "manual rows survive"
+        );
+        // A scan that resolved zero relics must NOT sweep (parse-gap safety).
+        apply_scan(&db, &[]).unwrap();
+        assert_eq!(
+            owned_qty(&db, "Lith", "S1", "Intact"),
+            2,
+            "empty scan must not wipe de_scan rows"
+        );
     }
 
     // The do-not-burn flag lives on the identity: it survives the stack going to 0.
