@@ -3246,6 +3246,22 @@ body.hide-scan-tag .src-tag.src-scan {
   border: 1px solid var(--line-2);
   padding: 0 3px;
 }
+/* Trends signal table: which signal list(s) surfaced the row. */
+.itag-sell {
+  color: var(--pos);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
+.itag-buy {
+  color: var(--blue);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
+.itag-unusual {
+  color: var(--hot);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
 
 /* Uniform 30px toolbar height (scoped to .filters). */
 .filters .search {
@@ -7722,6 +7738,19 @@ button.hw-nav:hover {
 .rtable tbody tr.rt-protected .nm {
   color: var(--faint);
 }
+/* Trends signal table: chart cells get fixed, compact footprints so the
+   sparkline and range bar read as columns, not stretch. */
+.trend-table .tt-spark {
+  width: 76px;
+}
+.trend-table .tt-spark svg {
+  display: block;
+}
+.trend-table .tt-range {
+  min-width: 170px;
+  max-width: 240px;
+}
+
 /* Summary footers on in-panel tables (Arcanes, Trends) — same voice as the
    .rtable sticky footer, without the stickiness (panels scroll as a page). */
 .dtable tfoot td {
