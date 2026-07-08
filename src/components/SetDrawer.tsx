@@ -2,8 +2,8 @@
 // prices/ownership, and the set-vs-parts economics. Opens from any row in the
 // Sets table; part names click through to the item Drawer (owned) or straight to
 // the Market screen (missing = "buy this" cue), stacking like the RelicDrawer.
-import { useRef, useState } from "react";
 import { useSets } from "../hooks/queries";
+import { useDrawerResize } from "../hooks/useDrawerResize";
 import { useEscape } from "../hooks/useEscape";
 import { clsx, fmt } from "../lib/format";
 import type { SetRow } from "../lib/types";
@@ -37,37 +37,7 @@ export function SetDrawer({
   useEscape(active ? onClose : () => {});
 
   // Resizable width — same affordance as the Relic/item drawers, own key.
-  const [width, setWidth] = useState<number>(() => {
-    const saved = Number(localStorage.getItem("wfit.setDrawerWidth"));
-    return Number.isFinite(saved) && saved >= MIN_WIDTH ? saved : 480;
-  });
-  const widthRef = useRef(width);
-  widthRef.current = width;
-  const startResize = (e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const onMove = (ev: PointerEvent) => {
-      const w = Math.min(
-        Math.max(window.innerWidth - ev.clientX, MIN_WIDTH),
-        window.innerWidth - 80,
-      );
-      widthRef.current = w;
-      setWidth(w);
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      document.body.style.userSelect = "";
-      try {
-        localStorage.setItem("wfit.setDrawerWidth", String(Math.round(widthRef.current)));
-      } catch {
-        // ignore persistence failures
-      }
-    };
-    document.body.style.userSelect = "none";
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
+  const { width, startResize } = useDrawerResize("wfit.setDrawerWidth", MIN_WIDTH, 480);
 
   const grip = (
     // biome-ignore lint/a11y/useKeyWithClickEvents: pointer-only resize affordance (no keyboard equivalent)
