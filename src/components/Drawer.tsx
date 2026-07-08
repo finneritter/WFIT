@@ -46,7 +46,7 @@ function RelicSourcesBox({ slug }: { slug: string }) {
                 <span className="nm">
                   {s.display_name}
                   {s.vaulted ? (
-                    <span className="vault" title="vaulted relic — no longer farmable">
+                    <span className="itag itag-vault" title="vaulted relic — no longer farmable">
                       VAULT
                     </span>
                   ) : null}

@@ -2659,6 +2659,12 @@ code {
   cursor: pointer;
   border-bottom: 1px solid var(--line);
   user-select: none;
+  /* Pins to the top of the content scroll while its section streams under —
+     the table-idiom sticky-header treatment generalized to section headers. */
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg);
 }
 .sec-h .tw {
   color: var(--faint);
@@ -3156,56 +3162,28 @@ code {
 .inv-tbl tr.excluded td {
   opacity: 0.55;
 }
-.inv-tbl .excl-tag {
-  color: var(--faint);
-  font-size: 9px;
-  margin-left: 5px;
-  border: 1px solid var(--line-2);
-  padding: 0 3px;
-  letter-spacing: .04em;
-}
-/* Vault markers in chips/list (the lock badge handles the grid). */
-.chip-it .ci-sub .vault,
-.inv-tbl .nm .vault {
+/* Vault / LISTED markers in the chip view (the lock badge / tag icon handle the
+   grid; the list view uses the shared .itag family below). */
+.chip-it .ci-sub .vault {
   color: var(--accent);
   font-size: 9px;
   margin-left: 4px;
 }
-.inv-tbl .nm .vault {
-  border: 1px solid var(--line-2);
-  padding: 0 3px;
-  letter-spacing: .04em;
-}
-/* "LISTED" tag in chips/list (the tag icon handles the grid). */
-.chip-it .ci-sub .listed-tag,
-.inv-tbl .nm .listed-tag {
+.chip-it .ci-sub .listed-tag {
   color: var(--plat);
   font-size: 9px;
   margin-left: 4px;
 }
-.inv-tbl .nm .listed-tag {
-  border: 1px solid var(--line-2);
-  padding: 0 3px;
-  letter-spacing: .04em;
-}
-/* "SCAN" / "WFM" provenance tag in the list view (manual is the norm → no tag). */
-.inv-tbl .nm .src-tag {
-  color: var(--faint);
-  font-size: 9px;
-  margin-left: 4px;
-  border: 1px solid var(--line-2);
-  padding: 0 3px;
-  letter-spacing: .04em;
-}
 /* The "SCAN" tag is hidden unless the user opts in (Settings → Appearance). */
-body.hide-scan-tag .src-tag.src-scan {
+body.hide-scan-tag .src-tag.src-scan,
+body.hide-scan-tag .itag-scan {
   display: none;
 }
 
 /* Shared HOT / VAULT / LISTED tags (components/ItemTags.tsx) — unscoped so they
    render consistently on every item-bearing screen (search, listings, ducats,
-   arcanes, watchlist, buy list). The Inventory grid/chip/list views keep their
-   own bespoke markup above. */
+   arcanes, watchlist, buy list, inventory list, relics, drawers). The Inventory
+   grid/chip tile views keep their own bespoke markup above. */
 .itag {
   font-size: 9px;
   margin-left: 4px;
@@ -3243,6 +3221,29 @@ body.hide-scan-tag .src-tag.src-scan {
 }
 .itag-oneaway {
   color: var(--hot);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
+/* Relic / inventory provenance + state tags (relics browser, drawers, inventory
+   list) — the one tag family everywhere an item name appears. */
+.itag-aya {
+  color: var(--aya);
+  border: 1px solid var(--aya);
+  padding: 0 3px;
+}
+.itag-prot {
+  color: var(--pos);
+  border: 1px solid var(--pos);
+  padding: 0 3px;
+}
+.itag-scan,
+.itag-src {
+  color: var(--faint);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
+.itag-excl {
+  color: var(--faint);
   border: 1px solid var(--line-2);
   padding: 0 3px;
 }
@@ -5117,24 +5118,28 @@ button.fgroup-h:hover .fg-go {
 .relic-tier.requiem {
   color: var(--neg);
 }
-/* SCAN provenance tag inside the shared data table (relics list). */
-.dtable .nm .src-tag {
-  color: var(--faint);
-  font-size: 9px;
-  margin-left: 5px;
-  border: 1px solid var(--line-2);
-  padding: 0 3px;
-  letter-spacing: .04em;
+/* Relic name-cell glyphs: the letter tile picks up the tier accent, so the
+   first column reads Lith/Meso/Neo/Axi at a glance (markup: ItemName inside a
+   td.relic-glyph.<tier>). */
+.relic-glyph.lith .gl {
+  color: var(--t-lith);
+  border-color: var(--t-lith);
 }
-/* VAULT marker inside the shared data table (relics browser) + drawers. */
-.dtable .nm .vault,
-.drawer .nm .vault {
-  color: var(--accent);
-  font-size: 9px;
-  margin-left: 5px;
-  border: 1px solid var(--line-2);
-  padding: 0 3px;
-  letter-spacing: .04em;
+.relic-glyph.meso .gl {
+  color: var(--t-meso);
+  border-color: var(--t-meso);
+}
+.relic-glyph.neo .gl {
+  color: var(--t-neo);
+  border-color: var(--t-neo);
+}
+.relic-glyph.axi .gl {
+  color: var(--t-axi);
+  border-color: var(--t-axi);
+}
+.relic-glyph.requiem .gl {
+  color: var(--t-req);
+  border-color: var(--t-req);
 }
 
 /* "To crack" tab — why-crack signal badges. Square/mono, color-keyed by signal. */
@@ -7778,30 +7783,6 @@ button.hw-nav:hover {
   display: inline-flex;
   gap: 4px;
   flex-wrap: wrap;
-}
-/* AYA badge — in Varzia's current Resurgence stock (vaulted but buyable). */
-.dtable .nm .aya-tag,
-.drawer .nm .aya-tag {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 4px;
-  border: 1px solid var(--aya);
-  color: var(--aya);
-  font-size: 8.5px;
-  letter-spacing: .06em;
-  vertical-align: 1px;
-}
-/* PROT badge — same chip shape as .vault, protective green. */
-.dtable .nm .prot,
-.drawer .nm .prot {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 4px;
-  border: 1px solid var(--pos);
-  color: var(--pos);
-  font-size: 8.5px;
-  letter-spacing: .06em;
-  vertical-align: 1px;
 }
 /* Relic drawer body + sections */
 .drawer .drawer-body {

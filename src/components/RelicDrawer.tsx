@@ -115,20 +115,20 @@ export function RelicDrawer({
             <div className="nm">
               {d.display_name}
               {d.vaulted ? (
-                <span className="vault" title="vaulted relic — no longer farmable">
+                <span className="itag itag-vault" title="vaulted relic — no longer farmable">
                   VAULT
                 </span>
               ) : null}
               {d.aya ? (
                 <span
-                  className="aya-tag"
+                  className="itag itag-aya"
                   title="in Varzia's current Prime Resurgence stock — buyable for Aya"
                 >
                   AYA
                 </span>
               ) : null}
               {d.protected ? (
-                <span className="prot" title="protected — flagged do-not-burn">
+                <span className="itag itag-prot" title="protected — flagged do-not-burn">
                   PROT
                 </span>
               ) : null}
