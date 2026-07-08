@@ -1,114 +1,88 @@
+// The Sets screen: every ownable prime set in one full-bleed sortable table
+// (the Relics browser treatment) — completion, plat-to-finish, and the
+// set-vs-parts spread. Clicking a row opens the SetDrawer (part chips +
+// per-part prices + economics).
 import { useEffect, useMemo } from "react";
-import type { ScreenId } from "../components/Sidebar";
-import { BlockStatus, Chip, StatBox } from "../components/ui";
-import { useSets } from "../hooks/queries";
-import { useColumnSort, usePaged } from "../hooks/useTable";
+import { Dropdown } from "../components/Dropdown";
+import { ItemTags } from "../components/ItemTags";
+import { setPartsSum } from "../components/SetDrawer";
+import { Chip, ItemName, SortTh, StatBox, TableStatus, rowAction } from "../components/ui";
+import { useListedSlugs, useSets } from "../hooks/queries";
+import { useColumnSort } from "../hooks/useTable";
 import { clsx, fmt } from "../lib/format";
+import { usePersisted } from "../lib/persist";
 import { usePageSearch } from "../lib/searchContext";
 import { compileQuery } from "../lib/searchQuery";
 import { setsSchema } from "../lib/searchSchemas";
 import type { SetRow } from "../lib/types";
 
-type NavFn = (s: ScreenId, opts?: { marketSlug?: string; focusSetSlug?: string }) => void;
-
 const ratio = (s: SetRow) => (s.total_parts ? s.owned_parts / s.total_parts : 0);
-
-type SetCol = "name" | "completion" | "value" | "missing";
-const SET_CMP: Record<SetCol, (a: SetRow, b: SetRow) => number> = {
-  name: (a, b) => a.set_name.localeCompare(b.set_name),
-  completion: (a, b) => ratio(a) - ratio(b),
-  value: (a, b) => (a.set_value ?? 0) - (b.set_value ?? 0),
-  missing: (a, b) => (a.missing_value ?? 0) - (b.missing_value ?? 0),
+const delta = (s: SetRow) => {
+  const sum = setPartsSum(s);
+  return s.set_value != null && sum != null ? s.set_value - sum : null;
 };
 
-function Row({
-  row,
-  onOpen,
-  onNavigate,
-}: {
-  row: SetRow;
-  onOpen: (slug: string) => void;
-  onNavigate: NavFn;
-}) {
-  // Owned parts open the in-app drawer; a missing part is a "buy this" cue, so it
-  // jumps straight to that item's live warframe.market listing in the Market screen.
-  const goMarket = (slug: string) => onNavigate("market", { marketSlug: slug });
+type Col = "name" | "parts" | "missing" | "value" | "sum" | "delta";
+const CMP: Record<Col, (a: SetRow, b: SetRow) => number> = {
+  name: (a, b) => a.set_name.localeCompare(b.set_name),
+  parts: (a, b) => ratio(a) - ratio(b),
+  missing: (a, b) => (a.missing_value ?? 0) - (b.missing_value ?? 0),
+  value: (a, b) => (a.set_value ?? 0) - (b.set_value ?? 0),
+  sum: (a, b) => (setPartsSum(a) ?? 0) - (setPartsSum(b) ?? 0),
+  delta: (a, b) => (delta(a) ?? -1e9) - (delta(b) ?? -1e9),
+};
+
+// Default order (no column chosen): closest to done first, richer spread first.
+function completionOrder(a: SetRow, b: SetRow): number {
   return (
-    <div className="setrow" data-set-slug={row.set_slug}>
-      <div className="set-main">
-        <div className="snm">{row.set_name}</div>
-        <div className="ssub">
-          {row.category} · {row.owned_parts}/{row.total_parts} parts
-        </div>
-        <div className={clsx("set-bar", row.complete && "done")}>
-          <i style={{ width: `${Math.round(ratio(row) * 100)}%` }} />
-        </div>
-      </div>
-      <div className="pchips">
-        {row.parts.map((p) => (
-          <div
-            key={p.slug}
-            className={clsx("pchip", p.owned ? "have" : "miss")}
-            // biome-ignore lint/a11y/useSemanticElements: styled as a div chip; no native-button reset exists in the theme
-            role="button"
-            tabIndex={0}
-            onClick={() => (p.owned ? onOpen(p.slug) : goMarket(p.slug))}
-            onKeyDown={(e) => {
-              if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
-                e.preventDefault();
-                if (p.owned) onOpen(p.slug);
-                else goMarket(p.slug);
-              }
-            }}
-            title={p.owned ? p.part_name : `Buy ${p.part_name} on warframe.market`}
-          >
-            <span className="pa">{p.part_name.slice(0, 3)}</span>
-            {p.owned ? (
-              <span className="ck">✓</span>
-            ) : (
-              <span className="pp">{p.median_plat == null ? "—" : `${fmt(p.median_plat)}p`}</span>
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="set-act">
-        {row.complete ? (
-          <>
-            <div className="sv num">{fmt(row.set_value)}p</div>
-            <div className="sx">full-set value</div>
-          </>
-        ) : (
-          <>
-            <div className="sv num">
-              {row.missing_value == null ? "—" : `+${fmt(row.missing_value)}p`}
-            </div>
-            <div className="sx">to complete</div>
-          </>
-        )}
-      </div>
-    </div>
+    ratio(b) - ratio(a) ||
+    (delta(b) ?? -1e9) - (delta(a) ?? -1e9) ||
+    a.set_name.localeCompare(b.set_name)
   );
 }
 
+type StateFilter = "all" | "complete" | "oneaway" | "progress";
+const STATE_CHIPS: [StateFilter, string][] = [
+  ["complete", "Complete"],
+  ["oneaway", "One away"],
+  ["progress", "In progress"],
+];
+
+function matchesState(s: SetRow, f: StateFilter): boolean {
+  switch (f) {
+    case "all":
+      return true;
+    case "complete":
+      return s.complete;
+    case "oneaway":
+      return !s.complete && s.total_parts - s.owned_parts === 1;
+    case "progress":
+      return !s.complete && s.owned_parts > 0;
+  }
+}
+
 export function Sets({
-  onOpen,
-  onNavigate,
+  onOpenSet,
   focusSetSlug,
 }: {
-  onOpen: (slug: string) => void;
-  onNavigate: NavFn;
+  onOpenSet: (slug: string) => void;
   focusSetSlug?: string | null;
 }) {
   const { data: sets = [], isLoading, isError } = useSets();
+  const listed = useListedSlugs();
   const search = usePageSearch();
-  const { sort, cycle, apply } = useColumnSort<SetRow, SetCol>("wfit-sets-sort", SET_CMP, {
-    key: "completion",
-    dir: "desc",
-  });
+  const [stateFilter, setStateFilter] = usePersisted<StateFilter>("wfit-sets-state", "all");
+  const [catFilter, setCatFilter] = usePersisted<string>("wfit-sets-cat", "all");
+  const sort = useColumnSort<SetRow, Col>("wfit-sets-sort-v2", CMP, null);
+
+  const catOptions = useMemo(() => {
+    const cats = [...new Set(sets.map((s) => s.category))].sort();
+    return [["all", "All categories"], ...cats.map((c) => [c, c] as const)] as const;
+  }, [sets]);
 
   const stats = useMemo(() => {
     const complete = sets.filter((s) => s.complete).length;
-    const oneAway = sets.filter((s) => s.total_parts - s.owned_parts === 1).length;
+    const oneAway = sets.filter((s) => !s.complete && s.total_parts - s.owned_parts === 1).length;
     const completableValue = sets
       .filter((s) => s.complete)
       .reduce((a, s) => a + (s.set_value ?? 0), 0);
@@ -118,14 +92,29 @@ export function Sets({
   }, [sets]);
 
   const { test } = useMemo(() => compileQuery(search, setsSchema), [search]);
-  const rows = useMemo(() => apply(sets.filter(test)), [sets, test, apply]);
-  const { visible, hasMore, shown, total, more } = usePaged(
-    rows,
-    36,
-    `${search}|${sort ? sort.key + sort.dir : ""}`,
-  );
+  const view = useMemo(() => {
+    const filtered = sets.filter(
+      (s) =>
+        test(s) &&
+        matchesState(s, stateFilter) &&
+        (catFilter === "all" || s.category === catFilter),
+    );
+    return sort.sort ? sort.apply(filtered) : [...filtered].sort(completionOrder);
+  }, [sets, test, stateFilter, catFilter, sort.sort, sort.apply]);
 
-  // Deep-link from the Relics "To crack" backlink: scroll to + flash the target row.
+  const totals = useMemo(() => {
+    let complete = 0;
+    let toFinish = 0;
+    let setValue = 0;
+    for (const s of view) {
+      if (s.complete) complete += 1;
+      else toFinish += s.missing_value ?? 0;
+      setValue += s.set_value ?? 0;
+    }
+    return { complete, toFinish, setValue };
+  }, [view]);
+
+  // Deep-link from the Relics "→ set" backlink: scroll to + flash the target row.
   useEffect(() => {
     if (!focusSetSlug) return;
     const t = window.setTimeout(() => {
@@ -138,15 +127,8 @@ export function Sets({
     return () => window.clearTimeout(t);
   }, [focusSetSlug]);
 
-  const sortChip = (col: SetCol, label: string) => (
-    <Chip active={sort?.key === col} onClick={() => cycle(col)}>
-      {label}
-      {sort?.key === col ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
-    </Chip>
-  );
-
   return (
-    <>
+    <div className="rtable-wrap">
       <div className="statband">
         <StatBox k="Complete sets" v={fmt(stats.complete)} />
         <StatBox k="One part away" v={fmt(stats.oneAway)} />
@@ -154,36 +136,139 @@ export function Sets({
         <StatBox k="Avg completion" v={`${stats.avg.toFixed(0)}%`} />
       </div>
 
-      <div className="mkt-filters">
-        <span className="muted" style={{ fontSize: 11 }}>
-          Sort
-        </span>
-        {sortChip("completion", "Completion")}
-        {sortChip("value", "Set value")}
-        {sortChip("missing", "To complete")}
-        {sortChip("name", "Name")}
+      <div className="mkt-filters rtable-filters">
+        {STATE_CHIPS.map(([f, label]) => (
+          <Chip
+            key={f}
+            active={stateFilter === f}
+            onClick={() => setStateFilter(stateFilter === f ? "all" : f)}
+          >
+            {label}
+          </Chip>
+        ))}
+        <Dropdown value={catFilter} options={catOptions} onChange={setCatFilter} title="Category" />
       </div>
 
-      <div className="tpanel">
-        {isError ? (
-          <BlockStatus error />
-        ) : isLoading ? (
-          <BlockStatus />
-        ) : visible.length === 0 ? (
-          <BlockStatus text="No sets match your search." />
-        ) : (
-          <>
-            {visible.map((s) => (
-              <Row key={s.set_slug} row={s} onOpen={onOpen} onNavigate={onNavigate} />
-            ))}
-            {hasMore ? (
-              <button type="button" className="btn load-more" onClick={more}>
-                Showing {shown} of {fmt(total)} — load more
-              </button>
-            ) : null}
-          </>
-        )}
+      <div className="rtable-scroll">
+        <table className="dtable rtable settable">
+          <thead>
+            <tr>
+              <SortTh<Col> label="Set" col="name" sort={sort.sort} onSort={sort.cycle} />
+              <SortTh<Col> label="Parts" col="parts" sort={sort.sort} onSort={sort.cycle} right />
+              <SortTh<Col>
+                label="To finish"
+                col="missing"
+                sort={sort.sort}
+                onSort={sort.cycle}
+                right
+              />
+              <SortTh<Col>
+                label="Set price"
+                col="value"
+                sort={sort.sort}
+                onSort={sort.cycle}
+                right
+              />
+              <SortTh<Col> label="Parts sum" col="sum" sort={sort.sort} onSort={sort.cycle} right />
+              <SortTh<Col>
+                label="Δ set−parts"
+                col="delta"
+                sort={sort.sort}
+                onSort={sort.cycle}
+                right
+              />
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading || isError || view.length === 0 ? (
+              <TableStatus
+                span={6}
+                loading={isLoading}
+                error={isError}
+                emptyText="No sets match the current filters."
+              />
+            ) : (
+              view.map((s) => <Row key={s.set_slug} s={s} listed={listed} onOpenSet={onOpenSet} />)
+            )}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={6}>
+                <span className="num">{fmt(totals.complete)}</span>/
+                <span className="num">{fmt(view.length)}</span> complete · to finish all{" "}
+                <span className="num">{fmt(totals.toFinish)}p</span> · set value{" "}
+                <span className="num">{fmt(totals.setValue)}p</span>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
-    </>
+    </div>
+  );
+}
+
+function Row({
+  s,
+  listed,
+  onOpenSet,
+}: {
+  s: SetRow;
+  listed: Set<string>;
+  onOpenSet: (slug: string) => void;
+}) {
+  const oneAway = !s.complete && s.total_parts - s.owned_parts === 1;
+  const sum = setPartsSum(s);
+  const d = delta(s);
+  return (
+    <tr
+      className={clsx("rt-row", s.owned_parts === 0 && "rt-unowned")}
+      data-set-slug={s.set_slug}
+      {...rowAction(() => onOpenSet(s.set_slug))}
+    >
+      <td>
+        <ItemName
+          name={s.set_name}
+          plat={s.set_value}
+          sub={s.category}
+          tags={
+            <>
+              {s.complete ? (
+                <span className="itag itag-complete" title="all parts owned">
+                  COMPLETE
+                </span>
+              ) : oneAway ? (
+                <span className="itag itag-oneaway" title="one part missing">
+                  ONE AWAY
+                </span>
+              ) : null}
+              <ItemTags listed={listed.has(s.set_slug)} />
+            </>
+          }
+        />
+      </td>
+      <td className="r num">
+        <span className={clsx(s.complete && "pos", s.owned_parts === 0 && "muted")}>
+          {s.owned_parts}/{s.total_parts}
+        </span>
+      </td>
+      <td className="r num">
+        {s.complete ? (
+          <span className="muted">—</span>
+        ) : s.missing_value != null ? (
+          `${fmt(s.missing_value)}p`
+        ) : (
+          <span className="muted">—</span>
+        )}
+      </td>
+      <td className={clsx("r num", s.set_value == null && "muted")}>
+        {s.set_value != null ? `${fmt(s.set_value)}p` : "—"}
+      </td>
+      <td className={clsx("r num", sum == null && "muted")}>
+        {sum != null ? `${fmt(sum)}p` : "—"}
+      </td>
+      <td className={clsx("r num", d != null && (d >= 0 ? "pos" : "neg"))}>
+        {d != null ? `${d >= 0 ? "+" : ""}${fmt(d)}p` : <span className="muted">—</span>}
+      </td>
+    </tr>
   );
 }

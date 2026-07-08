@@ -3235,6 +3235,17 @@ body.hide-scan-tag .src-tag.src-scan {
 .itag-qty {
   color: var(--faint);
 }
+/* Sets table: completion-state tags. */
+.itag-complete {
+  color: var(--pos);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
+.itag-oneaway {
+  color: var(--hot);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
 
 /* Uniform 30px toolbar height (scoped to .filters). */
 .filters .search {
@@ -7613,6 +7624,10 @@ button.hw-nav:hover {
   border-bottom: 1px solid var(--line);
   flex: none;
   align-items: center;
+}
+/* A statband above a full-bleed table (Sets) must not flex-shrink away. */
+.rtable-wrap .statband {
+  flex: none;
 }
 .rt-squad {
   display: inline-flex;
