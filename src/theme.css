@@ -7208,6 +7208,26 @@ button.hw-nav:hover {
 .hw .hot {
   color: var(--hot);
 }
+/* Arbitration widget headline: the tier letter wears its grade color (same
+   ramp as .tierb — S gold … F red; unrated stays the base ink). */
+.hw .g-s {
+  color: var(--g-s);
+}
+.hw .g-a {
+  color: var(--g-a);
+}
+.hw .g-b {
+  color: var(--g-b);
+}
+.hw .g-c {
+  color: var(--g-c);
+}
+.hw .g-d {
+  color: var(--g-d);
+}
+.hw .g-f {
+  color: var(--g-f);
+}
 
 /* Empty home call-to-action. */
 /* Temporary edit-mode diagnostic: shows measured grid width + tile cells. */

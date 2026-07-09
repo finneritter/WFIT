@@ -33,7 +33,7 @@ import {
 } from "../../hooks/queries";
 import { clsx, fmt, fmtK, msUntil, nextUtc, pct, syncedAgo } from "../../lib/format";
 import { usePersistedJSON } from "../../lib/persist";
-import { Countdown } from "../Countdown";
+import { Countdown, TierBadge } from "../Countdown";
 import { Icon } from "../Icon";
 import type { ScreenId } from "../Sidebar";
 import { MiniArea } from "../charts";
@@ -947,6 +947,7 @@ function ArbitrationWidget({ w, h, focused }: WidgetProps) {
       error={isError && !ws}
       stale={isError && !!ws}
       big={cur ? (cur.tier ?? "—") : "—"}
+      bigTone={cur?.tier ? `g-${cur.tier.toLowerCase()}` : undefined}
       sub={cur ? cur.mission_type : "no live arbitration"}
       empty={!isLoading && !block ? "Schedule unavailable." : undefined}
       cells={
@@ -959,11 +960,9 @@ function ArbitrationWidget({ w, h, focused }: WidgetProps) {
       }
       rows={(block?.notable ?? []).slice(0, ROW_POOL).map((a) => (
         <div className="hw-row hw-row-static" key={a.activation}>
+          <TierBadge tier={a.tier} />
           <span className="hw-row-i">
-            <span className="hw-row-n">
-              {a.tier ? `${a.tier} · ` : ""}
-              {a.node}
-            </span>
+            <span className="hw-row-n">{a.node}</span>
             <span className="hw-row-s">{a.mission_type}</span>
           </span>
           <span className="hw-row-v">
