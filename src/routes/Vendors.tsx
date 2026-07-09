@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import { Countdown } from "../components/Countdown";
 import { BlockStatus, ItemName, rowAction } from "../components/ui";
-import { useToggleVendorCheck, useVendorBoard } from "../hooks/queries";
-import { clsx, fmt } from "../lib/format";
+import { useToggleVendorCheck, useVendorBoard, useVendorGroup } from "../hooks/queries";
+import { clsx, fmt, fmtK } from "../lib/format";
+import { usePersisted } from "../lib/persist";
 import { usePageSearch } from "../lib/searchContext";
 import { compileQuery } from "../lib/searchQuery";
 import { vendorsSchema } from "../lib/searchSchemas";
@@ -11,15 +12,24 @@ import type { VendorIntelRow, VendorPanel } from "../lib/types";
 // Each currency owns a color accent, a header label, and a short per-cell unit.
 // The unit only renders in mixed-currency columns (Varzia: aya relics + regal-aya
 // frames/packs — regal is the real-money currency, hence its own loud color).
-const CURRENCY: Record<string, { cls: string; label: string; unit: string }> = {
+// `compact` renders costs through fmtK (standing runs to six figures).
+const CURRENCY: Record<string, { cls: string; label: string; unit: string; compact?: boolean }> = {
   ducats: { cls: "ducat", label: "Ducats", unit: "dc" },
   aya: { cls: "aya", label: "Aya", unit: "aya" },
   regal_aya: { cls: "regal", label: "Regal Aya", unit: "regal" },
   steel_essence: { cls: "essence", label: "Essence", unit: "ess" },
   cred: { cls: "cred", label: "Creds", unit: "cr" },
+  standing: { cls: "standing", label: "Standing", unit: "st", compact: true },
   // "none" (the Circuit — earned, not bought) is deliberately unmapped:
   // no cost cell, no "pays X" header line.
 };
+
+// Vendor tab groups. "live" is the rotating worldstate board; the rest are
+// static-registry groups served by get_vendor_group (Phase B/C add more).
+const GROUPS: [string, string][] = [
+  ["live", "Live"],
+  ["syndicates", "Syndicates"],
+];
 
 /** Distinct row currencies, stable order (aya before regal). Falls back to the
  *  panel's primary currency when there's no stock to inspect (away vendors). */
@@ -37,29 +47,36 @@ function panelCurrencies(panel: VendorPanel): string[] {
  * to open its market drawer.
  */
 export function Vendors({ onOpen }: { onOpen: (slug: string) => void }) {
-  const { data: panels, isLoading, isError } = useVendorBoard();
+  const [tab, setTab] = usePersisted<string>("wfit-vendors-tab", "live");
+  const live = useVendorBoard();
+  // Group tabs fetch lazily (enabled only when a static group is selected).
+  const grp = useVendorGroup(tab === "live" ? "" : tab);
+  const { data: panels, isLoading, isError } = tab === "live" ? live : grp;
   const search = usePageSearch();
   const { test } = useMemo(() => compileQuery(search, vendorsSchema), [search]);
 
-  if (isLoading) return <BlockStatus text="Loading vendors…" />;
-  if (isError || !panels)
+  const body = () => {
+    if (isLoading) return <BlockStatus text="Loading vendors…" />;
+    if (isError || !panels)
+      return (
+        <BlockStatus error text="Couldn't reach the world-state. The rest of WFIT works offline." />
+      );
+    if (panels.length === 0) return <BlockStatus text="No vendors are active right now." />;
+
+    const cols = panels.map((panel) => ({
+      panel,
+      rows: panel.rows.filter(test),
+      mixed: panelCurrencies(panel).length > 1,
+    }));
+    const bodyRows = Math.max(1, ...cols.map((c) => c.rows.length));
+    // Wide groups (six syndicates) keep a readable column floor and scroll
+    // horizontally inside the grid instead of squeezing to slivers.
+    const colMin = cols.length > 5 ? "230px" : "0";
+
     return (
-      <BlockStatus error text="Couldn't reach the world-state. The rest of WFIT works offline." />
-    );
-  if (panels.length === 0) return <BlockStatus text="No vendors are active right now." />;
-
-  const cols = panels.map((panel) => ({
-    panel,
-    rows: panel.rows.filter(test),
-    mixed: panelCurrencies(panel).length > 1,
-  }));
-  const bodyRows = Math.max(1, ...cols.map((c) => c.rows.length));
-
-  return (
-    <div className="vgrid-wrap">
       <div
         className="vgrid"
-        style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(${colMin}, 1fr))` }}
       >
         {cols.map(({ panel }, ci) => (
           <VendorHead key={panel.key} panel={panel} last={ci === cols.length - 1} />
@@ -87,6 +104,27 @@ export function Vendors({ onOpen }: { onOpen: (slug: string) => void }) {
           />
         ))}
       </div>
+    );
+  };
+
+  return (
+    <div className="vgrid-wrap">
+      <div className="tabband">
+        <div className="seg">
+          {GROUPS.map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className="segb"
+              aria-pressed={tab === id}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {body()}
     </div>
   );
 }
@@ -126,7 +164,9 @@ function VendorFoot({
             return (
               <span key={c} className="fpart">
                 <span className="fdot">·</span>
-                <span className={clsx("fcost num", cur.cls)}>{fmt(sum)}</span>
+                <span className={clsx("fcost num", cur.cls)}>
+                  {cur.compact ? fmtK(sum) : fmt(sum)}
+                </span>
                 <span className="flbl">{cur.label.toLowerCase()}</span>
               </span>
             );
@@ -142,26 +182,35 @@ function VendorHead({ panel, last }: { panel: VendorPanel; last: boolean }) {
   const payLabels = panelCurrencies(panel)
     .map((c) => CURRENCY[c]?.label)
     .filter(Boolean);
+  // Static-registry vendors have no rotation: no countdown, no here/away status —
+  // just location · pays X.
+  const isStatic = panel.activation == null && panel.expiry == null;
   return (
     <div className={clsx("vhead", last && "lastcol")}>
       <div className="h1">
         <span className="hname">{panel.name}</span>
-        <span className={clsx("hstatus", panel.active ? "live" : "away")}>
-          {panel.active ? "● here" : "away"}
-        </span>
+        {!isStatic ? (
+          <span className={clsx("hstatus", panel.active ? "live" : "away")}>
+            {panel.active ? "● here" : "away"}
+          </span>
+        ) : null}
       </div>
       <div className="hmeta">
-        <span className="hcd num">
-          <Countdown
-            iso={panel.active ? panel.expiry : panel.activation}
-            warnMs={12 * 3_600_000}
-            soonMs={2 * 3_600_000}
-          />
-        </span>
-        <span className="htl">{panel.active ? "until departure" : "until arrival"}</span>
+        {!isStatic ? (
+          <>
+            <span className="hcd num">
+              <Countdown
+                iso={panel.active ? panel.expiry : panel.activation}
+                warnMs={12 * 3_600_000}
+                soonMs={2 * 3_600_000}
+              />
+            </span>
+            <span className="htl">{panel.active ? "until departure" : "until arrival"}</span>
+          </>
+        ) : null}
         {(panel.location ?? panel.character) ? (
           <>
-            <span className="hdot">·</span>
+            {!isStatic ? <span className="hdot">·</span> : null}
             <span className="hloc">{panel.location ?? panel.character}</span>
           </>
         ) : null}
@@ -232,6 +281,11 @@ function VendorCell({
           thumb={row.thumbnail_url}
           tags={
             <>
+              {row.rank != null ? (
+                <span className="itag itag-rank num" title={`requires syndicate rank ${row.rank}`}>
+                  R{row.rank}
+                </span>
+              ) : null}
               {row.good_deal ? <span className="itag itag-deal">DEAL</span> : null}
               {owned && row.owned_qty > 1 ? (
                 <span className="itag itag-qty num">×{row.owned_qty}</span>
@@ -241,7 +295,7 @@ function VendorCell({
         />
       </div>
       <span className={clsx("vcost num", cur?.cls)}>
-        {row.cost != null ? fmt(row.cost) : ""}
+        {row.cost != null ? (cur?.compact ? fmtK(row.cost) : fmt(row.cost)) : ""}
         {showUnit && row.cost != null && cur ? <span className="vunit">{cur.unit}</span> : null}
       </span>
       <input
