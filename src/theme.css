@@ -2446,16 +2446,23 @@ body.modal-open .content {
 }
 
 /* ---------------- stat band (small boxes) ---------------- */
+/* Stat header band — one ruled strip, not floating boxes: cells share the
+   hairline frame (divider + bottom rule) the tables use, app-wide. */
 .statband {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
+  gap: 0;
   margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
 }
 .statbox {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  padding: 8px 12px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: none;
+  padding: 8px 16px;
+}
+.statbox:last-child {
+  border-right: 0;
 }
 .statbox .k {
   font-size: 9.5px;
@@ -7398,22 +7405,11 @@ button.hw-nav:hover {
 .content.content-sheet {
   padding: 0 0 48px;
 }
+/* On the full-bleed/sheet screens the band sits flush against the next strip
+   (the base .statband carries the fused look itself now). */
 .rtable-wrap .statband,
 .content-sheet .statband {
-  gap: 0;
   margin-bottom: 0;
-  border-bottom: 1px solid var(--line);
-}
-.rtable-wrap .statband .statbox,
-.content-sheet .statband .statbox {
-  border: 0;
-  border-right: 1px solid var(--line);
-  background: none;
-  padding: 8px 16px;
-}
-.rtable-wrap .statband .statbox:last-child,
-.content-sheet .statband .statbox:last-child {
-  border-right: 0;
 }
 /* Panels lose their box frame and become full-width bands: one shared rule
    between neighbours, nothing at the sides for lines to stop short of. */
@@ -7724,6 +7720,9 @@ button.hw-nav:hover {
   min-height: 0;
 }
 .rtable-filters {
+  /* kill the base .mkt-filters margin-bottom — it floated the table 12px
+     below this strip's rule, leaving the header's column dividers hanging */
+  margin: 0;
   padding: 10px 16px;
   border-bottom: 1px solid var(--line);
   flex: none;
