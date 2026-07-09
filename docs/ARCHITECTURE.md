@@ -116,7 +116,8 @@ The most-iterated subsystem. Full details in `docs/PERF_OPTIMIZATION.md` and inl
   where hairlines run edge to edge and always meet another line. List screens are full-bleed via
   one of two `App.tsx` content classes: `content-flush` (single-table spreadsheet screens —
   Relics/Sets/Vendors; the `.rtable` owns its scroll, sticky header + summary footer) or
-  `content-sheet` (multi-band pages — Inventory/Trends/Arcanes/Listings; panels flatten into
+  `content-sheet` (multi-band pages — Inventory/Trends/Arcanes/Listings/Market/Watchlist/Buy
+  List/Ducats/Sold History, the `SHEET_SCREENS` set in `App.tsx`; panels flatten into
   full-width ruled bands and tables gain column hairlines). `.statband` is a fused stat strip
   (cell dividers, no boxes) everywhere. Full contract + checklist: `docs/FEATURE_PLAYBOOK.md` §B.
 

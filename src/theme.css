@@ -7477,6 +7477,37 @@ button.hw-nav:hover {
   background: var(--panel);
   margin: 12px 16px;
 }
+/* Market screener: the strip stack goes flush (no flex gaps between the
+   search band, the chip row, and the table) and the search box is a band. */
+.content-sheet .mkt-screener {
+  gap: 0;
+}
+.content-sheet .mkt-search {
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  padding: 5px 16px;
+}
+/* Market item view: header, price context, controls, and the bid ladder are
+   ruled bands stacked over the seller table. */
+.content-sheet .mkt-head {
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.content-sheet .mkt-controls {
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.content-sheet .mkt-context,
+.content-sheet .bidladder {
+  margin: 0;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  padding: 8px 16px;
+}
 /* Sheet tables gain the column hairlines the rtable screens already have, so
    horizontal and vertical rules meet instead of rows floating in the band. */
 .content-sheet .dtable th,

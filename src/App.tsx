@@ -50,6 +50,22 @@ import { Watchlist } from "./routes/Watchlist";
 // Below this window width the sidebar auto-collapses to reclaim space.
 const NAV_NARROW = "(max-width: 1000px)";
 
+// Connected-sheet design language (docs/FEATURE_PLAYBOOK.md §B): full-bleed
+// single-table screens own their scroll (flush); multi-band list screens
+// flatten into full-width ruled bands and scroll as a page (sheet).
+const FLUSH_SCREENS = new Set<ScreenId>(["vendors", "relics", "sets"]);
+const SHEET_SCREENS = new Set<ScreenId>([
+  "trends",
+  "arcanes",
+  "inventory",
+  "listings",
+  "market",
+  "watchlist",
+  "buy",
+  "ducats",
+  "sold",
+]);
+
 const TITLES: Record<ScreenId, string> = {
   home: "Home",
   inventory: "Inventory",
@@ -289,12 +305,8 @@ export default function App() {
           <div
             className={clsx(
               "content",
-              (screen === "vendors" || screen === "relics" || screen === "sets") && "content-flush",
-              (screen === "trends" ||
-                screen === "arcanes" ||
-                screen === "inventory" ||
-                screen === "listings") &&
-                "content-sheet",
+              FLUSH_SCREENS.has(screen) && "content-flush",
+              SHEET_SCREENS.has(screen) && "content-sheet",
             )}
             ref={contentRef}
           >
