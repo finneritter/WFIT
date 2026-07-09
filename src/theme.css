@@ -7482,11 +7482,34 @@ button.hw-nav:hover {
 .content-sheet .mkt-screener {
   gap: 0;
 }
+/* The screener's search is the screen's primary control, so as a band it
+   stays loud: taller, panel-tinted, bigger type, and the underline + icon
+   catch the accent while typing. */
 .content-sheet .mkt-search {
+  /* base .search is flex:1 — its flex-basis would override height in the
+     screener's column flex, so pin it */
+  flex: none;
   border-left: 0;
   border-right: 0;
   border-top: 0;
-  padding: 5px 16px;
+  border-bottom: 1px solid var(--line-2);
+  padding: 0 16px;
+  height: 54px;
+  font-size: 15px;
+  background: var(--panel);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.content-sheet .mkt-search svg {
+  width: 18px;
+  height: 18px;
+  stroke: var(--soft);
+}
+.content-sheet .mkt-search:focus-within {
+  background: var(--panel-2);
+  border-bottom-color: var(--accent);
+}
+.content-sheet .mkt-search:focus-within svg {
+  stroke: var(--accent);
 }
 /* Market item view: header, price context, controls, and the bid ladder are
    ruled bands stacked over the seller table. */
