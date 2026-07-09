@@ -289,7 +289,7 @@ export default function App() {
           <div
             className={clsx(
               "content",
-              (screen === "vendors" || screen === "relics") && "content-flush",
+              (screen === "vendors" || screen === "relics" || screen === "sets") && "content-flush",
             )}
             ref={contentRef}
           >
