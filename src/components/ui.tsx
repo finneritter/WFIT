@@ -77,16 +77,20 @@ export function ItemName({
   thumb,
   sub,
   tags,
+  noGlyph,
 }: {
   name: string;
   plat: number | null | undefined;
   thumb?: string | null;
   sub?: React.ReactNode;
   tags?: React.ReactNode;
+  /** Plain-text cell — skip the letter/thumb tile (e.g. relic rows, where the
+   *  name itself already carries the tier). */
+  noGlyph?: boolean;
 }) {
   return (
     <div className="dnm">
-      <Glyph name={name} plat={plat} thumb={thumb} />
+      {noGlyph ? null : <Glyph name={name} plat={plat} thumb={thumb} />}
       <div className="di">
         <span className="nm">
           {name}

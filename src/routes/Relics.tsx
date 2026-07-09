@@ -240,10 +240,11 @@ function RelicRow({ r, onOpenRelic }: { r: RelicBrowserRow; onOpenRelic: OpenRel
       className={clsx("rt-row", r.qty === 0 && "rt-unowned", r.protected && "rt-protected")}
       {...rowAction(() => onOpenRelic(r.tier, r.relic_name))}
     >
-      <td className={clsx("relic-glyph", r.tier.toLowerCase())}>
+      <td>
         <ItemName
           name={r.display_name}
           plat={null}
+          noGlyph
           tags={
             <>
               {r.vaulted ? (

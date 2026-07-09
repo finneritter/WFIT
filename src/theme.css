@@ -5118,30 +5118,6 @@ button.fgroup-h:hover .fg-go {
 .relic-tier.requiem {
   color: var(--neg);
 }
-/* Relic name-cell glyphs: the letter tile picks up the tier accent, so the
-   first column reads Lith/Meso/Neo/Axi at a glance (markup: ItemName inside a
-   td.relic-glyph.<tier>). */
-.relic-glyph.lith .gl {
-  color: var(--t-lith);
-  border-color: var(--t-lith);
-}
-.relic-glyph.meso .gl {
-  color: var(--t-meso);
-  border-color: var(--t-meso);
-}
-.relic-glyph.neo .gl {
-  color: var(--t-neo);
-  border-color: var(--t-neo);
-}
-.relic-glyph.axi .gl {
-  color: var(--t-axi);
-  border-color: var(--t-axi);
-}
-.relic-glyph.requiem .gl {
-  color: var(--t-req);
-  border-color: var(--t-req);
-}
-
 /* "To crack" tab — why-crack signal badges. Square/mono, color-keyed by signal. */
 .crk-badge {
   font-size: 9px;
