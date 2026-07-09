@@ -7388,6 +7388,62 @@ button.hw-nav:hover {
   padding: 0;
   overflow: hidden;
 }
+
+/* ---- Connected sheet chrome -------------------------------------------------
+   The spreadsheet screens read as ONE ruled surface: stat boxes and filter
+   rows are bands inside the same hairline frame as the table, and every rule
+   runs edge to edge instead of floating as inset islands.
+   Two variants share it: .rtable-wrap (Relics/Sets — full-bleed, own scroll)
+   and .content-sheet (Trends/Arcanes — multi-band pages that scroll as a page). */
+.content.content-sheet {
+  padding: 0 0 48px;
+}
+.rtable-wrap .statband,
+.content-sheet .statband {
+  gap: 0;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--line);
+}
+.rtable-wrap .statband .statbox,
+.content-sheet .statband .statbox {
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: none;
+  padding: 8px 16px;
+}
+.rtable-wrap .statband .statbox:last-child,
+.content-sheet .statband .statbox:last-child {
+  border-right: 0;
+}
+/* Panels lose their box frame and become full-width bands: one shared rule
+   between neighbours, nothing at the sides for lines to stop short of. */
+.content-sheet .tpanel,
+.content-sheet .market-hero {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  margin-bottom: 0;
+}
+/* Control strips (Trends timeframe row, Arcanes filters) join the frame too. */
+.content-sheet .tf-row,
+.content-sheet .mkt-filters {
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+/* Sheet tables gain the column hairlines the rtable screens already have, so
+   horizontal and vertical rules meet instead of rows floating in the band. */
+.content-sheet .dtable th,
+.content-sheet .dtable td {
+  border-right: 1px solid var(--line);
+}
+.content-sheet .dtable th:last-child,
+.content-sheet .dtable td:last-child {
+  border-right: 0;
+}
+.content-sheet .legend {
+  padding: 10px 16px;
+}
 .vgrid-wrap {
   height: 100%;
   display: flex;

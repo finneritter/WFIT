@@ -217,7 +217,7 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
             Your arcanes — sell or dissolve
           </h3>
         </div>
-        <div className="mkt-filters" style={{ margin: "0 0 10px" }}>
+        <div className="mkt-filters">
           <Chip active={sellOnly === "1"} onClick={() => setSellOnly(sellOnly === "1" ? "0" : "1")}>
             Sell only
           </Chip>

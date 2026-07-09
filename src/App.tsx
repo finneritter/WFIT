@@ -290,6 +290,7 @@ export default function App() {
             className={clsx(
               "content",
               (screen === "vendors" || screen === "relics" || screen === "sets") && "content-flush",
+              (screen === "trends" || screen === "arcanes") && "content-sheet",
             )}
             ref={contentRef}
           >
