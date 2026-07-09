@@ -82,7 +82,7 @@ Design language (the "connected sheet" idiom — the void-revamp look, 2026-07):
     `.rtable-scroll` > `table.dtable.rtable` (sticky header, sticky summary `tfoot`,
     per-cell gridlines). Use for single-table "spreadsheet" screens.
   - **`content-sheet`** (Inventory, Trends, Arcanes, Listings, Market, Watchlist, Buy
-    List, Ducats, Sold History — see `SHEET_SCREENS` in `App.tsx`): the page scrolls as a
+    List, Ducats, Sold History, Account — see `SHEET_SCREENS` in `App.tsx`): the page scrolls as a
     whole; panels (`.tpanel`, `.market-hero`) lose their box frames and become full-width
     bands separated by single rules; control strips (`.filters`, `.mkt-filters`,
     `.tf-row`, `.tabband`) are ruled bands; `.dtable` cells gain column hairlines. Use

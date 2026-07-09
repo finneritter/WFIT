@@ -7500,6 +7500,33 @@ button.hw-nav:hover {
 .content-sheet .mkt-search:focus-within svg {
   stroke: var(--accent);
 }
+/* Account: profile header, info columns, tab strip, and the stat cards all
+   join the ruled frame (cards fuse into a band like .statband). */
+.content-sheet .acc-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.content-sheet .acc-cols {
+  padding: 14px 16px;
+}
+.content-sheet .acc-tabs {
+  margin: 0;
+  padding: 0 8px;
+}
+.content-sheet .acc-cards {
+  gap: 0;
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+}
+.content-sheet .acc-card {
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: none;
+  padding: 12px 16px;
+}
+.content-sheet .acc-card:last-child {
+  border-right: 0;
+}
 /* Market item view: header, price context, controls, and the bid ladder are
    ruled bands stacked over the seller table. */
 .content-sheet .mkt-head {

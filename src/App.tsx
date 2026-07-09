@@ -64,6 +64,7 @@ const SHEET_SCREENS = new Set<ScreenId>([
   "buy",
   "ducats",
   "sold",
+  "account",
 ]);
 
 const TITLES: Record<ScreenId, string> = {
