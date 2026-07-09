@@ -7420,12 +7420,27 @@ button.hw-nav:hover {
   background: none;
   margin-bottom: 0;
 }
-/* Control strips (Trends timeframe row, Arcanes filters) join the frame too. */
+/* Control strips (Trends timeframe row, Arcanes/Inventory filters) join the
+   frame too. */
 .content-sheet .tf-row,
-.content-sheet .mkt-filters {
+.content-sheet .mkt-filters,
+.content-sheet .filters {
   margin: 0;
   padding: 10px 16px;
   border-bottom: 1px solid var(--line);
+}
+/* Inventory sections: headers get side padding so text keeps its inset while
+   their rule runs edge to edge; the list table sits flush under that rule so
+   its column dividers connect to it. Tile/chip grids keep an inner gutter. */
+.content-sheet .sec-h {
+  padding: 4px 16px 7px;
+}
+.content-sheet .section .inv-tbl {
+  margin-top: 0;
+}
+.content-sheet .inv-root .grid,
+.content-sheet .inv-root .chips {
+  padding: 0 16px;
 }
 /* Sheet tables gain the column hairlines the rtable screens already have, so
    horizontal and vertical rules meet instead of rows floating in the band. */
