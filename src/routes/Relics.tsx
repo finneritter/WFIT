@@ -16,6 +16,12 @@ import type { RelicBrowserRow } from "../lib/types";
 const TIERS = ["Lith", "Meso", "Neo", "Axi", "Requiem"] as const;
 const TIER_ORDER: Record<string, number> = Object.fromEntries(TIERS.map((t, i) => [t, i]));
 const TIER_OPTIONS = [["all", "All tiers"], ...TIERS.map((t) => [t, t] as const)] as const;
+const REFINEMENTS = ["Intact", "Exceptional", "Flawless", "Radiant"] as const;
+// Filtering by refinement implies owned — an unowned catalog row has no stacks.
+const REF_OPTIONS = [
+  ["all", "Any refinement"],
+  ...REFINEMENTS.map((r) => [r, r] as const),
+] as const;
 const SQUADS = ["1", "2", "3", "4"] as const;
 
 export type OpenRelicFn = (tier: string, name: string) => void;
@@ -75,6 +81,7 @@ export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
 
   const [ownedOnly, setOwnedOnly] = usePersisted<"1" | "0">("wfit-relic-owned", "0");
   const [tierFilter, setTierFilter] = usePersisted<string>("wfit-relic-tier", "all");
+  const [refFilter, setRefFilter] = usePersisted<string>("wfit-relic-ref", "all");
   const [rareMinStr, setRareMin] = usePersisted<string>("wfit-relic-rare-min", "0");
   const rareMin = Number(rareMinStr) || 0;
   const [signals, setSignals] = usePersisted<string>("wfit-relic-signals", "");
@@ -95,12 +102,13 @@ export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
         test(r) &&
         (ownedOnly === "0" || r.qty > 0) &&
         (tierFilter === "all" || r.tier === tierFilter) &&
+        (refFilter === "all" || r.stacks.some((s) => s.refinement === refFilter && s.qty > 0)) &&
         (rareMin === 0 || (r.rare_plat ?? 0) > rareMin) &&
         [...active].every((s) => matchesSignal(r, s)),
     );
     // No column sort chosen → burn order (the whole point of the screen).
     return sort.sort ? sort.apply(filtered) : [...filtered].sort(burnOrder);
-  }, [rows, test, ownedOnly, tierFilter, rareMin, active, sort.sort, sort.apply]);
+  }, [rows, test, ownedOnly, tierFilter, refFilter, rareMin, active, sort.sort, sort.apply]);
 
   const totals = useMemo(() => {
     let ownedRelics = 0;
@@ -128,6 +136,12 @@ export function Relics({ onOpenRelic }: { onOpenRelic: OpenRelicFn }) {
           Owned
         </Chip>
         <Dropdown value={tierFilter} options={TIER_OPTIONS} onChange={setTierFilter} title="Tier" />
+        <Dropdown
+          value={refFilter}
+          options={REF_OPTIONS}
+          onChange={setRefFilter}
+          title="Owned refinement"
+        />
         <label className="rt-raremin" title="Only relics whose gold (rare) drop sells above this">
           rare &gt;
           <input
