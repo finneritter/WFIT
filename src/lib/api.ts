@@ -182,6 +182,8 @@ export const getWorldstate = () => invoke<Worldstate>("get_worldstate");
 export const forceWorldstateRefresh = () => invoke<Worldstate>("force_worldstate_refresh");
 // The Vendors board: one panel per rotating vendor, stock enriched + check-off state.
 export const getVendorBoard = () => invoke<VendorPanel[]>("get_vendor_board");
+export const getVendorGroup = (group: string) =>
+  invoke<VendorPanel[]>("get_vendor_group", { group });
 export const markVendorCheck = (vendorKey: string, itemRef: string) =>
   invoke<void>("mark_vendor_check", { vendorKey, itemRef });
 export const unmarkVendorCheck = (vendorKey: string, itemRef: string) =>

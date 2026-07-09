@@ -556,6 +556,7 @@ export interface VendorIntelRow {
   tradeable: boolean; // resolved to a market slug → ownership auto-detect works
   checked: boolean; // owned (auto) or manually ticked
   check_source: "owned" | "manual" | null;
+  rank: number | null; // syndicate rank gate (static vendors; null = ungated)
 }
 // One vendor column on the Vendors board.
 export interface VendorPanel {

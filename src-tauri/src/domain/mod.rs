@@ -10,3 +10,4 @@ pub mod nightwave;
 pub mod partname;
 pub mod relic;
 pub mod reward_match;
+pub mod vendors;

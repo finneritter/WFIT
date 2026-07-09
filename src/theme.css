@@ -129,6 +129,7 @@
   --regal: #d68a96; /* Regal Aya — real-money currency, deliberately reads warm/alien */
   --essence: #b08fd6;
   --cred: #c0c7ce; /* Nightwave creds — silvery, matches the in-game coin */
+  --standing: #85b892; /* syndicate standing — sage, quiet next to the sigil-red tags */
   /* arbitration grade ramp — S gold, A green, B yellow, C blue, D orange, F red */
   --g-s: #d6b748;
   --g-a: #5fc27e;
@@ -3219,6 +3220,17 @@ body.hide-scan-tag .itag-scan {
 }
 .itag-qty {
   color: var(--faint);
+}
+/* Syndicate rank gate on static vendor rows (R0–R5). Rendered as its own
+   flex cell in .vcell (not inside the truncating name) so it stays visible
+   in narrow columns. */
+.itag-rank {
+  color: var(--standing);
+  border: 1px solid var(--standing);
+  padding: 0 3px;
+}
+.vcell .vrank {
+  flex: none;
 }
 /* Sets table: completion-state tags. */
 .itag-complete {
@@ -7458,8 +7470,10 @@ button.hw-nav:hover {
   border-top: 0;
   padding: 9px 16px;
 }
-/* Tab strip (segmented control) sits in its own ruled band. */
-.content-sheet .tabband {
+/* Tab strip (segmented control) in its own ruled band — used on sheet pages
+   (Listings) and inside flush wraps (Vendors), so it's unscoped. */
+.tabband {
+  flex: none;
   padding: 10px 16px;
   border-bottom: 1px solid var(--line);
 }
@@ -7701,6 +7715,9 @@ button.hw-nav:hover {
 .vcell .vcost.cred {
   color: var(--cred);
 }
+.vcell .vcost.standing {
+  color: var(--standing);
+}
 /* per-cell currency unit — only rendered in mixed-currency columns (Varzia) */
 .vcell .vcost .vunit {
   margin-left: 4px;
@@ -7819,6 +7836,9 @@ button.hw-nav:hover {
 }
 .vfoot .fcost.cred {
   color: var(--cred);
+}
+.vfoot .fcost.standing {
+  color: var(--standing);
 }
 .vfoot .fpart {
   display: inline-flex;

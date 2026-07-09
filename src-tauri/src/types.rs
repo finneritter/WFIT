@@ -104,6 +104,8 @@ pub struct VendorIntelRow {
     pub checked: bool,
     /// Why `checked` is true: "owned" (from inventory/scan) or "manual". None when unchecked.
     pub check_source: Option<String>,
+    /// Syndicate rank gate for static-vendor offers (None = ungated / rotating stock).
+    pub rank: Option<u8>,
 }
 
 /// One vendor column on the Vendors board: its live status/countdown plus enriched stock.

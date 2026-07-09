@@ -52,6 +52,7 @@ export const keys = {
     ["recommendedPrice", slug, rank] as const,
   worldstate: ["worldstate"] as const,
   vendorBoard: ["vendorBoard"] as const,
+  vendorGroup: (group: string) => ["vendorGroup", group] as const,
   wantedNow: ["wantedNow"] as const,
   relicBrowser: (squad: number) => ["relicBrowser", squad] as const,
   relicDetail: (tier: string, name: string, squad: number) =>
@@ -201,7 +202,18 @@ export const useVendorBoard = () =>
     refetchIntervalInBackground: true,
   });
 
-// Manual check-off toggles. Invalidate the board so owned/manual state re-renders.
+// Static vendor tabs (Syndicates, …): bundled stock enriched like the board.
+// No rotation — only ownership/check-off state changes, via invalidation below.
+export const useVendorGroup = (group: string) =>
+  useQuery({
+    queryKey: keys.vendorGroup(group),
+    queryFn: () => api.getVendorGroup(group),
+    enabled: group !== "",
+    staleTime: 5 * 60_000,
+  });
+
+// Manual check-off toggles. Invalidate the board + group tabs so owned/manual
+// state re-renders wherever the vendor appears (hybrids show in both).
 export function useToggleVendorCheck() {
   const qc = useQueryClient();
   return useMutation({
@@ -217,6 +229,7 @@ export function useToggleVendorCheck() {
       checked ? api.markVendorCheck(vendorKey, itemRef) : api.unmarkVendorCheck(vendorKey, itemRef),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.vendorBoard });
+      qc.invalidateQueries({ queryKey: ["vendorGroup"] });
       // nightwave act ticks live on the worldstate payload (Rotation screen)
       qc.invalidateQueries({ queryKey: keys.worldstate });
     },
@@ -227,7 +240,10 @@ export function useClearVendorChecks() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vendorKey: string) => api.clearVendorChecks(vendorKey),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.vendorBoard }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.vendorBoard });
+      qc.invalidateQueries({ queryKey: ["vendorGroup"] });
+    },
   });
 }
 // Wanted items farmable from a live reward source right now. Depends on the

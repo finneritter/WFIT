@@ -446,6 +446,7 @@ export const vendorsSchema: SearchSchema<VendorIntelRow> = {
   fields: {
     plat: { kind: "number", get: (r) => r.median_plat, hint: "market value (plat)" },
     cost: { kind: "number", get: (r) => r.cost, hint: "vendor price" },
+    rank: { kind: "number", get: (r) => r.rank, hint: "syndicate rank gate (rank<=3)" },
   },
 };
 
