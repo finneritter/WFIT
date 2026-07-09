@@ -112,6 +112,13 @@ The most-iterated subsystem. Full details in `docs/PERF_OPTIMIZATION.md` and inl
 - **Query layer:** thin `invoke()` wrappers in `lib/api.ts`, React Query hooks + centralized
   query keys in `hooks/queries.ts`, precise invalidation per mutation, and a `prices-updated`
   listener that refreshes active views when the heartbeat lands.
+- **Design language — the connected sheet (void revamp, 2026-07):** dense mono/void-blue theme
+  where hairlines run edge to edge and always meet another line. List screens are full-bleed via
+  one of two `App.tsx` content classes: `content-flush` (single-table spreadsheet screens —
+  Relics/Sets/Vendors; the `.rtable` owns its scroll, sticky header + summary footer) or
+  `content-sheet` (multi-band pages — Inventory/Trends/Arcanes/Listings; panels flatten into
+  full-width ruled bands and tables gain column hairlines). `.statband` is a fused stat strip
+  (cell dividers, no boxes) everywhere. Full contract + checklist: `docs/FEATURE_PLAYBOOK.md` §B.
 
 ## Testing and verification
 

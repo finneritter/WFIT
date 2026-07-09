@@ -7450,6 +7450,33 @@ button.hw-nav:hover {
 .content-sheet .inv-root .chips {
   padding: 0 16px;
 }
+/* Listings: the account/connection bar is the screen's title band. */
+.content-sheet > .conn {
+  margin: 0;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  padding: 9px 16px;
+}
+/* Tab strip (segmented control) sits in its own ruled band. */
+.content-sheet .tabband {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+/* Warning callouts become full-width bands framed by their own hot rules. */
+.content-sheet > .conn-note {
+  margin: 0;
+  border-left: 0;
+  border-right: 0;
+  padding: 8px 16px;
+}
+/* Forms (sign-in, session token) stay boxed cards — a floating frame is right
+   for a form — with a gutter inside the otherwise full-bleed page. */
+.content-sheet .tpanel.card {
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  margin: 12px 16px;
+}
 /* Sheet tables gain the column hairlines the rtable screens already have, so
    horizontal and vertical rules meet instead of rows floating in the band. */
 .content-sheet .dtable th,

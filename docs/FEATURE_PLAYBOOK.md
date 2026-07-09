@@ -72,6 +72,31 @@ Rendering (reuse primitives from `src/components/ui.tsx`, never hand-roll markup
 - [ ] Numbers via `fmt`/`fmtK`/`pct`; colors via theme classes (`pos`/`neg`/`muted`,
       `t-*` tiers) — avoid inline color styles. Persist view/filter prefs via `usePersisted`.
 
+Design language (the "connected sheet" idiom — the void-revamp look, 2026-07):
+- **One ruled surface.** Hairlines (`var(--line)`) run edge to edge and MEET other lines —
+  no floating bordered islands, no rules that stop short of the window edge, no margins
+  between a strip's rule and the table under it (that leaves column dividers hanging).
+- Two page variants, chosen per screen in the `App.tsx` content-class switch:
+  - **`content-flush`** (Relics, Sets, Vendors): full-bleed, the table owns its scroll.
+    Layout = `.rtable-wrap` → `.statband` → `.mkt-filters rtable-filters` →
+    `.rtable-scroll` > `table.dtable.rtable` (sticky header, sticky summary `tfoot`,
+    per-cell gridlines). Use for single-table "spreadsheet" screens.
+  - **`content-sheet`** (Inventory, Trends, Arcanes, Listings): the page scrolls as a
+    whole; panels (`.tpanel`, `.market-hero`) lose their box frames and become full-width
+    bands separated by single rules; control strips (`.filters`, `.mkt-filters`,
+    `.tf-row`, `.tabband`) are ruled bands; `.dtable` cells gain column hairlines. Use
+    for multi-band screens (hero + tables, tabs, sections).
+- **Stat header** = `StatBox` row in `.statband`. The base style is already the fused
+  band (cell dividers + bottom rule, no boxes) — never re-box or gap it. It sits flush
+  (margin 0) on flush/sheet pages, and keeps a 12px bottom margin on padded pages.
+- **Sticky section headers** (`.sec-h`) carry symmetric 12px vertical padding — padding,
+  never margin, so the space travels when pinned and collapsed groups stay evenly ruled.
+- **Forms are still cards.** A setup/auth form inside a sheet page keeps its box via
+  `tpanel card` (see Listings' sign-in/session cards).
+- When adding a list screen, put it in one of the two variants and eyeball it with the
+  headless rig (`.claude/tools/shot.mjs <Screen>` against `npm run dev`) — the check is
+  literally "does every line reach another line or the window edge".
+
 ---
 
 ## C. Backend checklist (a new command / data path)

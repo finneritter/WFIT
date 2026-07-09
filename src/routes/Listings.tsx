@@ -178,7 +178,7 @@ function SignInCard() {
   };
 
   return (
-    <div className="tpanel" style={{ maxWidth: 520 }}>
+    <div className="tpanel card" style={{ maxWidth: 520 }}>
       <div className="tpanel-h">
         <h3>Connect warframe.market</h3>
         <span style={{ flex: 1 }} />
@@ -226,7 +226,7 @@ function SessionCard({ onSkip }: { onSkip: () => void }) {
   };
 
   return (
-    <div className="tpanel" style={{ marginBottom: 12, maxWidth: 560 }}>
+    <div className="tpanel card" style={{ maxWidth: 560 }}>
       <div className="tpanel-h">
         <h3>Add a session token</h3>
         <span style={{ flex: 1 }} />
@@ -289,7 +289,7 @@ function ImportPanel({ rows, onClose }: { rows: ImportRow[]; onClose: () => void
     Object.fromEntries(rows.map((r) => [r.slug, r.listed_qty])),
   );
   return (
-    <div className="tpanel" style={{ marginBottom: 12 }}>
+    <div className="tpanel">
       <div className="tpanel-h">
         <h3>Review import — listings, not inventory</h3>
         <span style={{ flex: 1 }} />
@@ -358,7 +358,7 @@ function RepricePanel({ rows, onClose }: { rows: RepriceRow[]; onClose: () => vo
   const apply = useWfmRepriceApply();
   const changes = rows.filter((r) => r.new_price !== r.current_price);
   return (
-    <div className="tpanel" style={{ marginBottom: 12 }}>
+    <div className="tpanel">
       <div className="tpanel-h">
         <h3>Reprice to best — review changes</h3>
         <span style={{ flex: 1 }} />
@@ -810,9 +810,7 @@ export function Listings({
       </div>
 
       {setStatus.isError ? (
-        <div className="conn-note" style={{ marginBottom: 12 }}>
-          Couldn't set status: {(setStatus.error as Error).message}
-        </div>
+        <div className="conn-note">Couldn't set status: {(setStatus.error as Error).message}</div>
       ) : null}
 
       {importRows ? <ImportPanel rows={importRows} onClose={() => setImportRows(null)} /> : null}
@@ -822,13 +820,13 @@ export function Listings({
       ) : null}
 
       {expired ? (
-        <div className="conn-note" style={{ marginBottom: 12 }}>
+        <div className="conn-note">
           Your warframe.market session has expired
           {expiresAt ? ` (${expiresAt.toLocaleDateString()})` : ""}. Paste a fresh JWT below to keep
           creating, editing, and selling orders.
         </div>
       ) : expiringSoon ? (
-        <div className="conn-note" style={{ marginBottom: 12 }}>
+        <div className="conn-note">
           Your warframe.market session expires in {daysLeft} day{daysLeft === 1 ? "" : "s"} (
           {expiresAt?.toLocaleDateString()}). Disconnect and reconnect to refresh it with a new JWT.
         </div>
@@ -838,23 +836,25 @@ export function Listings({
         <SessionCard onSkip={() => setSessionDismissed(true)} />
       ) : null}
 
-      <div className="seg" style={{ marginBottom: 12 }}>
-        <button
-          type="button"
-          className="segb"
-          aria-pressed={tab === "mine"}
-          onClick={() => setTab("mine")}
-        >
-          My listings
-        </button>
-        <button
-          type="button"
-          className="segb"
-          aria-pressed={tab === "recommended"}
-          onClick={() => setTab("recommended")}
-        >
-          Recommended
-        </button>
+      <div className="tabband">
+        <div className="seg">
+          <button
+            type="button"
+            className="segb"
+            aria-pressed={tab === "mine"}
+            onClick={() => setTab("mine")}
+          >
+            My listings
+          </button>
+          <button
+            type="button"
+            className="segb"
+            aria-pressed={tab === "recommended"}
+            onClick={() => setTab("recommended")}
+          >
+            Recommended
+          </button>
+        </div>
       </div>
 
       {tab === "recommended" ? (
