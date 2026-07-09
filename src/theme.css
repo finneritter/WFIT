@@ -7433,7 +7433,9 @@ button.hw-nav:hover {
    their rule runs edge to edge; the list table sits flush under that rule so
    its column dividers connect to it. Tile/chip grids keep an inner gutter. */
 .content-sheet .sec-h {
-  padding: 4px 16px 7px;
+  /* roomy top padding, not margin — the header is sticky, so the space must
+     travel with it (its background covers the gap when pinned) */
+  padding: 10px 16px 8px;
 }
 .content-sheet .section .inv-tbl {
   margin-top: 0;
