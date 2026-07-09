@@ -8,6 +8,7 @@ import { NotificationCenter } from "./components/NotificationCenter";
 import { RelicDrawer } from "./components/RelicDrawer";
 import { ResizeGrips } from "./components/ResizeGrips";
 import { RivenSavedSidebar } from "./components/RivenSavedSidebar";
+import { SetDrawer } from "./components/SetDrawer";
 import { type ScreenId, Sidebar } from "./components/Sidebar";
 import { SyncNow } from "./components/SyncNow";
 import { TitleBar } from "./components/TitleBar";
@@ -95,6 +96,8 @@ export default function App() {
   // The relic drawer (Relics browser row click). The item Drawer stacks on top of
   // it — a drop name opens the item without losing the relic context underneath.
   const [relicDrawer, setRelicDrawer] = useState<{ tier: string; name: string } | null>(null);
+  // The set drawer (Sets table row click) — same stacking contract as the relic drawer.
+  const [setDrawerSlug, setSetDrawerSlug] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   // The user's explicit collapse choice (persisted). On narrow windows the
   // sidebar auto-collapses regardless; widening again restores this preference.
@@ -134,6 +137,7 @@ export default function App() {
   // re-renders (e.g. the summary badge updating every 2s during a price sync).
   const open = useCallback((slug: string) => setDrawer(slug), []);
   const openRelic = useCallback((tier: string, name: string) => setRelicDrawer({ tier, name }), []);
+  const openSet = useCallback((slug: string) => setSetDrawerSlug(slug), []);
 
   // Single navigation entry point: switch screen, clear the page search, and set
   // which Listings tab to land on (defaults to "mine" so only explicit links go
@@ -285,7 +289,7 @@ export default function App() {
           <div
             className={clsx(
               "content",
-              (screen === "vendors" || screen === "relics") && "content-flush",
+              (screen === "vendors" || screen === "relics" || screen === "sets") && "content-flush",
             )}
             ref={contentRef}
           >
@@ -303,9 +307,7 @@ export default function App() {
                 in main.tsx instead). */}
               <ErrorBoundary key={screen}>
                 {screen === "home" && <Dashboard onOpen={open} onNavigate={navigate} />}
-                {screen === "sets" && (
-                  <Sets onOpen={open} onNavigate={navigate} focusSetSlug={focusSetSlug} />
-                )}
+                {screen === "sets" && <Sets onOpenSet={openSet} focusSetSlug={focusSetSlug} />}
                 {screen === "trends" && <Trends onOpen={open} />}
                 {screen === "watchlist" && <Watchlist onOpen={open} />}
                 {screen === "buy" && <BuyList onOpen={open} onNavigate={navigate} />}
@@ -342,6 +344,18 @@ export default function App() {
             onOpen={open}
             onNavigate={(s, opts) => {
               setRelicDrawer(null);
+              navigate(s, opts);
+            }}
+          />
+        ) : null}
+        {setDrawerSlug ? (
+          <SetDrawer
+            slug={setDrawerSlug}
+            active={drawer == null}
+            onClose={() => setSetDrawerSlug(null)}
+            onOpen={open}
+            onNavigate={(s, opts) => {
+              setSetDrawerSlug(null);
               navigate(s, opts);
             }}
           />

@@ -3,7 +3,7 @@
 // Clicking a row opens the RelicDrawer (per-refinement EV/ROI + drop table).
 import { useMemo } from "react";
 import { Dropdown } from "../components/Dropdown";
-import { Chip, SortTh, TableStatus, rowAction } from "../components/ui";
+import { Chip, ItemName, SortTh, TableStatus, rowAction } from "../components/ui";
 import { useImportScannedRelics, useRelicBrowser } from "../hooks/queries";
 import { useColumnSort } from "../hooks/useTable";
 import { clsx, fmt } from "../lib/format";
@@ -241,46 +241,50 @@ function RelicRow({ r, onOpenRelic }: { r: RelicBrowserRow; onOpenRelic: OpenRel
       {...rowAction(() => onOpenRelic(r.tier, r.relic_name))}
     >
       <td>
-        <span className="di">
-          <span className="nm">
-            {r.display_name}
-            {r.vaulted ? (
-              <span className="vault" title="vaulted relic — no longer farmable">
-                VAULT
-              </span>
-            ) : null}
-            {r.aya ? (
-              <span
-                className="aya-tag"
-                title="in Varzia's current Prime Resurgence stock — buyable for Aya"
-              >
-                AYA
-              </span>
-            ) : null}
-            {r.protected ? (
-              <span className="prot" title="protected — flagged do-not-burn">
-                PROT
-              </span>
-            ) : null}
-            {scanned ? (
-              <span className="src-tag src-scan" title="imported from the game">
-                SCAN
-              </span>
-            ) : null}
-          </span>
-          {r.qty === 0 ? (
-            <span className="sub">
-              {r.best_reward ? (
+        <ItemName
+          name={r.display_name}
+          plat={null}
+          noGlyph
+          tags={
+            <>
+              {r.vaulted ? (
+                <span className="itag itag-vault" title="vaulted relic — no longer farmable">
+                  VAULT
+                </span>
+              ) : null}
+              {r.aya ? (
+                <span
+                  className="itag itag-aya"
+                  title="in Varzia's current Prime Resurgence stock — buyable for Aya"
+                >
+                  AYA
+                </span>
+              ) : null}
+              {r.protected ? (
+                <span className="itag itag-prot" title="protected — flagged do-not-burn">
+                  PROT
+                </span>
+              ) : null}
+              {scanned ? (
+                <span className="itag itag-scan" title="imported from the game">
+                  SCAN
+                </span>
+              ) : null}
+            </>
+          }
+          sub={
+            r.qty === 0 ? (
+              r.best_reward ? (
                 <>
                   best: {r.best_reward}
                   {r.best_reward_plat != null ? ` · ${fmt(r.best_reward_plat)}p` : ""}
                 </>
               ) : (
                 <span className="muted">no priced drops</span>
-              )}
-            </span>
-          ) : null}
-        </span>
+              )
+            ) : undefined
+          }
+        />
       </td>
       <td className={clsx("relic-tier", r.tier.toLowerCase())}>{r.tier}</td>
       {/* One line per owned refinement stack — stacked vertically, never joined

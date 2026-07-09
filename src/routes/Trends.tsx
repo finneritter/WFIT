@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { MiniArea, RangeBar, Spark } from "../components/charts";
-import { BlockStatus, Glyph } from "../components/ui";
+import { BlockStatus, Chip, ItemName, SortTh, TableStatus, rowAction } from "../components/ui";
 import { useTrends } from "../hooks/queries";
-import { usePaged } from "../hooks/useTable";
+import { useColumnSort, usePaged } from "../hooks/useTable";
 import { CATEGORY_LABELS, clsx, fmt, pct } from "../lib/format";
 import { usePersisted } from "../lib/persist";
 import { usePageSearch } from "../lib/searchContext";
@@ -28,77 +28,32 @@ function Move({ delta, z }: { delta: number; z: number }) {
   );
 }
 
-function SignalRow({
-  row,
-  mode,
-  onOpen,
-}: {
-  row: TrendRow;
-  mode: "sell" | "buy" | "unusual";
-  onOpen: (s: string) => void;
-}) {
-  return (
-    <button type="button" className="sigrow" onClick={() => onOpen(row.slug)}>
-      <Glyph name={row.display_name} plat={row.median_plat} thumb={row.thumbnail_url} />
-      <span className="si">
-        <span className="sn">
-          {row.display_name}
-          {mode === "sell" && row.owned_qty > 0 ? <i className="own">×{row.owned_qty}</i> : null}
-          {mode !== "sell" && row.on_watchlist ? <i className="star">★</i> : null}
-        </span>
-        <RangeBar pos={row.range_pos} low={row.range_low} high={row.range_high} />
-      </span>
-      <Spark data={row.spark} up={row.delta >= 0} />
-      <span className="sr">
-        <span className="sp num">{fmt(row.median_plat)}p</span>
-        <Move delta={row.delta} z={row.z} />
-        <span className="svol num muted" title="avg daily trade volume (liquidity)">
-          {fmt(row.volume)}/d
-        </span>
-      </span>
-    </button>
-  );
-}
+type Signal = "sell" | "buy" | "unusual";
+const SIGNAL_CHIPS: [Signal, string, string][] = [
+  ["sell", "Sell signals", "items you own, high in range or spiking"],
+  ["buy", "Buy / flip", "liquid items low in their range"],
+  ["unusual", "Unusual moves", "volatility-adjusted movers"],
+];
 
-function Panel({
-  title,
-  note,
-  rows,
-  mode,
-  empty,
-  onOpen,
-  resetKey,
-}: {
-  title: string;
-  note?: string;
-  rows: TrendRow[];
-  mode: "sell" | "buy" | "unusual";
-  empty: string;
-  onOpen: (s: string) => void;
-  resetKey?: unknown;
-}) {
-  const { visible, hasMore, shown, total, more } = usePaged(rows, 12, resetKey);
+/** One table row: the trend data plus which signal lists surfaced it. */
+type SignalRow = { row: TrendRow; signals: Set<Signal> };
+
+type Col = "name" | "range" | "price" | "move" | "z" | "volume";
+const CMP: Record<Col, (a: SignalRow, b: SignalRow) => number> = {
+  name: (a, b) => a.row.display_name.localeCompare(b.row.display_name),
+  range: (a, b) => a.row.range_pos - b.row.range_pos,
+  price: (a, b) => (a.row.median_plat ?? 0) - (b.row.median_plat ?? 0),
+  move: (a, b) => a.row.delta - b.row.delta,
+  z: (a, b) => a.row.z - b.row.z,
+  volume: (a, b) => a.row.volume - b.row.volume,
+};
+
+// Default order (no column chosen): biggest absolute move first — the screen's
+// "what's happening" question.
+function moveOrder(a: SignalRow, b: SignalRow): number {
   return (
-    <div className="tpanel">
-      <div className="tpanel-h">
-        <h3>{title}</h3>
-        {note ? <span className="meta">{note}</span> : null}
-      </div>
-      {rows.length === 0 ? (
-        <div className="empty">{empty}</div>
-      ) : (
-        <>
-          {visible.map((r) => (
-            <SignalRow key={r.slug} row={r} mode={mode} onOpen={onOpen} />
-          ))}
-          {hasMore ? (
-            <button type="button" className="btn load-more" onClick={more}>
-              Showing {shown} of {fmt(total)} — load more
-            </button>
-          ) : null}
-        </>
-      )}
-    </div>
+    Math.abs(b.row.delta) - Math.abs(a.row.delta) ||
+    a.row.display_name.localeCompare(b.row.display_name)
   );
 }
 
@@ -128,32 +83,59 @@ function HeatRowView({ row, scale }: { row: HeatRow; scale: number }) {
 export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
   const [tf, setTf] = usePersisted<(typeof TFS)[number]>("wfit-trends-tf", "7d");
   const [outliers, setOutliers] = usePersisted<"1" | "0">("wfit-trends-outliers", "1");
+  const [signalFilter, setSignalFilter] = usePersisted<Signal | "all">("wfit-trends-signal", "all");
   const excludeOutliers = outliers === "1";
   const { data, isLoading, isError } = useTrends(tf, excludeOutliers);
+  const sort = useColumnSort<SignalRow, Col>("wfit-trends-sort", CMP, null);
 
-  // The topbar query narrows all three signal panels (the index/heat stay whole).
   const search = usePageSearch();
   const { test } = useMemo(() => compileQuery(search, trendsSchema), [search]);
-  const panels = useMemo(
-    () =>
-      data
-        ? {
-            sell: data.sell_signals.filter(test),
-            buy: data.buy_candidates.filter(test),
-            unusual: data.unusual.filter(test),
-          }
-        : null,
-    [data, test],
-  );
+
+  // The three backend signal lists merge into one table; a row keeps every
+  // signal it appears under (an owned spike can be both "sell" and "unusual").
+  const merged = useMemo(() => {
+    if (!data) return [];
+    const by = new Map<string, SignalRow>();
+    const add = (rows: TrendRow[], s: Signal) => {
+      for (const r of rows) {
+        const e = by.get(r.slug);
+        if (e) e.signals.add(s);
+        else by.set(r.slug, { row: r, signals: new Set([s]) });
+      }
+    };
+    add(data.sell_signals, "sell");
+    add(data.buy_candidates, "buy");
+    add(data.unusual, "unusual");
+    return [...by.values()];
+  }, [data]);
+
+  const view = useMemo(() => {
+    const filtered = merged.filter(
+      (e) => test(e.row) && (signalFilter === "all" || e.signals.has(signalFilter)),
+    );
+    return sort.sort ? sort.apply(filtered) : [...filtered].sort(moveOrder);
+  }, [merged, test, signalFilter, sort.sort, sort.apply]);
+
+  // Reset paging only when the filters change — not on the heartbeat refetch
+  // that hands back fresh arrays every ~45-60s.
+  const pageKey = `${tf}|${outliers}|${search}|${signalFilter}|${sort.sort ? sort.sort.key + sort.sort.dir : ""}`;
+  const { visible, hasMore, shown, total, more } = usePaged(view, 25, pageKey);
+
+  const breadth = useMemo(() => {
+    let up = 0;
+    let down = 0;
+    for (const e of view) {
+      if (e.row.delta > 0) up += 1;
+      else if (e.row.delta < 0) down += 1;
+    }
+    return { up, down, flat: view.length - up - down };
+  }, [view]);
 
   if (isError)
     return <BlockStatus error text="Couldn't load market trends. Try again in a moment." />;
   if (isLoading || !data) return <BlockStatus text="Loading market trends…" />;
 
   const heatScale = Math.max(1, ...data.category_heat.map((h) => Math.abs(h.avg_delta)));
-  // Reset each panel's paging only when the filters change — not on the heartbeat
-  // refetch that hands back fresh `panels` arrays every ~45-60s.
-  const pageKey = `${tf}|${outliers}|${search}`;
 
   return (
     <>
@@ -218,7 +200,7 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
         )}
       </div>
 
-      {/* Signal controls */}
+      {/* Signal controls: timeframe + signal-type filter + outlier clamp */}
       <div className="tf-row">
         <span className="lbl">timeframe</span>
         {TFS.map((t) => (
@@ -233,6 +215,16 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
           </button>
         ))}
         <span className="sp" />
+        {SIGNAL_CHIPS.map(([s, label, hint]) => (
+          <span key={s} title={hint}>
+            <Chip
+              active={signalFilter === s}
+              onClick={() => setSignalFilter(signalFilter === s ? "all" : s)}
+            >
+              {label}
+            </Chip>
+          </span>
+        ))}
         <button
           type="button"
           className="chip"
@@ -244,47 +236,116 @@ export function Trends({ onOpen }: { onOpen: (slug: string) => void }) {
         </button>
       </div>
 
-      {/* Row 2 — decision panels */}
-      <div className="tgrid trow2">
-        <Panel
-          title="Sell signals"
-          note="you own these"
-          rows={panels?.sell ?? []}
-          mode="sell"
-          empty="Items you own that are high in their range or spiking will surface here."
-          onOpen={onOpen}
-          resetKey={pageKey}
-        />
-        <Panel
-          title="Buy / flip candidates"
-          note="low in range"
-          rows={panels?.buy ?? []}
-          mode="buy"
-          empty="No clear dips in liquid items right now."
-          onOpen={onOpen}
-          resetKey={pageKey}
-        />
+      {/* The signal table — every mover in one sortable place */}
+      <div className="tpanel">
+        <div className="tpanel-h">
+          <h3>Signals</h3>
+          <span className="meta">{tf} · click a row for the item</span>
+        </div>
+        <table className="dtable trend-table">
+          <thead>
+            <tr>
+              <SortTh<Col> label="Item" col="name" sort={sort.sort} onSort={sort.cycle} />
+              <SortTh<Col> label="Range" col="range" sort={sort.sort} onSort={sort.cycle} />
+              <th className="tt-spark">Spark</th>
+              <SortTh<Col> label="Price" col="price" sort={sort.sort} onSort={sort.cycle} right />
+              <SortTh<Col> label="Move" col="move" sort={sort.sort} onSort={sort.cycle} right />
+              <SortTh<Col> label="Volume" col="volume" sort={sort.sort} onSort={sort.cycle} right />
+            </tr>
+          </thead>
+          <tbody>
+            {visible.length === 0 ? (
+              <TableStatus
+                span={6}
+                loading={false}
+                error={false}
+                emptyText="Nothing moving under the current filters."
+              />
+            ) : (
+              visible.map((e) => (
+                <tr key={e.row.slug} {...rowAction(() => onOpen(e.row.slug))}>
+                  <td>
+                    <ItemName
+                      name={e.row.display_name}
+                      plat={e.row.median_plat}
+                      thumb={e.row.thumbnail_url}
+                      sub={
+                        e.row.owned_qty > 0
+                          ? `you own ×${e.row.owned_qty}`
+                          : e.row.on_watchlist
+                            ? "on watchlist"
+                            : undefined
+                      }
+                      tags={
+                        <>
+                          {e.signals.has("sell") ? (
+                            <span
+                              className="itag itag-sell"
+                              title="you own this — high in range or spiking"
+                            >
+                              SELL
+                            </span>
+                          ) : null}
+                          {e.signals.has("buy") ? (
+                            <span className="itag itag-buy" title="liquid and low in its range">
+                              BUY
+                            </span>
+                          ) : null}
+                          {e.signals.has("unusual") ? (
+                            <span
+                              className="itag itag-unusual"
+                              title="unusual volatility-adjusted move"
+                            >
+                              σ
+                            </span>
+                          ) : null}
+                        </>
+                      }
+                    />
+                  </td>
+                  <td className="tt-range">
+                    <RangeBar pos={e.row.range_pos} low={e.row.range_low} high={e.row.range_high} />
+                  </td>
+                  <td className="tt-spark">
+                    <Spark data={e.row.spark} up={e.row.delta >= 0} />
+                  </td>
+                  <td className="r num">{fmt(e.row.median_plat)}p</td>
+                  <td className="r">
+                    <Move delta={e.row.delta} z={e.row.z} />
+                  </td>
+                  <td className="r num muted" title="avg daily trade volume (liquidity)">
+                    {fmt(e.row.volume)}/d
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={6}>
+                <span className="num">{fmt(view.length)}</span> signals ·{" "}
+                <span className="num pos">{breadth.up}</span> up ·{" "}
+                <span className="num neg">{breadth.down}</span> down ·{" "}
+                <span className="num">{breadth.flat}</span> flat
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+        {hasMore ? (
+          <button type="button" className="btn load-more" onClick={more}>
+            Showing {shown} of {fmt(total)} — load more
+          </button>
+        ) : null}
       </div>
 
-      {/* Row 3 — context */}
-      <div className="tgrid trow2">
-        <Panel
-          title="Unusual moves"
-          note="volatility-adjusted"
-          rows={panels?.unusual ?? []}
-          mode="unusual"
-          empty="Nothing moving unusually."
-          onOpen={onOpen}
-          resetKey={pageKey}
-        />
-        <div className="tpanel">
-          <div className="tpanel-h">
-            <h3>Category heat</h3>
-          </div>
-          {data.category_heat.map((h) => (
-            <HeatRowView key={h.category} row={h} scale={heatScale} />
-          ))}
+      {/* Category heat — the sector map */}
+      <div className="tpanel">
+        <div className="tpanel-h">
+          <h3>Category heat</h3>
         </div>
+        {data.category_heat.map((h) => (
+          <HeatRowView key={h.category} row={h} scale={heatScale} />
+        ))}
       </div>
     </>
   );

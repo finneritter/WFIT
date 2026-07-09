@@ -2,8 +2,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Dropdown, type DropdownOption } from "../components/Dropdown";
 import { Icon } from "../components/Icon";
+import { ItemTags } from "../components/ItemTags";
 import { Spark } from "../components/charts";
-import { BlockStatus, Glyph, SortTh, StatBox, rowAction } from "../components/ui";
+import { BlockStatus, ItemName, SortTh, StatBox, rowAction } from "../components/ui";
 import { useInventory, useListings, usePricingProgress, useSummary } from "../hooks/queries";
 import {
   CATEGORY_LABELS,
@@ -234,30 +235,42 @@ const InvTable = memo(function InvTable({
               {...rowAction(() => onOpen(row.slug))}
             >
               <td>
-                <div className="dnm">
-                  <Glyph name={row.display_name} plat={plat} thumb={row.thumbnail_url} />
-                  <span className="di">
-                    <span className="nm">
-                      {row.display_name}
-                      {row.trend === "up" ? <span className="hot">▲ HOT</span> : null}
-                      {row.excluded ? <span className="excl-tag">EXCL</span> : null}
-                      {row.is_vaulted ? <span className="vault">VAULT</span> : null}
-                      {listed.has(row.slug) ? <span className="listed-tag">LISTED</span> : null}
+                <ItemName
+                  name={row.display_name}
+                  plat={plat}
+                  thumb={row.thumbnail_url}
+                  tags={
+                    <>
+                      <ItemTags
+                        trend={row.trend}
+                        vaulted={row.is_vaulted}
+                        listed={listed.has(row.slug)}
+                      />
+                      {row.excluded ? (
+                        <span className="itag itag-excl" title="excluded from valuation">
+                          EXCL
+                        </span>
+                      ) : null}
                       {SRC_TAG[row.source] ? (
                         <span
-                          className={clsx("src-tag", row.source === "de_scan" && "src-scan")}
+                          className={clsx(
+                            "itag",
+                            row.source === "de_scan" ? "itag-scan" : "itag-src",
+                          )}
                           title={`added via ${row.source}`}
                         >
                           {SRC_TAG[row.source]}
                         </span>
                       ) : null}
-                    </span>
-                    <span className="sub">
+                    </>
+                  }
+                  sub={
+                    <>
                       {row.part_type}
                       {row.first_added_at ? ` · added ${relativeDay(row.first_added_at)}` : ""}
-                    </span>
-                  </span>
-                </div>
+                    </>
+                  }
+                />
               </td>
               <td className="r">
                 <span className="tcell">

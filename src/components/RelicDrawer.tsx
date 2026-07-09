@@ -2,8 +2,9 @@
 // refine-or-not ROI) + the full drop table with ownership. Opens from any row in
 // the Relics browser; drop names click through to the item Drawer, which stacks
 // on top (this drawer's Escape is gated off while it does — see `active`).
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRelicDetail, useSetRelicProtected, useSetRelicQty } from "../hooks/queries";
+import { useDrawerResize } from "../hooks/useDrawerResize";
 import { useEscape } from "../hooks/useEscape";
 import { clsx, fmt } from "../lib/format";
 import { usePersisted } from "../lib/persist";
@@ -47,37 +48,7 @@ export function RelicDrawer({
   useEscape(active ? onClose : () => {});
 
   // Resizable width — same affordance as the item Drawer, own persistence key.
-  const [width, setWidth] = useState<number>(() => {
-    const saved = Number(localStorage.getItem("wfit.relicDrawerWidth"));
-    return Number.isFinite(saved) && saved >= MIN_WIDTH ? saved : 520;
-  });
-  const widthRef = useRef(width);
-  widthRef.current = width;
-  const startResize = (e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const onMove = (ev: PointerEvent) => {
-      const w = Math.min(
-        Math.max(window.innerWidth - ev.clientX, MIN_WIDTH),
-        window.innerWidth - 80,
-      );
-      widthRef.current = w;
-      setWidth(w);
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      document.body.style.userSelect = "";
-      try {
-        localStorage.setItem("wfit.relicDrawerWidth", String(Math.round(widthRef.current)));
-      } catch {
-        // ignore persistence failures
-      }
-    };
-    document.body.style.userSelect = "none";
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
+  const { width, startResize } = useDrawerResize("wfit.relicDrawerWidth", MIN_WIDTH, 520);
 
   const refinements = d?.refinements ?? [];
   // Chance column defaults to what you'd actually hold: the best owned
@@ -144,20 +115,20 @@ export function RelicDrawer({
             <div className="nm">
               {d.display_name}
               {d.vaulted ? (
-                <span className="vault" title="vaulted relic — no longer farmable">
+                <span className="itag itag-vault" title="vaulted relic — no longer farmable">
                   VAULT
                 </span>
               ) : null}
               {d.aya ? (
                 <span
-                  className="aya-tag"
+                  className="itag itag-aya"
                   title="in Varzia's current Prime Resurgence stock — buyable for Aya"
                 >
                   AYA
                 </span>
               ) : null}
               {d.protected ? (
-                <span className="prot" title="protected — flagged do-not-burn">
+                <span className="itag itag-prot" title="protected — flagged do-not-burn">
                   PROT
                 </span>
               ) : null}

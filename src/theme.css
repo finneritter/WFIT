@@ -79,18 +79,21 @@
 }
 
 :root {
-  --bg: #0c0d10;
-  --bg-2: #111216;
-  --panel: #15171b;
-  --panel-2: #1b1d22;
-  --line: #24262e;
-  --line-2: #31343d;
-  --ink: #e2e3e6;
-  --soft: #989ba2;
-  --faint: #62656d;
-  --hover: #1f2127;
-  --accent: #cfd2d8; /* neutral — no brand accent in wireframe */
-  --accent-ink: #15171b; /* text/icon color on an --accent fill */
+  /* Void blue-black neutral stack: same lightness ladder as the original gray
+     wireframe, pulled toward a cold navy cast so the colored accents (tier,
+     currency, pos/neg) do the talking against a darker field. */
+  --bg: #07080c;
+  --bg-2: #0b0d13;
+  --panel: #10131b;
+  --panel-2: #151924;
+  --line: #1e2330;
+  --line-2: #2a3040;
+  --ink: #e3e5ec;
+  --soft: #939aac;
+  --faint: #5d6375;
+  --hover: #171c28;
+  --accent: #ccd4e6; /* near-neutral cool — still no loud brand accent */
+  --accent-ink: #10131b; /* text/icon color on an --accent fill */
   --pos: #5fc27e;
   --neg: #e0685c;
   --hot: #f0a93e;
@@ -2656,6 +2659,12 @@ code {
   cursor: pointer;
   border-bottom: 1px solid var(--line);
   user-select: none;
+  /* Pins to the top of the content scroll while its section streams under —
+     the table-idiom sticky-header treatment generalized to section headers. */
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg);
 }
 .sec-h .tw {
   color: var(--faint);
@@ -2809,7 +2818,7 @@ code {
   right: 0;
   bottom: 0;
   height: 14px;
-  background: #06070a;
+  background: #04060b;
   border-top: 1px solid var(--line-2);
   display: flex;
   align-items: center;
@@ -2840,7 +2849,7 @@ code {
   background: var(--neg);
 }
 .trend.flat {
-  background: #777;
+  background: var(--faint);
 }
 
 /* ===== Inventory display overhaul (Update 2) — additive + scoped to .inv-root ===== */
@@ -3153,56 +3162,28 @@ code {
 .inv-tbl tr.excluded td {
   opacity: 0.55;
 }
-.inv-tbl .excl-tag {
-  color: var(--faint);
-  font-size: 9px;
-  margin-left: 5px;
-  border: 1px solid var(--line-2);
-  padding: 0 3px;
-  letter-spacing: .04em;
-}
-/* Vault markers in chips/list (the lock badge handles the grid). */
-.chip-it .ci-sub .vault,
-.inv-tbl .nm .vault {
+/* Vault / LISTED markers in the chip view (the lock badge / tag icon handle the
+   grid; the list view uses the shared .itag family below). */
+.chip-it .ci-sub .vault {
   color: var(--accent);
   font-size: 9px;
   margin-left: 4px;
 }
-.inv-tbl .nm .vault {
-  border: 1px solid var(--line-2);
-  padding: 0 3px;
-  letter-spacing: .04em;
-}
-/* "LISTED" tag in chips/list (the tag icon handles the grid). */
-.chip-it .ci-sub .listed-tag,
-.inv-tbl .nm .listed-tag {
+.chip-it .ci-sub .listed-tag {
   color: var(--plat);
   font-size: 9px;
   margin-left: 4px;
 }
-.inv-tbl .nm .listed-tag {
-  border: 1px solid var(--line-2);
-  padding: 0 3px;
-  letter-spacing: .04em;
-}
-/* "SCAN" / "WFM" provenance tag in the list view (manual is the norm → no tag). */
-.inv-tbl .nm .src-tag {
-  color: var(--faint);
-  font-size: 9px;
-  margin-left: 4px;
-  border: 1px solid var(--line-2);
-  padding: 0 3px;
-  letter-spacing: .04em;
-}
 /* The "SCAN" tag is hidden unless the user opts in (Settings → Appearance). */
-body.hide-scan-tag .src-tag.src-scan {
+body.hide-scan-tag .src-tag.src-scan,
+body.hide-scan-tag .itag-scan {
   display: none;
 }
 
 /* Shared HOT / VAULT / LISTED tags (components/ItemTags.tsx) — unscoped so they
    render consistently on every item-bearing screen (search, listings, ducats,
-   arcanes, watchlist, buy list). The Inventory grid/chip/list views keep their
-   own bespoke markup above. */
+   arcanes, watchlist, buy list, inventory list, relics, drawers). The Inventory
+   grid/chip tile views keep their own bespoke markup above. */
 .itag {
   font-size: 9px;
   margin-left: 4px;
@@ -3231,6 +3212,56 @@ body.hide-scan-tag .src-tag.src-scan {
 }
 .itag-qty {
   color: var(--faint);
+}
+/* Sets table: completion-state tags. */
+.itag-complete {
+  color: var(--pos);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
+.itag-oneaway {
+  color: var(--hot);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
+/* Relic / inventory provenance + state tags (relics browser, drawers, inventory
+   list) — the one tag family everywhere an item name appears. */
+.itag-aya {
+  color: var(--aya);
+  border: 1px solid var(--aya);
+  padding: 0 3px;
+}
+.itag-prot {
+  color: var(--pos);
+  border: 1px solid var(--pos);
+  padding: 0 3px;
+}
+.itag-scan,
+.itag-src {
+  color: var(--faint);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
+.itag-excl {
+  color: var(--faint);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
+/* Trends signal table: which signal list(s) surfaced the row. */
+.itag-sell {
+  color: var(--pos);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
+.itag-buy {
+  color: var(--blue);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
+}
+.itag-unusual {
+  color: var(--hot);
+  border: 1px solid var(--line-2);
+  padding: 0 3px;
 }
 
 /* Uniform 30px toolbar height (scoped to .filters). */
@@ -5087,26 +5118,6 @@ button.fgroup-h:hover .fg-go {
 .relic-tier.requiem {
   color: var(--neg);
 }
-/* SCAN provenance tag inside the shared data table (relics list). */
-.dtable .nm .src-tag {
-  color: var(--faint);
-  font-size: 9px;
-  margin-left: 5px;
-  border: 1px solid var(--line-2);
-  padding: 0 3px;
-  letter-spacing: .04em;
-}
-/* VAULT marker inside the shared data table (relics browser) + drawers. */
-.dtable .nm .vault,
-.drawer .nm .vault {
-  color: var(--accent);
-  font-size: 9px;
-  margin-left: 5px;
-  border: 1px solid var(--line-2);
-  padding: 0 3px;
-  letter-spacing: .04em;
-}
-
 /* "To crack" tab — why-crack signal badges. Square/mono, color-keyed by signal. */
 .crk-badge {
   font-size: 9px;
@@ -5581,6 +5592,11 @@ button.rsetbar:hover .rsetbox.hit-sp {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+/* The screener already spaces its children with the flex gap above, so the
+   shared .mkt-filters margin-bottom would double the gap under the filter row. */
+.mkt-screener .mkt-filters {
+  margin-bottom: 0;
 }
 .mkt-search {
   height: 38px;
@@ -7132,6 +7148,31 @@ button.hw-nav:hover {
 .hw-row-active .hw-row {
   background: var(--hover);
 }
+/* Idle "recent" header above the recently-opened list (label left, clear right). */
+.hw-recent-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 2px 4px;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.hw-recent-hd button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--faint);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.hw-recent-hd button:hover {
+  color: var(--muted);
+}
 
 /* Tone helpers (descendant match wins over the base .hw-big/.hw-cv color). */
 .hw .pos {
@@ -7142,6 +7183,26 @@ button.hw-nav:hover {
 }
 .hw .hot {
   color: var(--hot);
+}
+/* Arbitration widget headline: the tier letter wears its grade color (same
+   ramp as .tierb — S gold … F red; unrated stays the base ink). */
+.hw .g-s {
+  color: var(--g-s);
+}
+.hw .g-a {
+  color: var(--g-a);
+}
+.hw .g-b {
+  color: var(--g-b);
+}
+.hw .g-c {
+  color: var(--g-c);
+}
+.hw .g-d {
+  color: var(--g-d);
+}
+.hw .g-f {
+  color: var(--g-f);
 }
 
 /* Empty home call-to-action. */
@@ -7297,9 +7358,10 @@ button.hw-nav:hover {
 }
 
 /* Edit-mode wobble — on the inner .hw-card so the tile element itself isn't
-   transformed. Paused on the tile being dragged. Off for reduced-motion. */
+   transformed. The floating drag overlay is excluded (a wobbling clone under
+   the cursor reads as jitter). Off for reduced-motion. */
 @media (prefers-reduced-motion: no-preference) {
-  .hw-grid.editing .hw:not(.dragging) .hw-card {
+  .hw-grid.editing .hw:not(.hw-overlay) .hw-card {
     animation: hw-wobble 2.4s ease-in-out infinite;
   }
   .hw-grid.editing .hw:nth-child(2n) .hw-card {
@@ -7611,6 +7673,10 @@ button.hw-nav:hover {
   flex: none;
   align-items: center;
 }
+/* A statband above a full-bleed table (Sets) must not flex-shrink away. */
+.rtable-wrap .statband {
+  flex: none;
+}
 .rt-squad {
   display: inline-flex;
   align-items: center;
@@ -7704,6 +7770,27 @@ button.hw-nav:hover {
 .rtable tbody tr.rt-protected .nm {
   color: var(--faint);
 }
+/* Trends signal table: chart cells get fixed, compact footprints so the
+   sparkline and range bar read as columns, not stretch. */
+.trend-table .tt-spark {
+  width: 76px;
+}
+.trend-table .tt-spark svg {
+  display: block;
+}
+.trend-table .tt-range {
+  min-width: 170px;
+  max-width: 240px;
+}
+
+/* Summary footers on in-panel tables (Arcanes, Trends) — same voice as the
+   .rtable sticky footer, without the stickiness (panels scroll as a page). */
+.dtable tfoot td {
+  border-top: 1px solid var(--line-2);
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
 .rtable tfoot td {
   position: sticky;
   bottom: 0;
@@ -7723,30 +7810,6 @@ button.hw-nav:hover {
   display: inline-flex;
   gap: 4px;
   flex-wrap: wrap;
-}
-/* AYA badge — in Varzia's current Resurgence stock (vaulted but buyable). */
-.dtable .nm .aya-tag,
-.drawer .nm .aya-tag {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 4px;
-  border: 1px solid var(--aya);
-  color: var(--aya);
-  font-size: 8.5px;
-  letter-spacing: .06em;
-  vertical-align: 1px;
-}
-/* PROT badge — same chip shape as .vault, protective green. */
-.dtable .nm .prot,
-.drawer .nm .prot {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 4px;
-  border: 1px solid var(--pos);
-  color: var(--pos);
-  font-size: 8.5px;
-  letter-spacing: .06em;
-  vertical-align: 1px;
 }
 /* Relic drawer body + sections */
 .drawer .drawer-body {

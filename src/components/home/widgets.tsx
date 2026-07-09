@@ -32,7 +32,8 @@ import {
   useWorldstate,
 } from "../../hooks/queries";
 import { clsx, fmt, fmtK, msUntil, nextUtc, pct, syncedAgo } from "../../lib/format";
-import { Countdown } from "../Countdown";
+import { usePersistedJSON } from "../../lib/persist";
+import { Countdown, TierBadge } from "../Countdown";
 import { Icon } from "../Icon";
 import type { ScreenId } from "../Sidebar";
 import { MiniArea } from "../charts";
@@ -775,13 +776,36 @@ function MarketPulseWidget({ w, h, focused, onOpen }: WidgetProps) {
   );
 }
 
+// Snapshot of a picked result — enough to render the idle "recent" list without
+// re-querying (the price is last-seen, not live; it's a jump-back list).
+interface RecentPick {
+  slug: string;
+  display_name: string;
+  part_type: string;
+  thumbnail_url: string | null;
+  median_plat: number | null;
+}
+const RECENT_CAP = 12;
+
 function MarketSearchWidget({ h, focused, onOpen }: WidgetProps) {
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
+  const [recents, setRecents] = usePersistedJSON<RecentPick[]>("wfit-market-recents", []);
   const query = q.trim();
   const { data = [], isFetching } = useSearchCatalog(query);
   const results = data.slice(0, focused ? ROW_POOL : 6);
+  const remember = (r: RecentPick) =>
+    setRecents((prev) => [r, ...prev.filter((p) => p.slug !== r.slug)].slice(0, RECENT_CAP));
   const pick = (slug: string) => {
+    const hit = data.find((r) => r.slug === slug);
+    if (hit)
+      remember({
+        slug: hit.slug,
+        display_name: hit.display_name,
+        part_type: hit.part_type,
+        thumbnail_url: hit.thumbnail_url,
+        median_plat: hit.median_plat,
+      });
     onOpen(slug);
     setQ("");
     setActive(0);
@@ -815,6 +839,34 @@ function MarketSearchWidget({ h, focused, onOpen }: WidgetProps) {
       )}
     </div>
   );
+  // Idle state (nothing typed): recently opened items fill the space that the
+  // results list would use. Popover mode (1 row tall) has no idle space — skip.
+  const recentList =
+    open || asPopover || recents.length === 0 ? null : (
+      <div className={clsx("hw-rows hw-search-res", focused && "scroll")}>
+        <div className="hw-recent-hd">
+          <span>recent</span>
+          <button type="button" onClick={() => setRecents([])}>
+            clear
+          </button>
+        </div>
+        {recents.slice(0, focused ? ROW_POOL : 6).map((r) => (
+          <HwRow
+            key={r.slug}
+            slug={r.slug}
+            name={r.display_name}
+            plat={r.median_plat}
+            thumb={r.thumbnail_url}
+            sub={r.part_type}
+            right={r.median_plat == null ? "—" : `${fmt(r.median_plat)}p`}
+            onOpen={(slug) => {
+              remember(r);
+              onOpen(slug);
+            }}
+          />
+        ))}
+      </div>
+    );
   return (
     <div className="hw-b hw-search">
       <div className="hw-search-box">
@@ -844,7 +896,7 @@ function MarketSearchWidget({ h, focused, onOpen }: WidgetProps) {
         />
         {asPopover ? list : null}
       </div>
-      {!asPopover ? list : null}
+      {!asPopover ? (list ?? recentList) : null}
     </div>
   );
 }
@@ -895,6 +947,7 @@ function ArbitrationWidget({ w, h, focused }: WidgetProps) {
       error={isError && !ws}
       stale={isError && !!ws}
       big={cur ? (cur.tier ?? "—") : "—"}
+      bigTone={cur?.tier ? `g-${cur.tier.toLowerCase()}` : undefined}
       sub={cur ? cur.mission_type : "no live arbitration"}
       empty={!isLoading && !block ? "Schedule unavailable." : undefined}
       cells={
@@ -907,11 +960,9 @@ function ArbitrationWidget({ w, h, focused }: WidgetProps) {
       }
       rows={(block?.notable ?? []).slice(0, ROW_POOL).map((a) => (
         <div className="hw-row hw-row-static" key={a.activation}>
+          <TierBadge tier={a.tier} />
           <span className="hw-row-i">
-            <span className="hw-row-n">
-              {a.tier ? `${a.tier} · ` : ""}
-              {a.node}
-            </span>
+            <span className="hw-row-n">{a.node}</span>
             <span className="hw-row-s">{a.mission_type}</span>
           </span>
           <span className="hw-row-v">

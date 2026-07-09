@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ItemTags } from "../components/ItemTags";
 import { Chip, ItemName, Scrim, SortTh, StatBox, TableStatus, rowAction } from "../components/ui";
 import { useArcaneDashboard, useCollectionBreakdown, useListedSlugs } from "../hooks/queries";
+import { useDrawerResize } from "../hooks/useDrawerResize";
 import { useEscape } from "../hooks/useEscape";
 import { useColumnSort, usePaged } from "../hooks/useTable";
 import { clsx, fmt } from "../lib/format";
@@ -77,6 +78,27 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
     ownedView,
     50,
     `${sellOnly}|${dissolveOnly}|${noCommon}|${search}|${own.sort ? own.sort.key + own.sort.dir : ""}`,
+  );
+
+  // Footer totals over the whole filtered view (not just the visible page).
+  const ownedTotals = useMemo(() => {
+    let sell = 0;
+    let vosfor = 0;
+    let value = 0;
+    for (const a of ownedView) {
+      sell += a.sell_plat;
+      vosfor += a.vosfor_total;
+      value += ownedValue(a);
+    }
+    return { sell, vosfor, value };
+  }, [ownedView]);
+  const bestColl = useMemo(
+    () =>
+      collections.reduce<CollectionEv | null>(
+        (best, c) => (best == null || c.ev_plat_per_pull > best.ev_plat_per_pull ? c : best),
+        null,
+      ),
+    [collections],
   );
 
   return (
@@ -171,6 +193,21 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
               ))
             )}
           </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={7}>
+                <span className="num">{fmt(sortedColls.length)}</span> collections · best{" "}
+                {bestColl ? (
+                  <>
+                    {bestColl.name} at{" "}
+                    <span className="num">{bestColl.ev_plat_per_pull.toFixed(1)}p</span> / 200 vf
+                  </>
+                ) : (
+                  "—"
+                )}
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
@@ -259,6 +296,16 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
               ))
             )}
           </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={5}>
+                <span className="num">{fmt(ownedView.length)}</span> arcanes · sell{" "}
+                <span className="num">{fmt(ownedTotals.sell)}p</span> · dissolve{" "}
+                <span className="num">{fmt(ownedTotals.vosfor)}</span> vf · total{" "}
+                <span className="num">{fmt(ownedTotals.value)}p</span>
+              </td>
+            </tr>
+          </tfoot>
         </table>
         {ownedPage.hasMore ? (
           <button type="button" className="btn load-more" onClick={ownedPage.more}>
@@ -277,19 +324,16 @@ export function Arcanes({ onOpen }: { onOpen: (slug: string) => void }) {
       </div>
 
       {openCol ? (
-        <CollectionBreakdownModal
-          collection={openCol}
-          onOpen={onOpen}
-          onClose={() => setOpenCol(null)}
-        />
+        <CollectionDrawer collection={openCol} onOpen={onOpen} onClose={() => setOpenCol(null)} />
       ) : null}
     </>
   );
 }
 
-/// What's driving a collection's value: a scrollable list of every arcane in it with
-/// its plat price and Vosfor, sorted by EV contribution. Styled like the listing form.
-function CollectionBreakdownModal({
+/// What's driving a collection's value: every arcane in it with its plat price and
+/// Vosfor, sorted by EV contribution. A right-side resizable drawer (the Relic/Set
+/// drawer affordance); arcane names close it and open the item Drawer.
+function CollectionDrawer({
   collection: c,
   onOpen,
   onClose,
@@ -300,83 +344,100 @@ function CollectionBreakdownModal({
 }) {
   useEscape(onClose);
   const { data: rows = [], isLoading, isError } = useCollectionBreakdown(c.key);
+  const { width, startResize } = useDrawerResize("wfit.arcaneDrawerWidth", 400, 480);
 
   return (
-    <Scrim onClose={onClose}>
-      <div className="modal lf-modal">
-        <div className="modal-h">
-          <h2>{c.name}</h2>
-          <span style={{ flex: 1 }} />
+    <Scrim className="scrim" onClose={onClose}>
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: pointer-only resize affordance (no keyboard equivalent) */}
+      <div
+        className="drawer-grip"
+        style={{ right: width }}
+        onPointerDown={startResize}
+        onClick={(e) => e.stopPropagation()}
+        title="Drag to resize"
+      />
+      <div className="drawer" style={{ width }}>
+        <div className="drawer-h">
+          <div className="di">
+            <div className="nm">{c.name}</div>
+            <div className="sub">Vosfor collection · {fmt(c.pool_size)} arcanes in the pool</div>
+          </div>
           <button type="button" className="x" onClick={onClose}>
             ✕
           </button>
         </div>
 
-        {/* Collection headline (reuses the row data — no refetch). */}
-        <div className="dgrid lf-grid">
-          <div className="cell">
-            <div className="k">Plat / 200 vf</div>
-            <div className="v">{c.ev_plat_per_pull.toFixed(1)}p</div>
+        <div className="drawer-body">
+          {/* Collection headline (reuses the row data — no refetch). */}
+          <div className="dgrid lf-grid">
+            <div className="cell">
+              <div className="k">Plat / 200 vf</div>
+              <div className="v">{c.ev_plat_per_pull.toFixed(1)}p</div>
+            </div>
+            <div className="cell">
+              <div className="k">Plat / vf</div>
+              <div className="v">{c.plat_per_vosfor.toFixed(2)}</div>
+            </div>
+            <div className="cell">
+              <div className="k">Legendary</div>
+              <div className="v">{c.legendary_pct > 0 ? `${c.legendary_pct}%` : "—"}</div>
+            </div>
+            <div className="cell">
+              <div className="k">Priced</div>
+              <div className="v">{Math.round(c.coverage * 100)}%</div>
+            </div>
+            <div className="cell">
+              <div className="k">Pool</div>
+              <div className="v">{fmt(c.pool_size)}</div>
+            </div>
           </div>
-          <div className="cell">
-            <div className="k">Plat / vf</div>
-            <div className="v">{c.plat_per_vosfor.toFixed(2)}</div>
-          </div>
-          <div className="cell">
-            <div className="k">Legendary</div>
-            <div className="v">{c.legendary_pct > 0 ? `${c.legendary_pct}%` : "—"}</div>
-          </div>
-          <div className="cell">
-            <div className="k">Priced</div>
-            <div className="v">{Math.round(c.coverage * 100)}%</div>
-          </div>
-          <div className="cell">
-            <div className="k">Pool</div>
-            <div className="v">{fmt(c.pool_size)}</div>
-          </div>
-        </div>
 
-        <div className="np-list">
-          <table className="dtable">
-            <thead>
-              <tr>
-                <th>Arcane</th>
-                <th className="r">Plat</th>
-                <th className="r">Vosfor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading || isError || rows.length === 0 ? (
-                <TableStatus
-                  span={3}
-                  loading={isLoading}
-                  error={isError}
-                  emptyText="No arcanes in this collection."
-                />
-              ) : (
-                rows.map((r) => (
-                  <tr
-                    key={r.slug}
-                    {...rowAction(() => {
-                      onClose();
-                      onOpen(r.slug);
-                    })}
-                  >
-                    <td>
-                      <ItemName
-                        name={r.display_name}
-                        plat={r.plat}
-                        thumb={r.thumbnail_url}
-                        sub={`${r.rarity} · ${(r.prob * 100).toFixed(1)}% / draw`}
-                      />
-                    </td>
-                    <td className="r">{r.plat == null ? "—" : `${fmt(r.plat)}p`}</td>
-                    <td className="r num">{fmt(r.vosfor)} vf</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          <div className="rankbox">
+            <div className="rankbox-h">
+              <b>Arcanes</b>
+              <span className="muted"> · by EV contribution — names open the item drawer</span>
+            </div>
+            <table className="dtable">
+              <thead>
+                <tr>
+                  <th>Arcane</th>
+                  <th className="r">Plat</th>
+                  <th className="r">Vosfor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading || isError || rows.length === 0 ? (
+                  <TableStatus
+                    span={3}
+                    loading={isLoading}
+                    error={isError}
+                    emptyText="No arcanes in this collection."
+                  />
+                ) : (
+                  rows.map((r) => (
+                    <tr
+                      key={r.slug}
+                      {...rowAction(() => {
+                        onClose();
+                        onOpen(r.slug);
+                      })}
+                    >
+                      <td>
+                        <ItemName
+                          name={r.display_name}
+                          plat={r.plat}
+                          thumb={r.thumbnail_url}
+                          sub={`${r.rarity} · ${(r.prob * 100).toFixed(1)}% / draw`}
+                        />
+                      </td>
+                      <td className="r">{r.plat == null ? "—" : `${fmt(r.plat)}p`}</td>
+                      <td className="r num">{fmt(r.vosfor)} vf</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </Scrim>
