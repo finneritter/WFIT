@@ -7362,9 +7362,10 @@ button.hw-nav:hover {
 }
 
 /* Edit-mode wobble — on the inner .hw-card so the tile element itself isn't
-   transformed. Paused on the tile being dragged. Off for reduced-motion. */
+   transformed. The floating drag overlay is excluded (a wobbling clone under
+   the cursor reads as jitter). Off for reduced-motion. */
 @media (prefers-reduced-motion: no-preference) {
-  .hw-grid.editing .hw:not(.dragging) .hw-card {
+  .hw-grid.editing .hw:not(.hw-overlay) .hw-card {
     animation: hw-wobble 2.4s ease-in-out infinite;
   }
   .hw-grid.editing .hw:nth-child(2n) .hw-card {

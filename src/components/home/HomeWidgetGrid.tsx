@@ -82,6 +82,9 @@ function firstFree(tiles: Tile[], w: number, h: number): { x: number; y: number 
 const layoutSig = (tiles: Tile[]) =>
   tiles.map((t) => `${t.key}:${t.x}:${t.y}:${t.w}:${t.h}`).join("|");
 
+const rectMoved = (a: DOMRect, b: DOMRect) =>
+  a.left !== b.left || a.top !== b.top || a.width !== b.width || a.height !== b.height;
+
 export function HomeWidgetGrid({
   onOpen,
   onNavigate,
@@ -166,6 +169,22 @@ export function HomeWidgetGrid({
   // play the inverse transform → identity so it appears to move from where it was.
   const prevRects = useRef(new Map<string, DOMRect>());
   const flipAnims = useRef(new Map<string, Animation>());
+  // FLIP "First": capture every tile's current VISUAL rect — in-flight slide
+  // transforms included — in the same frame as, and just before, any state
+  // update that changes the layout or re-runs the animation effect. Reading
+  // inside the effect is too late for a tile still sliding from the previous
+  // reorder: the grid has already reflowed under its transform, so its rect is
+  // neither the old visual position nor the new static slot, and fast drags
+  // made tiles visibly jump before gliding back.
+  const snapshotRects = useCallback(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const next = new Map<string, DOMRect>();
+    for (const el of grid.querySelectorAll<HTMLElement>(".hw[data-key]")) {
+      if (el.dataset.key) next.set(el.dataset.key, el.getBoundingClientRect());
+    }
+    prevRects.current = next;
+  }, []);
   // Signature of the rendered layout so the effect re-runs on move/resize.
   const orderSig = layoutSig(order);
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-capture + animate whenever the layout changes (tracked via orderSig); the body reads the DOM rather than the order array directly.
@@ -180,32 +199,36 @@ export function HomeWidgetGrid({
     for (const el of grid.querySelectorAll<HTMLElement>(".hw[data-key]")) {
       const key = el.dataset.key;
       if (!key) continue;
-      const now = el.getBoundingClientRect();
-      next.set(key, now);
+      let now = el.getBoundingClientRect();
       const prev = prevRects.current.get(key);
-      if (
-        !reduce &&
-        prev &&
-        (prev.left !== now.left ||
-          prev.top !== now.top ||
-          prev.width !== now.width ||
-          prev.height !== now.height)
-      ) {
-        flipAnims.current.get(key)?.cancel();
-        const anim = el.animate(
-          [
-            {
-              transformOrigin: "top left",
-              transform: `translate(${prev.left - now.left}px, ${prev.top - now.top}px) scale(${
-                prev.width / now.width
-              }, ${prev.height / now.height})`,
-            },
-            { transformOrigin: "top left", transform: "none" },
-          ],
-          { duration: 180, easing: "cubic-bezier(.2,.7,.3,1)" },
-        );
-        flipAnims.current.set(key, anim);
+      if (prev && rectMoved(prev, now)) {
+        // Retarget: kill the in-flight slide BEFORE trusting the measurement —
+        // its transform is baked into the rect above and would corrupt the new
+        // delta. A tile the reorder didn't disturb never gets here (its rect,
+        // read in the same frame as the snapshot, still equals prev), so it
+        // keeps gliding uninterrupted.
+        const inflight = flipAnims.current.get(key);
+        if (inflight && inflight.playState === "running") {
+          inflight.cancel();
+          now = el.getBoundingClientRect();
+        }
+        if (!reduce && rectMoved(prev, now)) {
+          const anim = el.animate(
+            [
+              {
+                transformOrigin: "top left",
+                transform: `translate(${prev.left - now.left}px, ${prev.top - now.top}px) scale(${
+                  prev.width / now.width
+                }, ${prev.height / now.height})`,
+              },
+              { transformOrigin: "top left", transform: "none" },
+            ],
+            { duration: 180, easing: "cubic-bezier(.2,.7,.3,1)" },
+          );
+          flipAnims.current.set(key, anim);
+        }
       }
+      next.set(key, now);
     }
     prevRects.current = next;
   }, [orderSig, dragKey]);
@@ -245,6 +268,7 @@ export function HomeWidgetGrid({
         h: tr?.height ?? 0,
       };
       lastPt.current = { x: e.clientX, y: e.clientY };
+      snapshotRects(); // tiles may still be sliding from a previous drop
       draftRef.current = itemsRef.current.slice();
       setDraft(draftRef.current);
       setDragKey(key); // overlay positioned by the layout effect on mount
@@ -280,6 +304,7 @@ export function HomeWidgetGrid({
         // Keep array order stable (placement is absolute) so React/FLIP diff cleanly.
         const next = base.map((t) => placed.get(t.key) ?? t);
         if (layoutSig(next) !== layoutSig(draftRef.current ?? base)) {
+          snapshotRects();
           draftRef.current = next;
           setDraft(next);
         }
@@ -289,7 +314,9 @@ export function HomeWidgetGrid({
         window.removeEventListener("pointerup", up);
         const final = draftRef.current;
         // Seed the dropped tile's FLIP "from" rect with the overlay's last position
-        // so it glides from the cursor into its slot instead of teleporting.
+        // so it glides from the cursor into its slot instead of teleporting; every
+        // other tile's "from" is its current visual position (it may still slide).
+        snapshotRects();
         const ov = overlayRef.current;
         if (ov) prevRects.current.set(key, ov.getBoundingClientRect());
         setDragKey(null);
@@ -300,7 +327,7 @@ export function HomeWidgetGrid({
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
     },
-    [editing, setItems, positionOverlay],
+    [editing, setItems, positionOverlay, snapshotRects],
   );
 
   // ---- resize by the SE corner (pointer events, delta-based) -----------------
@@ -337,6 +364,7 @@ export function HomeWidgetGrid({
         for (const t of resolveDown(others, resized)) placed.set(t.key, t);
         const next = base.map((t) => placed.get(t.key) ?? t);
         if (layoutSig(next) !== layoutSig(draftRef.current ?? base)) {
+          snapshotRects();
           draftRef.current = next;
           setDraft(next);
         }
@@ -352,7 +380,7 @@ export function HomeWidgetGrid({
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
     },
-    [setItems],
+    [setItems, snapshotRects],
   );
 
   const addWidget = useCallback(
