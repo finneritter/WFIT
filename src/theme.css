@@ -7489,7 +7489,9 @@ button.hw-nav:hover {
 .content-sheet .mkt-search {
   /* base .search is flex:1 — pin it so the box keeps its own height */
   flex: none;
-  margin: 12px 16px;
+  /* 2px bottom: the chip strip below brings its own 10px padding, so the
+     visual gap matches the 12px above the box */
+  margin: 12px 16px 2px;
   transition: border-color 0.15s ease;
 }
 .content-sheet .mkt-search:focus-within {

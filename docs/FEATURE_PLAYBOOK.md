@@ -92,8 +92,10 @@ Design language (the "connected sheet" idiom — the void-revamp look, 2026-07):
   (margin 0) on flush/sheet pages, and keeps a 12px bottom margin on padded pages.
 - **Sticky section headers** (`.sec-h`) carry symmetric 12px vertical padding — padding,
   never margin, so the space travels when pinned and collapsed groups stay evenly ruled.
-- **Forms are still cards.** A setup/auth form inside a sheet page keeps its box via
-  `tpanel card` (see Listings' sign-in/session cards).
+- **Forms and primary inputs are still boxes.** A setup/auth form inside a sheet page
+  keeps its frame via `tpanel card` (Listings' sign-in/session cards), and a screen's
+  primary search input stays a floating framed box rather than a band (Market screener —
+  explicit preference, 2026-07-09); give it a `:focus-within` accent frame.
 - When adding a list screen, put it in one of the two variants and eyeball it with the
   headless rig (`.claude/tools/shot.mjs <Screen>` against `npm run dev`) — the check is
   literally "does every line reach another line or the window edge".
