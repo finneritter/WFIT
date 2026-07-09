@@ -6,6 +6,15 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Manual fallback: tag-push events occasionally never reach Actions (seen
+  # 2026-07-09 with v1.4.0 — tag existed on the remote, no run, GH status
+  # green, even after a solo re-push). Dispatch with the tag to build the
+  # exact same draft release without depending on event delivery.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing v* tag to build (e.g. v1.4.0)"
+        required: true
 
 permissions:
   contents: write # create the draft release + upload assets
@@ -19,8 +28,14 @@ jobs:
           - os: ubuntu-latest
           - os: windows-latest
     runs-on: ${{ matrix.os }}
+    # One place resolves the tag for both trigger paths (inputs is empty on
+    # tag pushes, ref_name is "main"-less on dispatch — the || covers both).
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -49,7 +64,7 @@ jobs:
       - name: Version from tag
         id: ver
         shell: bash
-        run: echo "num=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: echo "num=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
       # Runs beforeBuildCommand (npm run build), cargo build --release, bundles,
       # and uploads every artifact to one draft release keyed by the tag.
       # The body puts a direct-link download table front and center — the
@@ -65,8 +80,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "WFIT ${{ github.ref_name }}"
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: "WFIT ${{ env.RELEASE_TAG }}"
           releaseDraft: true
           updaterJsonPreferNsis: true
           releaseBody: |
@@ -74,11 +89,11 @@ jobs:
 
             | Platform | Download | Notes |
             |---|---|---|
-            | **Windows 10/11** | [WFIT_${{ steps.ver.outputs.num }}_x64-setup.exe](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/WFIT_${{ steps.ver.outputs.num }}_x64-setup.exe) | Recommended. Unsigned for now — SmartScreen will warn: click **More info → Run anyway**. |
-            | Windows (MSI) | [WFIT_${{ steps.ver.outputs.num }}_x64_en-US.msi](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/WFIT_${{ steps.ver.outputs.num }}_x64_en-US.msi) | Alternative installer. |
-            | **Linux — any distro** | [WFIT_${{ steps.ver.outputs.num }}_amd64.AppImage](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/WFIT_${{ steps.ver.outputs.num }}_amd64.AppImage) | `chmod +x` and run. Needs `webkit2gtk-4.1`. |
-            | Debian / Ubuntu | [WFIT_${{ steps.ver.outputs.num }}_amd64.deb](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/WFIT_${{ steps.ver.outputs.num }}_amd64.deb) | `sudo apt install ./WFIT_${{ steps.ver.outputs.num }}_amd64.deb` |
-            | Fedora / RHEL | [WFIT-${{ steps.ver.outputs.num }}-1.x86_64.rpm](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/WFIT-${{ steps.ver.outputs.num }}-1.x86_64.rpm) | `sudo dnf install ./WFIT-${{ steps.ver.outputs.num }}-1.x86_64.rpm` |
+            | **Windows 10/11** | [WFIT_${{ steps.ver.outputs.num }}_x64-setup.exe](https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/WFIT_${{ steps.ver.outputs.num }}_x64-setup.exe) | Recommended. Unsigned for now — SmartScreen will warn: click **More info → Run anyway**. |
+            | Windows (MSI) | [WFIT_${{ steps.ver.outputs.num }}_x64_en-US.msi](https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/WFIT_${{ steps.ver.outputs.num }}_x64_en-US.msi) | Alternative installer. |
+            | **Linux — any distro** | [WFIT_${{ steps.ver.outputs.num }}_amd64.AppImage](https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/WFIT_${{ steps.ver.outputs.num }}_amd64.AppImage) | `chmod +x` and run. Needs `webkit2gtk-4.1`. |
+            | Debian / Ubuntu | [WFIT_${{ steps.ver.outputs.num }}_amd64.deb](https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/WFIT_${{ steps.ver.outputs.num }}_amd64.deb) | `sudo apt install ./WFIT_${{ steps.ver.outputs.num }}_amd64.deb` |
+            | Fedora / RHEL | [WFIT-${{ steps.ver.outputs.num }}-1.x86_64.rpm](https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/WFIT-${{ steps.ver.outputs.num }}-1.x86_64.rpm) | `sudo dnf install ./WFIT-${{ steps.ver.outputs.num }}-1.x86_64.rpm` |
 
             macOS: no prebuilt bundle — build from source on a Mac (`npm run tauri build`).
 
