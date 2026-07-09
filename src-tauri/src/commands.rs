@@ -1011,6 +1011,31 @@ pub async fn force_worldstate_refresh(
     Ok(ws)
 }
 
+/// Static vendor tabs (Syndicates, later open worlds …): panels built from the
+/// bundled registry (`domain/vendors.rs`) — no worldstate read, always active,
+/// no countdown. Rows go through the same enrich pipeline as the Live board.
+#[tauri::command]
+pub fn get_vendor_group(
+    state: State<'_, Arc<AppState>>,
+    group: String,
+) -> AppResult<Vec<VendorPanel>> {
+    crate::domain::vendors::group(&group)
+        .map(|v| {
+            Ok(VendorPanel {
+                key: v.key.into(),
+                name: v.name.into(),
+                character: None,
+                location: Some(v.location.into()),
+                currency: v.currency.into(),
+                active: true,
+                activation: None,
+                expiry: None,
+                rows: vendor::enrich_static(&state.db, v.key, v.offers)?,
+            })
+        })
+        .collect()
+}
+
 /// The Vendors board: one panel per rotating vendor (Baro, Varzia, Teshin/Steel
 /// Path), each with live status/countdown and stock cross-referenced against the
 /// catalog (market value, owned qty, deal flag, check-off state). Reads the (cached)

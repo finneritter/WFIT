@@ -286,6 +286,7 @@ pub fn run() {
             commands::get_worldstate,
             commands::force_worldstate_refresh,
             commands::get_vendor_board,
+            commands::get_vendor_group,
             commands::mark_vendor_check,
             commands::unmark_vendor_check,
             commands::clear_vendor_checks,
