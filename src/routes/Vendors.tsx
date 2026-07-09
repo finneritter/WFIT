@@ -281,11 +281,6 @@ function VendorCell({
           thumb={row.thumbnail_url}
           tags={
             <>
-              {row.rank != null ? (
-                <span className="itag itag-rank num" title={`requires syndicate rank ${row.rank}`}>
-                  R{row.rank}
-                </span>
-              ) : null}
               {row.good_deal ? <span className="itag itag-deal">DEAL</span> : null}
               {owned && row.owned_qty > 1 ? (
                 <span className="itag itag-qty num">×{row.owned_qty}</span>
@@ -294,6 +289,13 @@ function VendorCell({
           }
         />
       </div>
+      {/* Outside the truncating name span — the rank gate must survive narrow
+          columns, so it sits as its own cell next to the cost. */}
+      {row.rank != null ? (
+        <span className="itag itag-rank num vrank" title={`requires syndicate rank ${row.rank}`}>
+          R{row.rank}
+        </span>
+      ) : null}
       <span className={clsx("vcost num", cur?.cls)}>
         {row.cost != null ? (cur?.compact ? fmtK(row.cost) : fmt(row.cost)) : ""}
         {showUnit && row.cost != null && cur ? <span className="vunit">{cur.unit}</span> : null}

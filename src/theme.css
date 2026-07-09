@@ -3221,11 +3221,16 @@ body.hide-scan-tag .itag-scan {
 .itag-qty {
   color: var(--faint);
 }
-/* Syndicate rank gate on static vendor rows (R0–R5). */
+/* Syndicate rank gate on static vendor rows (R0–R5). Rendered as its own
+   flex cell in .vcell (not inside the truncating name) so it stays visible
+   in narrow columns. */
 .itag-rank {
   color: var(--standing);
   border: 1px solid var(--standing);
   padding: 0 3px;
+}
+.vcell .vrank {
+  flex: none;
 }
 /* Sets table: completion-state tags. */
 .itag-complete {
