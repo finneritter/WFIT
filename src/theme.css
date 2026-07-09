@@ -5617,6 +5617,11 @@ button.rsetbar:hover .rsetbox.hit-sp {
   flex-direction: column;
   gap: 12px;
 }
+/* The screener already spaces its children with the flex gap above, so the
+   shared .mkt-filters margin-bottom would double the gap under the filter row. */
+.mkt-screener .mkt-filters {
+  margin-bottom: 0;
+}
 .mkt-search {
   height: 38px;
   font-size: 13px;
