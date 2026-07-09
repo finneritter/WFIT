@@ -7167,6 +7167,31 @@ button.hw-nav:hover {
 .hw-row-active .hw-row {
   background: var(--hover);
 }
+/* Idle "recent" header above the recently-opened list (label left, clear right). */
+.hw-recent-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 2px 4px;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.hw-recent-hd button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--faint);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.hw-recent-hd button:hover {
+  color: var(--muted);
+}
 
 /* Tone helpers (descendant match wins over the base .hw-big/.hw-cv color). */
 .hw .pos {
