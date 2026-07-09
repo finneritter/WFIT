@@ -7482,31 +7482,18 @@ button.hw-nav:hover {
 .content-sheet .mkt-screener {
   gap: 0;
 }
-/* The screener's search is the screen's primary control, so as a band it
-   stays loud: taller, panel-tinted, bigger type, and the underline + icon
-   catch the accent while typing. */
+/* The screener's search stays a floating box (the pre-sheet look, kept by
+   preference) — framed all around, inset inside the full-bleed page. The
+   frame + icon catch the accent while focused so it still reads as the
+   screen's primary control. */
 .content-sheet .mkt-search {
-  /* base .search is flex:1 — its flex-basis would override height in the
-     screener's column flex, so pin it */
+  /* base .search is flex:1 — pin it so the box keeps its own height */
   flex: none;
-  border-left: 0;
-  border-right: 0;
-  border-top: 0;
-  border-bottom: 1px solid var(--line-2);
-  padding: 0 16px;
-  height: 54px;
-  font-size: 15px;
-  background: var(--panel);
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-.content-sheet .mkt-search svg {
-  width: 18px;
-  height: 18px;
-  stroke: var(--soft);
+  margin: 12px 16px;
+  transition: border-color 0.15s ease;
 }
 .content-sheet .mkt-search:focus-within {
-  background: var(--panel-2);
-  border-bottom-color: var(--accent);
+  border-color: var(--accent);
 }
 .content-sheet .mkt-search:focus-within svg {
   stroke: var(--accent);
