@@ -8,7 +8,10 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
 # Files staged for this commit (Added/Copied/Modified/Renamed), NUL-safe.
-mapfile -d '' -t staged < <(git diff --cached --name-only --diff-filter=ACMR -z)
+# Portable read loop — macOS ships bash 3.2, which has no `mapfile`.
+staged=()
+while IFS= read -r -d '' f; do staged+=("$f"); done \
+  < <(git diff --cached --name-only --diff-filter=ACMR -z)
 [ ${#staged[@]} -eq 0 ] && exit 0
 
 restage=()
