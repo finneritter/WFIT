@@ -139,8 +139,10 @@ Reuse these shared helpers — **do not reimplement** (this is where logic drift
       recomputes those caches. Realizable value is computed fresh per call — no bump needed.
 
 Domain purity:
-- [ ] `domain/` modules are pure (no I/O). Bundled datasets (`mod_rarity`, `arcane`) are
-      `.tsv`s loaded into `Lazy` maps, not DB tables.
+- [ ] `domain/` modules are pure (no I/O). Bundled datasets (`mod_rarity`, `arcane`,
+      `nightwave`, `vendors`) are `.tsv`s loaded into `Lazy` maps, not DB tables. Wiki-sourced
+      datasets are seeded by a script (`scripts/scrape_vendors.py`) into committed, hand-reviewed
+      files — the app never scrapes at runtime.
 
 Tests:
 - [ ] Unit-test the new logic with `db::testutil::test_db`. Pin twin/invariant properties
