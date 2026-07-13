@@ -27,6 +27,11 @@ pub fn set(db: &Db, key: &str, value: &str) -> AppResult<()> {
 }
 
 pub const KEY_LAST_CATALOG_SYNC: &str = "last_catalog_sync";
+/// Version marker of the set-membership pass. "2" = per-part quantity_in_set
+/// from /v2/items/<slug>/set (the v1 pass parsed nothing — camelCase bug). On
+/// launch a mismatch schedules a background re-pass so quantity-aware set
+/// completion (issue #1) works without the user re-running "Update game data".
+pub const KEY_SET_MEMBERSHIP_PASS: &str = "set_membership_pass";
 pub const KEY_LAST_PRICE_SYNC: &str = "last_price_sync";
 /// Stamp of the last vault-status sync from warframe-items (long TTL).
 pub const KEY_LAST_VAULT_SYNC: &str = "last_vault_sync";

@@ -107,7 +107,11 @@ export interface BuyRow {
 export interface SetPart {
   slug: string;
   part_name: string;
+  /** owned_qty >= required — a ×2 part owned once is NOT owned. */
   owned: boolean;
+  owned_qty: number;
+  /** quantity_in_set — 2 for dual-weapon barrels/receivers. */
+  required: number;
   median_plat: number | null;
 }
 
@@ -115,6 +119,7 @@ export interface SetRow {
   set_slug: string;
   set_name: string;
   category: Category;
+  /** Unit counts (sum of required quantities), not distinct part types. */
   total_parts: number;
   owned_parts: number;
   complete: boolean;

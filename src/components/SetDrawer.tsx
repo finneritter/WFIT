@@ -15,7 +15,7 @@ const MIN_WIDTH = 400;
 
 export const setPartsSum = (row: SetRow): number | null => {
   if (!row.parts.some((p) => p.median_plat != null)) return null;
-  return row.parts.reduce((a, p) => a + (p.median_plat ?? 0), 0);
+  return row.parts.reduce((a, p) => a + (p.median_plat ?? 0) * p.required, 0);
 };
 
 export function SetDrawer({
@@ -121,11 +121,21 @@ export function SetDrawer({
                     else goMarket(p.slug);
                   }
                 }}
-                title={p.owned ? p.part_name : `Buy ${p.part_name} on warframe.market`}
+                title={
+                  (p.required > 1 ? `${p.part_name} ×${p.required} — ` : "") +
+                  (p.owned ? p.part_name : `Buy ${p.part_name} on warframe.market`)
+                }
               >
-                <span className="pa">{p.part_name.slice(0, 3)}</span>
+                <span className="pa">
+                  {p.part_name.slice(0, 3)}
+                  {p.required > 1 ? ` ×${p.required}` : ""}
+                </span>
                 {p.owned ? (
                   <span className="ck">✓</span>
+                ) : p.required > 1 && p.owned_qty > 0 ? (
+                  <span className="pp">
+                    {p.owned_qty}/{p.required}
+                  </span>
                 ) : (
                   <span className="pp">
                     {p.median_plat == null ? "—" : `${fmt(p.median_plat)}p`}
@@ -200,8 +210,11 @@ export function SetDrawer({
                     </td>
                     <td className="r num">
                       {p.median_plat != null ? `${fmt(p.median_plat)}p` : "—"}
+                      {p.required > 1 ? <span className="muted"> ×{p.required}</span> : null}
                     </td>
-                    <td className={clsx("r num", !p.owned && "muted")}>{p.owned ? "✓" : "—"}</td>
+                    <td className={clsx("r num", !p.owned && "muted")}>
+                      {p.required > 1 ? `${p.owned_qty}/${p.required}` : p.owned ? "✓" : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

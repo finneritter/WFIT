@@ -4,9 +4,11 @@ use crate::error::AppResult;
 use crate::types::{SetPart, SetRow};
 use std::collections::HashMap;
 
-/// Set completion via the set_slug heuristic (quantity_in_set assumed 1). When
-/// Pass B fills set_membership this can be swapped for authoritative membership;
-/// for v1 grouping catalog parts by their derived set_slug is sufficient.
+/// Set completion: parts grouped by the derived set_slug heuristic, with
+/// per-part required quantities from set_membership (the set pass). A part
+/// without a membership row requires 1 — true for everything except the dual
+/// weapons (Aksomati Prime needs ×2 barrels/receivers, issue #1). Counts are
+/// in UNITS, so "one away" and completion stay honest for ×2 parts.
 pub fn list(db: &Db) -> AppResult<Vec<SetRow>> {
     struct PartRow {
         slug: String,
@@ -74,7 +76,26 @@ pub fn list(db: &Db) -> AppResult<Vec<SetRow>> {
         Ok(map)
     })?;
 
-    // 3) Group parts by set_slug and assemble.
+    // 2.5) Per-part required quantities (set pass). Absent row = 1.
+    let required: HashMap<(String, String), i64> = db.read(|c| {
+        let mut stmt =
+            c.prepare("SELECT set_slug, part_slug, quantity_in_set FROM set_membership")?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                (r.get::<_, String>(0)?, r.get::<_, String>(1)?),
+                r.get::<_, i64>(2)?,
+            ))
+        })?;
+        let mut map = HashMap::new();
+        for r in rows {
+            let (key, qty) = r?;
+            map.insert(key, qty);
+        }
+        Ok(map)
+    })?;
+
+    // 3) Group parts by set_slug and assemble. All counts are units, not
+    // distinct part types, so a ×2 part owned once is 1/2 — not complete.
     let mut grouped: HashMap<String, Vec<PartRow>> = HashMap::new();
     for p in parts {
         grouped.entry(p.set_slug.clone()).or_default().push(p);
@@ -87,30 +108,36 @@ pub fn list(db: &Db) -> AppResult<Vec<SetRow>> {
             .first()
             .map(|m| m.category.clone())
             .unwrap_or_else(|| "warframe".into());
-        let total_parts = members.len() as i64;
-        let owned_parts = members.iter().filter(|m| m.owned_qty >= 1).count() as i64;
-        let complete = total_parts > 0 && owned_parts == total_parts;
 
-        let missing_sum: i64 = members
-            .iter()
-            .filter(|m| m.owned_qty < 1)
-            .map(|m| m.median_plat.unwrap_or(0))
-            .sum();
+        let mut total_parts = 0i64;
+        let mut owned_parts = 0i64;
+        let mut missing_sum = 0i64;
+        let mut parts: Vec<SetPart> = Vec::with_capacity(members.len());
+        for m in &members {
+            let need = required
+                .get(&(set_slug.clone(), m.slug.clone()))
+                .copied()
+                .unwrap_or(1)
+                .max(1);
+            let have = m.owned_qty.clamp(0, need);
+            total_parts += need;
+            owned_parts += have;
+            missing_sum += (need - have) * m.median_plat.unwrap_or(0);
+            parts.push(SetPart {
+                slug: m.slug.clone(),
+                part_name: partname::split_name(&m.display_name, &m.part_type).1,
+                owned: have >= need,
+                owned_qty: m.owned_qty.max(0),
+                required: need,
+                median_plat: m.median_plat,
+            });
+        }
+        let complete = total_parts > 0 && owned_parts == total_parts;
         let missing_value = if missing_sum > 0 {
             Some(missing_sum)
         } else {
             None
         };
-
-        let parts: Vec<SetPart> = members
-            .iter()
-            .map(|m| SetPart {
-                slug: m.slug.clone(),
-                part_name: partname::split_name(&m.display_name, &m.part_type).1,
-                owned: m.owned_qty >= 1,
-                median_plat: m.median_plat,
-            })
-            .collect();
 
         let set_item = set_items.get(&set_slug);
         let set_name = set_item
@@ -138,6 +165,91 @@ pub fn list(db: &Db) -> AppResult<Vec<SetRow>> {
         ra.cmp(&rb).then(a.set_name.cmp(&b.set_name))
     });
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::testutil::{seed_item, test_db};
+
+    fn own(db: &crate::db::Db, slug: &str, qty: i64) {
+        db.with(|c| {
+            c.execute(
+                "INSERT INTO inventory_items (slug, qty, first_added_at, last_modified_at)
+                 VALUES (?1, ?2, '2026-01-01', '2026-01-01')
+                 ON CONFLICT(slug) DO UPDATE SET qty = excluded.qty",
+                rusqlite::params![slug, qty],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// Issue #1: Aksomati Prime needs ×2 barrels — one of each part must NOT
+    /// read as complete, and counts / missing value are unit-based.
+    #[test]
+    fn quantity_in_set_gates_completion() {
+        let db = test_db("sets-qty");
+        seed_item(&db, "ak_set", "set", Some(100));
+        seed_item(&db, "ak_barrel", "weapon", Some(10));
+        seed_item(&db, "ak_link", "weapon", Some(5));
+        db.with(|c| {
+            c.execute(
+                "UPDATE catalog_items SET set_slug = 'ak_set'
+                  WHERE slug IN ('ak_barrel', 'ak_link')",
+                [],
+            )?;
+            c.execute(
+                "INSERT INTO set_membership (set_slug, part_slug, quantity_in_set)
+                 VALUES ('ak_set', 'ak_barrel', 2), ('ak_set', 'ak_link', 1)",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+        own(&db, "ak_barrel", 1);
+        own(&db, "ak_link", 1);
+
+        let rows = list(&db).unwrap();
+        let row = rows.iter().find(|r| r.set_slug == "ak_set").unwrap();
+        assert_eq!((row.total_parts, row.owned_parts), (3, 2));
+        assert!(!row.complete, "1 of 2 barrels must not complete the set");
+        assert_eq!(row.missing_value, Some(10), "one barrel short");
+        let barrel = row.parts.iter().find(|p| p.slug == "ak_barrel").unwrap();
+        assert!(!barrel.owned);
+        assert_eq!((barrel.owned_qty, barrel.required), (1, 2));
+
+        own(&db, "ak_barrel", 2);
+        let rows = list(&db).unwrap();
+        assert!(
+            rows.iter()
+                .find(|r| r.set_slug == "ak_set")
+                .unwrap()
+                .complete
+        );
+    }
+
+    /// No membership rows (set pass never ran) → every part requires 1, the
+    /// pre-fix behavior.
+    #[test]
+    fn defaults_to_one_without_membership() {
+        let db = test_db("sets-qty-default");
+        seed_item(&db, "solo_set", "set", None);
+        seed_item(&db, "solo_blade", "weapon", Some(7));
+        db.with(|c| {
+            c.execute(
+                "UPDATE catalog_items SET set_slug = 'solo_set' WHERE slug = 'solo_blade'",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+        own(&db, "solo_blade", 1);
+        let rows = list(&db).unwrap();
+        let row = rows.iter().find(|r| r.set_slug == "solo_set").unwrap();
+        assert!(row.complete);
+        assert_eq!((row.total_parts, row.owned_parts), (1, 1));
+    }
 }
 
 fn prettify_set_slug(slug: &str) -> String {

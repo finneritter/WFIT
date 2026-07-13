@@ -1769,6 +1769,11 @@ pub async fn sets_refresh(state: State<'_, Arc<AppState>>) -> AppResult<usize> {
     sets_refresh_inner(&state, |_, _| {}).await
 }
 
+/// Same pass, callable outside a Tauri command (the launch backfill).
+pub async fn sets_refresh_background(state: &Arc<AppState>) -> AppResult<usize> {
+    sets_refresh_inner(state, |_, _| {}).await
+}
+
 /// `on_progress(done, total)` is called after each set is processed, so a caller can
 /// surface progress (the set pass is the slow ~157-call step of "Update game data").
 async fn sets_refresh_inner(
@@ -1784,35 +1789,45 @@ async fn sets_refresh_inner(
         }
         Ok(out)
     })?;
-    let id_map = catalog::id_slug_map(&state.db)?;
 
     let total = set_slugs.len();
     let mut written = 0usize;
     for (i, set_slug) in set_slugs.into_iter().enumerate() {
         on_progress(i, total);
-        let Ok(Some(detail)) = state.market.fetch_detail(&set_slug).await else {
+        // /set returns each member with ITS OWN quantity_in_set (×2 barrels
+        // etc.) — the set item's detail has no per-part quantities.
+        let Ok(Some(members)) = state.market.fetch_set_members(&set_slug).await else {
             continue;
         };
-        for part_id in detail.set_parts {
-            if let Some(part_slug) = id_map.get(&part_id) {
-                if part_slug == &set_slug {
-                    continue; // the set item lists itself
-                }
-                state.db.with(|c| {
-                    c.execute(
-                        "INSERT INTO set_membership (set_slug, part_slug, quantity_in_set)
-                         VALUES (?1, ?2, ?3)
-                         ON CONFLICT(set_slug, part_slug) DO UPDATE SET
-                            quantity_in_set = excluded.quantity_in_set",
-                        rusqlite::params![set_slug, part_slug, detail.quantity_in_set.max(1)],
-                    )?;
-                    Ok(())
-                })?;
-                written += 1;
-            }
+        let parts: Vec<_> = members
+            .into_iter()
+            .filter(|m| !m.set_root && m.slug != set_slug)
+            .collect();
+        if parts.is_empty() {
+            continue;
         }
+        state.db.with_mut(|c| {
+            let tx = c.transaction()?;
+            tx.execute(
+                "DELETE FROM set_membership WHERE set_slug = ?1",
+                rusqlite::params![set_slug],
+            )?;
+            for m in &parts {
+                tx.execute(
+                    "INSERT INTO set_membership (set_slug, part_slug, quantity_in_set)
+                     VALUES (?1, ?2, ?3)",
+                    rusqlite::params![set_slug, m.slug, m.quantity_in_set.max(1)],
+                )?;
+            }
+            tx.commit()?;
+            Ok(())
+        })?;
+        written += parts.len();
     }
     on_progress(total, total);
+    if written > 0 {
+        crate::db::meta::set(&state.db, crate::db::meta::KEY_SET_MEMBERSHIP_PASS, "2")?;
+    }
     Ok(written)
 }
 

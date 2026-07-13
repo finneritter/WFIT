@@ -371,7 +371,9 @@ pub struct BuyRow {
 pub struct SetPart {
     pub slug: String,
     pub part_name: String, // just the part, e.g. "Systems"
-    pub owned: bool,
+    pub owned: bool,       // owned_qty >= required (a ×2 part owned once is NOT owned)
+    pub owned_qty: i64,
+    pub required: i64, // quantity_in_set — 2 for dual-weapon barrels/receivers
     pub median_plat: Option<i64>,
 }
 

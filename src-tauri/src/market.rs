@@ -585,8 +585,12 @@ impl Market {
         }))
     }
 
-    /// Pass B: per-item detail — the set composition (member ids + quantity).
-    pub async fn fetch_detail(&self, slug: &str) -> AppResult<Option<ItemDetailRaw>> {
+    /// Pass B: set composition via `/v2/items/<slug>/set` — every member item
+    /// with its own `quantityInSet`. This is the only place per-part quantities
+    /// exist (the set item's detail carries none — Aksomati Prime needs ×2
+    /// barrels/receivers, issue #1), and one call covers the whole set. The API
+    /// is camelCase; the old snake_case deserializer silently parsed nothing.
+    pub async fn fetch_set_members(&self, slug: &str) -> AppResult<Option<Vec<SetMemberRaw>>> {
         #[derive(Deserialize)]
         struct Resp {
             data: Data,
@@ -594,22 +598,33 @@ impl Market {
         #[derive(Deserialize)]
         struct Data {
             #[serde(default)]
-            set_parts: Vec<String>,
-            set_root: Option<bool>,
+            items: Vec<Item>,
+        }
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Item {
+            slug: String,
             quantity_in_set: Option<i64>,
+            set_root: Option<bool>,
         }
 
-        let url = format!("{API_V2}/items/{slug}");
+        let url = format!("{API_V2}/items/{slug}/set");
         let r = self.get_throttled(&url).await?;
         if !r.status().is_success() {
             return Ok(None);
         }
         let resp: Resp = r.json().await?;
-        Ok(Some(ItemDetailRaw {
-            set_parts: resp.data.set_parts,
-            set_root: resp.data.set_root.unwrap_or(false),
-            quantity_in_set: resp.data.quantity_in_set.unwrap_or(1),
-        }))
+        Ok(Some(
+            resp.data
+                .items
+                .into_iter()
+                .map(|i| SetMemberRaw {
+                    slug: i.slug,
+                    quantity_in_set: i.quantity_in_set.unwrap_or(1),
+                    set_root: i.set_root.unwrap_or(false),
+                })
+                .collect(),
+        ))
     }
 
     /// Public live orders for one item → best buy/sell among online users (the
@@ -1119,12 +1134,13 @@ pub struct OrderBook {
     pub bids: Vec<(i64, i64, i64)>, // (rank, price, qty) — online buy orders
 }
 
-/// Raw set-composition fields from the detail endpoint (ids, not slugs).
+/// One member of a set from the `/set` endpoint — slug (no id resolution
+/// needed), its own required quantity, and whether it's the set item itself.
 #[derive(Debug, Clone)]
-pub struct ItemDetailRaw {
-    pub set_parts: Vec<String>,
-    pub set_root: bool,
+pub struct SetMemberRaw {
+    pub slug: String,
     pub quantity_in_set: i64,
+    pub set_root: bool,
 }
 
 /// A raw warframe.market order (v2 user-orders shape). `item_id` is the

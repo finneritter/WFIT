@@ -617,6 +617,22 @@ pub(crate) async fn launch_refresh(state: Arc<AppState>) -> error::AppResult<()>
         }
     }
 
+    // 1.65) Set-membership quantities (issue #1): the old set pass silently
+    // parsed nothing (snake_case deserializer vs camelCase API), so every
+    // install has an empty set_membership table. One background re-pass per
+    // version marker (~157 throttled calls, ~1 min behind the price prime);
+    // failure retries on the next launch.
+    if meta::get(&state.db, meta::KEY_SET_MEMBERSHIP_PASS)?.as_deref() != Some("2") {
+        let st = state.clone();
+        tauri::async_runtime::spawn(async move {
+            tracing::info!("launch: backfilling set_membership quantities");
+            match commands::sets_refresh_background(&st).await {
+                Ok(n) => tracing::info!(rows = n, "set membership backfill done"),
+                Err(e) => tracing::warn!(error = %e, "set membership backfill failed"),
+            }
+        });
+    }
+
     // 1.7) Item manifest (Account screen's non-tradeable name/icon/mastery source):
     // seed from the bundled TSV (or re-seed on a newer bundle). Live refresh via
     // "Update game data". Same bundled-baseline pattern as relics.
