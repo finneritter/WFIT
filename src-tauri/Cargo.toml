@@ -53,6 +53,9 @@ axum = { version = "0.7", optional = true, default-features = false, features = 
   "tokio",
   "http1",
 ] }
+ocrs = { version = "0.12", optional = true }
+rten = { version = "0.24", optional = true }
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 # Windows: game-inventory memory scan (gamescan/memory_windows.rs, process_windows.rs).
 # Pure-Rust bindings — no extra SDK needed to `cargo check` the target from other hosts.
@@ -70,8 +73,13 @@ windows = { version = "0.58", features = [
 # unauthenticated loopback server doesn't belong in strangers' installs). Local
 # workflows opt back in explicitly — `npm run tauri:dev` and `scripts/install.sh`
 # both pass `--features dev-dashboard`.
-default = ["custom-protocol"]
+default = ["custom-protocol", "relic-ocr"]
 custom-protocol = ["tauri/custom-protocol"]
+# Relic-crack price capture (issue #2): screenshot → OCR → priced overlay. Pure-Rust
+# OCR (ocrs/rten, models bundled from resources/ocr) — default ON since it adds no
+# native libs; the flag exists so a lean build stays possible and so `cargo test`
+# can exercise the always-compiled matching/preprocess layers without the models.
+relic-ocr = ["dep:ocrs", "dep:rten"]
 # Local web dashboard (observability + stress + fault injection): a loopback HTTP
 # server + axum. Default-on; the server binds 127.0.0.1:8848 (WFIT_DASH_PORT, 0 to
 # disable) and is opened from Settings › Developer › Web dashboard.
