@@ -610,6 +610,92 @@ pub async fn get_cascade_status(
     Ok(crate::worldstate::cascade_status(&ws.fissures))
 }
 
+/// Run the relic-crack capture pipeline right now (the Settings/dev path; the
+/// global hotkey and auto-detect go through the same `relic_ocr::trigger`).
+/// Registered unconditionally so the command surface never changes with the
+/// Cargo feature; without `relic-ocr` it reports why it can't run.
+#[tauri::command]
+pub async fn trigger_relic_crack(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<crate::types::CrackCapture> {
+    #[cfg(feature = "relic-ocr")]
+    {
+        let capture = crate::relic_ocr::run_capture(state.db.clone()).await;
+        *state.last_crack.lock() = Some(capture.clone());
+        use tauri::Emitter;
+        let _ = app.emit_to(
+            crate::relic_ocr::RELIC_OVERLAY_LABEL,
+            "relic-overlay-show",
+            &capture,
+        );
+        let _ = app.emit("crack-capture", ());
+        Ok(capture)
+    }
+    #[cfg(not(feature = "relic-ocr"))]
+    {
+        let _ = (app, state);
+        Err(AppError::Invalid(
+            "this build was compiled without the relic-ocr feature".into(),
+        ))
+    }
+}
+
+/// The most recent relic-crack capture (in-memory). The overlay webview fetches
+/// this on mount (rebuilt-window recovery) and the main window's last-capture
+/// view reads it too.
+#[tauri::command]
+pub fn get_last_crack_capture(
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<Option<crate::types::CrackCapture>> {
+    Ok(state.last_crack.lock().clone())
+}
+
+/// Run the OCR pipeline on a PNG screenshot from disk (Settings › Developer).
+/// Kept in release builds so users can self-diagnose from a screenshot when
+/// filing an issue — no capture, no overlay, just the pipeline.
+#[tauri::command]
+pub async fn relic_ocr_run_file(
+    state: State<'_, Arc<AppState>>,
+    path: String,
+) -> AppResult<crate::types::CrackCapture> {
+    #[cfg(feature = "relic-ocr")]
+    {
+        let captured_at = chrono::Utc::now().to_rfc3339();
+        let t0 = std::time::Instant::now();
+        let matches = tauri::async_runtime::spawn_blocking(move || {
+            let frame = image::open(&path)
+                .map_err(|e| format!("open {path}: {e}"))?
+                .into_rgba8();
+            crate::relic_ocr::read_rewards(&frame)
+        })
+        .await
+        .map_err(|e| AppError::Other(format!("ocr task: {e}")))?
+        .map_err(AppError::Invalid)?;
+        let ocr_ms = t0.elapsed().as_millis() as i64;
+        let ocr_lines = matches
+            .iter()
+            .map(|m| format!("{} ({:.2})", m.display_name, m.confidence))
+            .collect();
+        let rewards = crate::relic_ocr::price_matches(&state.db, &matches)?;
+        Ok(crate::types::CrackCapture {
+            captured_at,
+            rewards,
+            ocr_lines,
+            capture_ms: 0,
+            ocr_ms,
+            error: None,
+        })
+    }
+    #[cfg(not(feature = "relic-ocr"))]
+    {
+        let _ = (state, path);
+        Err(AppError::Invalid(
+            "this build was compiled without the relic-ocr feature".into(),
+        ))
+    }
+}
+
 /// Fire a notification immediately so the user can confirm OS toasts work (and
 /// grant the permission prompt on platforms that gate it).
 #[tauri::command]

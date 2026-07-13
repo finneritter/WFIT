@@ -8,11 +8,26 @@
 //! injection, no memory reads, no game files touched beyond (optionally) tailing
 //! the EE.log text file. DE has publicly tolerated this class of tool for years.
 
+#[cfg(feature = "relic-ocr")]
+pub mod capture;
 pub mod layout;
 pub mod matching;
 #[cfg(feature = "relic-ocr")]
 pub mod ocr;
 pub mod preprocess;
+
+use crate::db::{catalog, relics, wanted, Db};
+use crate::error::AppResult;
+use crate::types::{CrackCapture, CrackReward};
+
+/// How long the result stays on screen. Becomes a pref (default 10s ≈ the
+/// reward-choice window) when the Settings block lands.
+#[allow(dead_code)] // used by trigger(); hotkey dispatch lands with the prefs stage
+pub const DEFAULT_DURATION_SECS: u64 = 10;
+
+/// Overlay window label (the window itself lands with the overlay stage; the
+/// emit is a no-op until then).
+pub const RELIC_OVERLAY_LABEL: &str = "relic-overlay";
 
 /// Preprocessed band → OCR → card grouping → closed-vocabulary matching.
 /// The file-based and live-capture paths both funnel through here.
@@ -23,6 +38,155 @@ pub fn read_rewards(frame: &image::RgbaImage) -> Result<Vec<matching::LineMatch>
     let cards = layout::group_into_cards(&words);
     let vocab = matching::build_vocab();
     Ok(matching::match_lines(&vocab, &cards, 4))
+}
+
+/// Price matched reward names through the same preload the Relics browser uses
+/// (`relics::BrowserCtx`), so a captured part's plat always equals what the
+/// Relics screen shows for that slug. Marks the highest-plat reward `best`.
+pub fn price_matches(db: &Db, matches: &[matching::LineMatch]) -> AppResult<Vec<CrackReward>> {
+    let signals = wanted::crack_signals(db)?;
+    let name_to_slug = catalog::name_slug_map(db)?;
+    db.read(|c| {
+        let ctx = relics::load_ctx(c, name_to_slug)?;
+        let mut rewards: Vec<CrackReward> = matches
+            .iter()
+            .map(|m| {
+                let slug = ctx
+                    .name_to_slug
+                    .get(&catalog::normalize_name(&m.display_name))
+                    .cloned();
+                let plat = slug
+                    .as_deref()
+                    .and_then(|s| crate::db::prices::effective_price_from(&ctx.prices, s, None));
+                let ducats = slug.as_deref().and_then(|s| ctx.ducats.get(s).copied());
+                let ducats_per_plat = match (ducats, plat) {
+                    (Some(d), Some(p)) if p > 0 => {
+                        Some((d as f64 / p as f64 * 10.0).round() / 10.0)
+                    }
+                    _ => None,
+                };
+                CrackReward {
+                    reward_name: m.display_name.clone(),
+                    owned_qty: slug
+                        .as_deref()
+                        .and_then(|s| ctx.owned_parts.get(s).copied())
+                        .unwrap_or(0),
+                    wanted: slug
+                        .as_deref()
+                        .is_some_and(|s| signals.watch_buy.contains(s)),
+                    set_slug: slug
+                        .as_deref()
+                        .and_then(|s| signals.one_away.get(s))
+                        .map(|(set_slug, _)| set_slug.clone()),
+                    plat,
+                    ducats,
+                    ducats_per_plat,
+                    slug,
+                    confidence: m.confidence,
+                    best: false,
+                }
+            })
+            .collect();
+        if let Some(best_idx) = rewards
+            .iter()
+            .enumerate()
+            .filter_map(|(i, r)| r.plat.map(|p| (i, p)))
+            .max_by_key(|&(_, p)| p)
+            .map(|(i, _)| i)
+        {
+            rewards[best_idx].best = true;
+        }
+        Ok(rewards)
+    })
+}
+
+/// The full capture pipeline: grab the game frame, OCR it off the async
+/// runtime (CPU-heavy), price the matches. Never errors — failures come back
+/// as a `CrackCapture { error, .. }` the overlay renders as a failure state.
+#[cfg(feature = "relic-ocr")]
+pub async fn run_capture(db: Db) -> CrackCapture {
+    let captured_at = chrono::Utc::now().to_rfc3339();
+    let fail = |error: String, capture_ms: i64| CrackCapture {
+        captured_at: captured_at.clone(),
+        rewards: Vec::new(),
+        ocr_lines: Vec::new(),
+        capture_ms,
+        ocr_ms: 0,
+        error: Some(error),
+    };
+
+    let t0 = std::time::Instant::now();
+    let frame = tauri::async_runtime::spawn_blocking(capture::game_frame).await;
+    let capture_ms = t0.elapsed().as_millis() as i64;
+    let (frame, path) = match frame {
+        Ok(Ok(ok)) => ok,
+        Ok(Err(e)) => return fail(e, capture_ms),
+        Err(e) => return fail(format!("capture task: {e}"), capture_ms),
+    };
+    tracing::info!(capture_ms, path, "relic_ocr: frame captured");
+
+    let t1 = std::time::Instant::now();
+    let matches = tauri::async_runtime::spawn_blocking(move || read_rewards(&frame)).await;
+    let ocr_ms = t1.elapsed().as_millis() as i64;
+    let matches = match matches {
+        Ok(Ok(m)) => m,
+        Ok(Err(e)) => return fail(e, capture_ms),
+        Err(e) => return fail(format!("ocr task: {e}"), capture_ms),
+    };
+
+    let ocr_lines: Vec<String> = matches
+        .iter()
+        .map(|m| format!("{} ({:.2})", m.display_name, m.confidence))
+        .collect();
+    let (rewards, error) = match price_matches(&db, &matches) {
+        Ok(r) if r.is_empty() => (
+            Vec::new(),
+            Some("no reward names recognized — is the reward screen up?".to_string()),
+        ),
+        Ok(r) => (r, None),
+        Err(e) => (Vec::new(), Some(format!("pricing failed: {e}"))),
+    };
+    CrackCapture {
+        captured_at,
+        rewards,
+        ocr_lines,
+        capture_ms,
+        ocr_ms,
+        error,
+    }
+}
+
+/// Hotkey/auto-detect entry point, shaped like `overlay::trigger`: run the
+/// pipeline, remember the result, push it to the overlay window and the main
+/// window, auto-hide after the duration unless a newer trigger superseded us.
+#[cfg(feature = "relic-ocr")]
+#[allow(dead_code)] // dispatched from the shared hotkey registrar (prefs stage)
+pub fn trigger(app: &tauri::AppHandle) {
+    use std::sync::atomic::Ordering;
+    use tauri::{Emitter, Manager};
+
+    let Some(state) = app.try_state::<std::sync::Arc<crate::AppState>>() else {
+        return; // recovery mode
+    };
+    let state = state.inner().clone();
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let capture = run_capture(state.db.clone()).await;
+        *state.last_crack.lock() = Some(capture.clone());
+
+        // This trigger now owns the overlay window.
+        let gen = state.relic_overlay_gen.fetch_add(1, Ordering::SeqCst) + 1;
+        // Overlay window ships in the next stage; both emits are best-effort.
+        let _ = app.emit_to(RELIC_OVERLAY_LABEL, "relic-overlay-show", &capture);
+        let _ = app.emit("crack-capture", ());
+
+        tokio::time::sleep(std::time::Duration::from_secs(DEFAULT_DURATION_SECS)).await;
+        if state.relic_overlay_gen.load(Ordering::SeqCst) == gen {
+            if let Some(w) = tauri::Manager::get_webview_window(&app, RELIC_OVERLAY_LABEL) {
+                let _ = w.hide();
+            }
+        }
+    });
 }
 
 #[cfg(all(test, feature = "relic-ocr"))]

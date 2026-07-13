@@ -10,8 +10,6 @@ mod gamescan;
 mod market;
 mod notify;
 mod overlay;
-// TODO(relic-ocr stage 3): drop the allow once the capture pipeline calls into it.
-#[allow(dead_code)]
 mod relic_ocr;
 mod rivens;
 mod types;
@@ -58,6 +56,12 @@ pub struct AppState {
     /// if the counter is unchanged when it fires. Lets a re-press cancel the
     /// previous hide and restart the on-screen duration without tracking handles.
     pub overlay_gen: AtomicU64,
+    /// Same generation-counter pattern for the relic-crack overlay.
+    pub relic_overlay_gen: AtomicU64,
+    /// Most recent relic-crack capture (in-memory only — it's a snapshot of a
+    /// 10-second on-screen moment, not durable data). The main window's "last
+    /// capture" view and a rebuilt overlay both self-fetch from here.
+    pub last_crack: parking_lot::Mutex<Option<types::CrackCapture>>,
 }
 
 /// Managed INSTEAD of AppState when startup fails (corrupt DB, failed
@@ -266,6 +270,10 @@ pub fn run() {
             commands::get_overlay_prefs,
             commands::set_overlay_prefs,
             commands::get_cascade_status,
+            // relic-crack capture (issue #2)
+            commands::trigger_relic_crack,
+            commands::get_last_crack_capture,
+            commands::relic_ocr_run_file,
             commands::get_pricing_progress,
             // computed
             commands::get_sets,
@@ -455,6 +463,8 @@ fn init_app(
         pricing_active: AtomicBool::new(false),
         close_to_tray: AtomicBool::new(close_to_tray),
         overlay_gen: AtomicU64::new(0),
+        relic_overlay_gen: AtomicU64::new(0),
+        last_crack: parking_lot::Mutex::new(None),
     });
     app.manage(state.clone());
 
