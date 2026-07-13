@@ -185,7 +185,12 @@ pub async fn capture_and_show(
 
     // This trigger now owns the overlay window.
     let gen = state.relic_overlay_gen.fetch_add(1, Ordering::SeqCst) + 1;
-    crate::overlay::position_and_show(app, RELIC_OVERLAY_LABEL, crate::overlay::Anchor::TopLeft);
+    crate::overlay::position_and_show(
+        app,
+        RELIC_OVERLAY_LABEL,
+        crate::overlay::Anchor::TopLeft,
+        crate::overlay::MonitorPick::Primary,
+    );
     let _ = app.emit_to(RELIC_OVERLAY_LABEL, "relic-overlay-show", &capture);
     let _ = app.emit("crack-capture", ());
 
@@ -274,7 +279,12 @@ pub fn show_test_overlay(app: &tauri::AppHandle, state: &std::sync::Arc<crate::A
         .map(|p| p.duration_secs.max(1) as u64)
         .unwrap_or(10);
     let gen = state.relic_overlay_gen.fetch_add(1, Ordering::SeqCst) + 1;
-    crate::overlay::position_and_show(app, RELIC_OVERLAY_LABEL, crate::overlay::Anchor::TopLeft);
+    crate::overlay::position_and_show(
+        app,
+        RELIC_OVERLAY_LABEL,
+        crate::overlay::Anchor::TopLeft,
+        crate::overlay::MonitorPick::Primary,
+    );
     let _ = app.emit_to(RELIC_OVERLAY_LABEL, "relic-overlay-show", &sample);
 
     let app = app.clone();

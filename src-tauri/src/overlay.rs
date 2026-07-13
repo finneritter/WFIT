@@ -50,7 +50,12 @@ pub fn trigger(app: &tauri::AppHandle) {
         // This press now owns the window.
         let gen = state.overlay_gen.fetch_add(1, Ordering::SeqCst) + 1;
 
-        position_and_show(&app, OVERLAY_LABEL, Anchor::UpperMiddle);
+        position_and_show(
+            &app,
+            OVERLAY_LABEL,
+            Anchor::UpperMiddle,
+            MonitorPick::UnderCursor,
+        );
         let _ = app.emit_to(OVERLAY_LABEL, "overlay-show", &status);
 
         let secs = prefs.duration_secs.max(1) as u64;
@@ -64,8 +69,8 @@ pub fn trigger(app: &tauri::AppHandle) {
     });
 }
 
-/// Where an overlay window sits on the monitor under the cursor. Both overlay
-/// windows (Cascade pill, relic-crack HUD box) share the positioning helper.
+/// Where an overlay window sits on its monitor. Both overlay windows (Cascade
+/// pill, relic-crack HUD box) share the positioning helper.
 #[derive(Clone, Copy)]
 pub enum Anchor {
     /// Centered horizontally, ~12% down — the Cascade pill.
@@ -73,6 +78,19 @@ pub enum Anchor {
     /// Pinned to the top-left corner (small inset) — the relic-crack box sits
     /// where Warframe puts its own mission info, reading like game HUD.
     TopLeft,
+}
+
+/// Which monitor an overlay targets.
+#[derive(Clone, Copy)]
+pub enum MonitorPick {
+    /// The monitor under the cursor ("where the user is looking") — the
+    /// Cascade pill's historical behavior.
+    UnderCursor,
+    /// The primary monitor — the relic box must land where the game is, and
+    /// mid-mission the cursor is no signal at all (Finn: it showed on the
+    /// wrong screen). Falls back to cursor/current/first when the platform
+    /// reports no primary (Wayland has no such concept; GDK may return None).
+    Primary,
 }
 
 /// An overlay window by label — recreated from its tauri.conf.json definition
@@ -107,21 +125,17 @@ pub fn overlay_window(app: &tauri::AppHandle, label: &str) -> Option<tauri::Webv
     }
 }
 
-/// Position an overlay on the monitor under the cursor (falling back to the
-/// window's current monitor, then the primary), make it click-through, and
+/// Position an overlay on its target monitor, make it click-through, and
 /// show it. All math is in physical pixels, so mixed-DPI multi-monitor
 /// placement stays correct without manual scale-factor handling.
-pub fn position_and_show(app: &tauri::AppHandle, label: &str, anchor: Anchor) {
+pub fn position_and_show(app: &tauri::AppHandle, label: &str, anchor: Anchor, pick: MonitorPick) {
     let Some(win) = overlay_window(app, label) else {
         return;
     };
 
-    // Pick the monitor whose physical rect contains the cursor — "where the user
-    // is looking", i.e. usually the game's monitor.
-    let monitor = app
-        .cursor_position()
-        .ok()
-        .and_then(|cur| {
+    // The monitor whose physical rect contains the cursor.
+    let under_cursor = || {
+        app.cursor_position().ok().and_then(|cur| {
             win.available_monitors().ok().and_then(|mons| {
                 mons.into_iter().find(|m| {
                     let p = m.position();
@@ -134,8 +148,18 @@ pub fn position_and_show(app: &tauri::AppHandle, label: &str, anchor: Anchor) {
                 })
             })
         })
-        .or_else(|| win.current_monitor().ok().flatten())
-        .or_else(|| win.primary_monitor().ok().flatten());
+    };
+    let monitor = match pick {
+        MonitorPick::UnderCursor => under_cursor(),
+        MonitorPick::Primary => win.primary_monitor().ok().flatten().or_else(under_cursor),
+    }
+    .or_else(|| win.current_monitor().ok().flatten())
+    .or_else(|| win.primary_monitor().ok().flatten())
+    .or_else(|| {
+        win.available_monitors()
+            .ok()
+            .and_then(|m| m.into_iter().next())
+    });
 
     if let Some(m) = monitor {
         let size = m.size();
