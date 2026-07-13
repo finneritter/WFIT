@@ -1,0 +1,67 @@
+name: Bug report
+description: Something in WFIT is broken or behaving wrong
+title: "BUG: "
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Found in Settings › About (e.g. `1.4.1`). If you built from source, give the commit hash.
+      placeholder: "1.4.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - Windows
+        - macOS (built from source)
+    validations:
+      required: true
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Install method
+      options:
+        - GitHub release (AppImage / .deb / .msi)
+        - scripts/install.sh
+        - Built from source
+        - In-app auto-update
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What went wrong? What did you see?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the Inventory screen
+        2. Click …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen instead?
+  - type: textarea
+    id: context
+    attributes:
+      label: Screenshots / extra context
+      description: Drag and drop screenshots here, or add anything else that might help.
+  - type: checkboxes
+    id: latest
+    attributes:
+      label: Version check
+      options:
+        - label: I'm on the latest release (Settings › About › Updates)
