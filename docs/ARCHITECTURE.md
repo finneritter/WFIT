@@ -34,7 +34,8 @@ src-tauri/src/          Rust core
   overlay.rs            global-hotkey always-on-top Void Cascade HUD (separate tiny webview)
   notify.rs             desktop + in-app notification engine
   domain/               pure functions + bundled datasets (no I/O): classify, partname,
-                        mod_rarity, arcane, relic (incl. squad-EV order statistics)
+                        mod_rarity, arcane, relic (incl. squad-EV order statistics),
+                        vendors (static vendor registry — non-rotating shop stock)
   db/                   one module per table/feature; transactional writes
   commands.rs           the #[tauri::command] surface
   lib.rs                AppState, handler registry, launch warm-up, background tasks
@@ -63,7 +64,10 @@ reference/              design wireframes and prior prototypes kept for context
 - **Bundled reference data** (no DB table, or DB-seeded + live-refreshable): TSVs under
   `src-tauri/src/domain/data/` loaded into lazy maps — mod rarity, arcane dissolution values,
   relic ids/drop tables/vault flags (seeded to DB, hot-swapped from WFCD `Relics.json`; refreshed
-  on launch when older than 3 days), Sol node names, Nightwave offerings.
+  on launch when older than 3 days), Sol node names, Nightwave offerings, and static vendor
+  offerings (`domain/data/vendors/` — one TSV per vendor, six syndicates so far; seeded from
+  wiki.warframe.com by `scripts/scrape_vendors.py` into committed, hand-reviewed files — the app
+  never touches the wiki at runtime).
 
 ## Data sources
 
@@ -100,7 +104,8 @@ The most-iterated subsystem. Full details in `docs/PERF_OPTIMIZATION.md` and inl
 
 - **Screens** (`src/routes/`): Home (customizable widget dashboard), Inventory, Sets, Arcanes,
   Relics (full-catalog browser + RelicDrawer), Ducats, Listings, Sold History, Market screener,
-  Riven Search, Watchlist, Buy List, Trends, Rotation, Vendors board, Account, Settings — plus
+  Riven Search, Watchlist, Buy List, Trends, Rotation, Vendors board (tabbed: Live rotating
+  vendors · Syndicates static shops, more static groups planned), Account, Settings — plus
   the Void Cascade overlay window.
 - **Topbar search** applies to every listing screen through one DIM-style grammar
   (`lib/searchQuery.ts`): free text, `is:` flags, `field:value`, numeric comparisons (`ev>30`).
@@ -143,7 +148,10 @@ scripts/install.sh       # optimized local build installed as a desktop app
 
 - Linux needs `webkit2gtk-4.1`; the WebKitGTK/Wayland rendering workarounds are set in `main()`.
 - Releases: push a `v*` tag → GitHub Actions builds Linux + Windows bundles, signs the updater
-  artifacts, and uploads them with `latest.json` to a draft release. Publishing the release makes
+  artifacts, and uploads them with `latest.json` to a draft release. If the tag-push event never
+  reaches Actions (observed with v1.4.0 — also check the workflow hasn't been silently disabled),
+  dispatch the same build manually: `gh workflow run release.yml -f tag=vX.Y.Z` checks out that
+  tag and produces the identical draft release. Publishing the release makes
   existing installs (Windows + AppImage) offer the update in-app; deb/rpm users get a
   notification linking to Releases.
 - The optional dev dashboard (loopback stress/observability server, `dev-dashboard` Cargo
