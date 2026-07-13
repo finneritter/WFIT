@@ -21,7 +21,7 @@ dense monochrome "trading terminal" look.
 |---|---|
 | **Inventory** — realizable portfolio value ![Inventory](docs/screenshots/inventory.png) | **Relics** — full-catalog browser with squad EV ![Relics](docs/screenshots/relics.png) |
 | **Riven Search** — auction screener + value estimator ![Riven Search](docs/screenshots/riven-search.png) | **Trends** — market index + your movers ![Trends](docs/screenshots/trends.png) |
-| **Vendors** — Baro/Varzia/Teshin/Circuit/Nora check-off ![Vendors](docs/screenshots/vendors.png) | **Rotation** — fissures, cycles, arbitrations ![Rotation](docs/screenshots/rotation.png) |
+| **Vendors** — Baro/Varzia/Teshin/Circuit/Nora + syndicate shops ![Vendors](docs/screenshots/vendors.png) | **Rotation** — fissures, cycles, arbitrations ![Rotation](docs/screenshots/rotation.png) |
 | **Arcanes** — Vosfor dissolution math ![Arcanes](docs/screenshots/arcanes.png) | |
 
 </details>
@@ -74,7 +74,8 @@ just get a notification pointing back here.
   prep; whether each arcane is worth more sold or dissolved into Vosfor.
 - **Rotation & Vendors** — fissures verified against DE's own worldstate feed, locally-computed
   world cycles, arbitration schedule with community node grades, and a check-off board for
-  Baro / Varzia / Teshin / the Circuit / Nora's shop with market values attached.
+  Baro / Varzia / Teshin / the Circuit / Nora's shop with market values attached — plus a
+  Syndicates tab pricing all six relay syndicates' tradeable stock in plat per standing.
 - **Listings & sales** — mirrors your live warframe.market sell orders (read-only), and keeps a
   ledger of what you actually sold.
 - **Watchlist & buy list** — target prices that flip a badge when the market crosses them, and a
