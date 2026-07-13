@@ -3,6 +3,38 @@
 All notable changes to WFIT are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.1] — 2026-07-12 · first user-reported bugfixes
+
+- **Set completion respects per-set part quantities** (#1). Sets that
+  need multiples of a part (Aksomati Prime: ×2 barrels and receivers)
+  no longer read complete with one of each. Completion, part counters,
+  one-away detection, "to complete" pricing, and the relic planner's
+  wanted/one-away signals all count units now; the set drawer marks ×2
+  parts and shows partial counts (1/2). The underlying set-composition
+  sync had silently never stored quantities — existing installs re-sync
+  automatically in the background on first launch after updating.
+- **The Void Cascade overlay survives a force-closed window** (#3).
+  Closing the overlay through the window manager used to kill the
+  hotkey for the rest of the session; it now hides instead, and a
+  destroyed window is rebuilt on the next press.
+- **The "update available" notification deep-links to the installer** —
+  clicking it opens Settings scrolled to About › Updates with the row
+  highlighted, instead of the top of the page.
+
+## [1.4.0] — 2026-07-09 · void UI + syndicates
+
+- **Void UI revamp.** New void-blue palette and the "connected sheet"
+  design language: hairlines run edge to edge, list screens go
+  full-bleed, panels flatten into ruled bands, and a fused stat strip
+  replaces boxed stats app-wide. Sets, Arcanes, and Trends rebuilt in
+  the Relics table+drawer idiom.
+- **Vendors › Syndicates tab.** All six relay syndicates' tradeable
+  stock as static offering datasets — live prices, rank gates, standing
+  costs, and plat-per-standing to spot what's worth buying to sell.
+- Relics gained a refinement filter; the Market screener search
+  returned to a floating box; Account got the connected-sheet
+  treatment.
+
 ## [1.3.0] — 2026-07-06 · relic browser
 
 - **The Relics screen is a full-catalog browser now.** Every known relic
