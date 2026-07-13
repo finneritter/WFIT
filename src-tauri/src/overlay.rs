@@ -85,12 +85,41 @@ pub fn trigger(app: &tauri::AppHandle) {
     });
 }
 
+/// The overlay window — recreated from its tauri.conf.json definition when the
+/// WM destroyed it anyway (issue #3: a force-closed overlay must not kill the
+/// hotkey for the rest of the session). CloseRequested is intercepted in
+/// lib.rs (hide, not destroy), so this only fires on hard kills that bypass
+/// the close protocol. The webview self-fetches status on mount, so a rebuilt
+/// window renders correctly even if it misses this press's emit.
+fn overlay_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
+    if let Some(w) = app.get_webview_window(OVERLAY_LABEL) {
+        return Some(w);
+    }
+    let cfg = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|w| w.label == OVERLAY_LABEL)?
+        .clone();
+    match tauri::WebviewWindowBuilder::from_config(app, &cfg).and_then(|b| b.build()) {
+        Ok(w) => {
+            tracing::info!("overlay: window was destroyed — recreated from config");
+            Some(w)
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "overlay: failed to recreate destroyed window");
+            None
+        }
+    }
+}
+
 /// Position the overlay upper-middle of the monitor under the cursor (falling
 /// back to the window's current monitor, then the primary), make it
 /// click-through, and show it. All math is in physical pixels, so mixed-DPI
 /// multi-monitor centering stays correct without manual scale-factor handling.
 fn position_and_show(app: &tauri::AppHandle) {
-    let Some(win) = app.get_webview_window(OVERLAY_LABEL) else {
+    let Some(win) = overlay_window(app) else {
         return;
     };
 
