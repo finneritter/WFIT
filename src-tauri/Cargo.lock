@@ -5909,6 +5909,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "strsim",
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",

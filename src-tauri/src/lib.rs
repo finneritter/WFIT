@@ -10,6 +10,9 @@ mod gamescan;
 mod market;
 mod notify;
 mod overlay;
+// TODO(relic-ocr stage 3): drop the allow once the capture pipeline calls into it.
+#[allow(dead_code)]
+mod relic_ocr;
 mod rivens;
 mod types;
 mod updater;
