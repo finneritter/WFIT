@@ -75,9 +75,9 @@ pub fn trigger(app: &tauri::AppHandle) {
 pub enum Anchor {
     /// Centered horizontally, ~12% down — the Cascade pill.
     UpperMiddle,
-    /// Pinned to the top-left corner (small inset) — the relic-crack box sits
-    /// where Warframe puts its own mission info, reading like game HUD.
-    TopLeft,
+    /// Pinned to the top-right corner (small inset) — the relic-crack box,
+    /// clear of Warframe's own top-left mission info.
+    TopRight,
 }
 
 /// Which monitor an overlay targets.
@@ -173,9 +173,9 @@ pub fn position_and_show(app: &tauri::AppHandle, label: &str, anchor: Anchor, pi
                 origin.x + (size.width as i32 - outer.width as i32) / 2,
                 origin.y + size.height as i32 / 8, // ~12% down
             ),
-            Anchor::TopLeft => (
-                origin.x + size.width as i32 / 64, // small inset, scales with res
-                origin.y + size.height as i32 / 36,
+            Anchor::TopRight => (
+                origin.x + size.width as i32 - outer.width as i32 - size.width as i32 / 64,
+                origin.y + size.height as i32 / 36, // small inset, scales with res
             ),
         };
         let _ = win.set_position(PhysicalPosition::new(x, y));

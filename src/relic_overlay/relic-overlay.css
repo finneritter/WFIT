@@ -27,7 +27,9 @@ body {
   height: 100%;
   display: flex;
   align-items: flex-start;
-  justify-content: flex-start;
+  /* The window is anchored top-right of the monitor; hug its right edge so
+     the visible box sits flush with the screen corner inset. */
+  justify-content: flex-end;
   padding: 6px;
 }
 
