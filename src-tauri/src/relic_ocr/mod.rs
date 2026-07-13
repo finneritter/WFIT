@@ -130,6 +130,15 @@ pub async fn run_capture(db: Db) -> CrackCapture {
         Ok(Err(e)) => return fail(e, capture_ms),
         Err(e) => return fail(format!("ocr task: {e}"), capture_ms),
     };
+    // The step between "frame captured" and the box appearing — log it so a
+    // slow or empty read is diagnosable from the console (this was invisible
+    // when debug-build inference silently took ~20s).
+    tracing::info!(
+        ocr_ms,
+        matched = matches.len(),
+        names = ?matches.iter().map(|m| m.display_name.as_str()).collect::<Vec<_>>(),
+        "relic_ocr: rewards read"
+    );
 
     let ocr_lines: Vec<String> = matches
         .iter()

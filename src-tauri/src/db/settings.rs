@@ -211,7 +211,7 @@ impl Default for RelicOcrPrefs {
         Self {
             // Off by default: a global key-grab is intrusive, so the user opts in.
             enabled: false,
-            hotkey: "Alt+KeyX".into(), // X for "checkmark the right reward"; Alt like the Cascade key
+            hotkey: "Alt+KeyT".into(), // Finn's pick; Alt like the Cascade key
             duration_secs: 10,
             auto_detect: false,
         }

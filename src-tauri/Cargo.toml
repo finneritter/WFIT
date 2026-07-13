@@ -97,6 +97,29 @@ criterion = { version = "0.5", default-features = false, features = ["cargo_benc
 name = "valuation"
 harness = false
 
+# OCR inference (rten) is 20x+ slower without optimizations — a debug-build
+# capture takes ~20s instead of <1s, which silently blows the 10-second reward
+# window in `npm run tauri:dev`. Optimize just the inference/image crates in
+# dev; everything else keeps fast debug compiles.
+[profile.dev.package.rten]
+opt-level = 3
+[profile.dev.package.rten-base]
+opt-level = 3
+[profile.dev.package.rten-gemm]
+opt-level = 3
+[profile.dev.package.rten-imageproc]
+opt-level = 3
+[profile.dev.package.rten-simd]
+opt-level = 3
+[profile.dev.package.rten-tensor]
+opt-level = 3
+[profile.dev.package.rten-vecmath]
+opt-level = 3
+[profile.dev.package.ocrs]
+opt-level = 3
+[profile.dev.package.image]
+opt-level = 3
+
 # Smaller, faster installed binary (scripts/install.sh builds --release).
 # panic stays "unwind" — Tauri callbacks tolerate caught panics better.
 [profile.release]

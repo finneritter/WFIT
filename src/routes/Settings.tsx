@@ -406,7 +406,7 @@ function Overlay() {
 // Default while the pref query loads — matches the Rust `Default`.
 const RELIC_OCR_DEFAULTS: RelicOcrPrefs = {
   enabled: false,
-  hotkey: "Alt+KeyX",
+  hotkey: "Alt+KeyT",
   duration_secs: 10,
   auto_detect: false,
 };
