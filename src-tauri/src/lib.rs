@@ -63,6 +63,9 @@ pub struct AppState {
     /// 10-second on-screen moment, not durable data). The main window's "last
     /// capture" view and a rebuilt overlay both self-fetch from here.
     pub last_crack: parking_lot::Mutex<Option<types::CrackCapture>>,
+    /// Generation counter for the EE.log watcher: the prefs setter bumps it to
+    /// retire any running watcher before (maybe) starting a fresh one.
+    pub log_watch_gen: AtomicU64,
 }
 
 /// Managed INSTEAD of AppState when startup fails (corrupt DB, failed
@@ -469,6 +472,7 @@ fn init_app(
         overlay_gen: AtomicU64::new(0),
         relic_overlay_gen: AtomicU64::new(0),
         last_crack: parking_lot::Mutex::new(None),
+        log_watch_gen: AtomicU64::new(0),
     });
     app.manage(state.clone());
 
@@ -478,17 +482,21 @@ fn init_app(
 
     // Pre-warm the OCR engine off the startup path when the relic capture is
     // enabled: model deserialization costs ~100ms, and the first hotkey press
-    // during a 10-second reward window must not pay it.
+    // during a 10-second reward window must not pay it. Also start the EE.log
+    // watcher when auto-detect is on.
     #[cfg(feature = "relic-ocr")]
-    if db::settings::relic_ocr_prefs(&state.db)
-        .map(|p| p.enabled)
-        .unwrap_or(false)
     {
-        tauri::async_runtime::spawn_blocking(|| {
-            if let Err(e) = relic_ocr::ocr::warm() {
-                tracing::warn!(error = %e, "relic_ocr: engine pre-warm failed");
-            }
-        });
+        if db::settings::relic_ocr_prefs(&state.db)
+            .map(|p| p.enabled)
+            .unwrap_or(false)
+        {
+            tauri::async_runtime::spawn_blocking(|| {
+                if let Err(e) = relic_ocr::ocr::warm() {
+                    tracing::warn!(error = %e, "relic_ocr: engine pre-warm failed");
+                }
+            });
+        }
+        relic_ocr::log_watch::apply(app.handle());
     }
 
     // Dev-only local stress/observability dashboard (feature `dev-dashboard`).

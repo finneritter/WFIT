@@ -11,6 +11,8 @@
 #[cfg(feature = "relic-ocr")]
 pub mod capture;
 pub mod layout;
+#[cfg(feature = "relic-ocr")]
+pub mod log_watch;
 pub mod matching;
 #[cfg(feature = "relic-ocr")]
 pub mod ocr;

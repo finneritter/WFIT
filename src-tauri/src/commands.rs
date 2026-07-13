@@ -627,12 +627,15 @@ pub fn set_relic_ocr_prefs(
     settings::set_relic_ocr_prefs(&state.db, &prefs)?;
     crate::hotkeys::apply_all(&app);
     #[cfg(feature = "relic-ocr")]
-    if prefs.enabled {
-        tauri::async_runtime::spawn_blocking(|| {
-            if let Err(e) = crate::relic_ocr::ocr::warm() {
-                tracing::warn!(error = %e, "relic_ocr: engine pre-warm failed");
-            }
-        });
+    {
+        if prefs.enabled {
+            tauri::async_runtime::spawn_blocking(|| {
+                if let Err(e) = crate::relic_ocr::ocr::warm() {
+                    tracing::warn!(error = %e, "relic_ocr: engine pre-warm failed");
+                }
+            });
+        }
+        crate::relic_ocr::log_watch::apply(&app);
     }
     Ok(())
 }

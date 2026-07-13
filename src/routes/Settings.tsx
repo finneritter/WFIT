@@ -483,6 +483,18 @@ function RelicOcr() {
         </div>
       </Row>
       <Row
+        label="Auto-detect reward screen"
+        hint="Watches the game's engine log (EE.log, a plain text file — read only) and shows the price box automatically the moment the reward choices appear, no hotkey needed. The hotkey keeps working either way."
+      >
+        <div style={{ opacity: prefs.enabled ? 1 : 0.4 }}>
+          <Seg
+            value={prefs.auto_detect ? "on" : "off"}
+            options={OFF_ON}
+            onChange={(v) => prefs.enabled && save({ auto_detect: v === "on" })}
+          />
+        </div>
+      </Row>
+      <Row
         label="Test capture"
         hint="Runs the full pipeline right now against whatever is on screen (with the game up on the reward screen, you should see the box top-left)."
       >
