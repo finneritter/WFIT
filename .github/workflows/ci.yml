@@ -44,7 +44,9 @@ jobs:
             libxdo-dev \
             build-essential \
             pkg-config \
-            libssl-dev
+            libssl-dev \
+            libpipewire-0.3-dev \
+            libclang-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -64,10 +66,12 @@ jobs:
         run: cargo test --features dev-dashboard
         working-directory: src-tauri
       # The lean (public release) configuration must also compile and must not
-      # link the dashboard's HTTP stack.
+      # link the dashboard's HTTP stack. A no-relic-ocr build must stay green
+      # too (matching/preprocess/layout are always-compiled by contract).
       - name: cargo check (lean release config)
         run: |
           cargo check
+          cargo check --no-default-features --features custom-protocol
           if cargo tree -e no-dev | grep -q axum; then
             echo "lean build still links axum" && exit 1
           fi

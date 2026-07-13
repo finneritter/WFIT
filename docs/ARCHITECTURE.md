@@ -31,7 +31,15 @@ src-tauri/src/          Rust core
                         inventory import (Linux + Windows; isolated from the market path)
   rivens/               riven search: separate wfm surface (v2 reference + v1 auctions),
                         value estimator (grade.rs/price.rs), saved-search watcher (watch.rs)
-  overlay.rs            global-hotkey always-on-top Void Cascade HUD (separate tiny webview)
+  overlay.rs            always-on-top overlay windows: the Void Cascade HUD pill + the shared
+                        positioning/rebuild helpers both overlays use (separate tiny webviews)
+  relic_ocr/            relic-crack price capture (issue #2): hotkey or EE.log auto-detect →
+                        one-off screenshot of the game (xcap, window-first) → pure-Rust OCR
+                        (ocrs; models bundled in resources/ocr) → closed-vocabulary reward-name
+                        matching → prices from the same preload as the Relics browser → a
+                        Warframe-HUD-styled top-left overlay. Cargo feature `relic-ocr`
+                        (default ON); the WFInfo approach — no injection, no memory reads
+  hotkeys.rs            single registrar/dispatcher for all global hotkeys (cascade + relic)
   notify.rs             desktop + in-app notification engine
   domain/               pure functions + bundled datasets (no I/O): classify, partname,
                         mod_rarity, arcane, relic (incl. squad-EV order statistics),
