@@ -139,6 +139,30 @@ Nightwave acts on the Rotation panel are check-off-able: scan-detected completio
 gamescan `SeasonChallengeHistory` blob) lock the checkbox green, while manual ticks persist in
 `vendor_checkoff` under the `nightwave_acts` key so they survive a reload.
 
+### Syndicates tab — static vendor registry (2026-07-09, every-vendor expansion Phase A)
+
+The Vendors screen grew a tab strip: **Live** (the rotating worldstate board above, unchanged)
+plus static-registry groups, starting with **Syndicates** (the six relay syndicates). Static
+vendors never rotate, so they don't ride worldstate at all:
+
+- **`domain/vendors.rs`** — a bundled registry (`StaticVendor`/`StaticOffer`, `REGISTRY`). Each
+  vendor's offerings are a committed, hand-reviewed TSV under `domain/data/vendors/`
+  (`item · cost · currency · rank-gate · slug_hint`), seeded from wiki.warframe.com by
+  `scripts/scrape_vendors.py` — the app never touches the wiki at runtime (same contract as
+  `nightwave.rs`). Offer names are cleaned to warframe.market display names where one exists;
+  the `slug_hint` column overrides the fuzzy matcher for stragglers.
+- **`get_vendor_group(group)`** (commands.rs) builds the panels for a tab from the registry — no
+  worldstate read, always active, no expiry. Rows are enriched by **`db/vendor.rs::enrich_static`**
+  against the same resolution tables as the live board (catalog match → live price, ownership,
+  manual check-offs), so a syndicate offer shows what it's worth in plat per standing spent.
+- Frontend (`routes/Vendors.tsx`): the tab persists (`wfit-vendors-tab`), static groups fetch
+  lazily (query enabled only when selected), rank gates render as chips that survive narrow
+  columns, and the footer "to go" sum is grouped per currency (standing; Varzia's aya vs regal
+  aya stay separate on the live tab).
+
+Later phases add open worlds (Cetus/Fortuna/Deimos) and Zariman/Höllvania/Misc groups to the
+same registry — a new tab is a new `group` value plus TSVs, nothing else.
+
 ---
 
 ## 1. Two ways to get worldstate (use the parsed one)
