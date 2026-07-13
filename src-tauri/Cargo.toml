@@ -1,6 +1,6 @@
 [package]
 name = "wfit"
-version = "1.4.0"
+version = "1.4.1"
 description = "Warframe Item Tracker — local Tauri desktop tracker for warframe.market"
 edition = "2021"
 license-file = "../LICENSE"
