@@ -27,11 +27,13 @@ export default defineConfig({
     target: "es2021",
     minify: process.env.TAURI_ENV_DEBUG ? false : "esbuild",
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
-    // Two HTML entries: the main app and the lightweight Cascade overlay window.
+    // Three HTML entries: the main app and the two lightweight overlay windows
+    // (Cascade pill, relic-crack HUD box).
     rollupOptions: {
       input: {
         main: "index.html",
         overlay: "overlay.html",
+        "relic-overlay": "relic-overlay.html",
       },
     },
   },

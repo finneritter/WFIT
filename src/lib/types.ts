@@ -643,6 +643,29 @@ export interface RelicRefinementInfo {
   ev_delta: number | null; // ev_plat − Intact ev_plat
   plat_per_100_traces: number | null;
 }
+// One reward read off the in-game reward-selection screen by the relic-OCR
+// capture (mirrors src-tauri types.rs::CrackReward).
+export interface CrackReward {
+  reward_name: string;
+  slug: string | null; // null = untradeable (Forma, Kuva)
+  plat: number | null;
+  ducats: number | null;
+  ducats_per_plat: number | null; // high = Baro fodder
+  owned_qty: number;
+  wanted: boolean;
+  set_slug: string | null; // completes a one-away set
+  confidence: number; // OCR match confidence in [0.7, 1]
+  best: boolean; // highest-plat reward of the capture
+}
+// Result of one reward-screen capture (mirrors types.rs::CrackCapture).
+export interface CrackCapture {
+  captured_at: string; // RFC3339
+  rewards: CrackReward[];
+  ocr_lines: string[]; // per-card OCR text (diagnostics)
+  capture_ms: number;
+  ocr_ms: number;
+  error: string | null;
+}
 // Everything the relic drawer shows for one relic identity.
 export interface RelicDetail {
   tier: string;

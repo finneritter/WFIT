@@ -71,7 +71,7 @@ pub fn trigger(app: &tauri::AppHandle) {
         // This press now owns the window.
         let gen = state.overlay_gen.fetch_add(1, Ordering::SeqCst) + 1;
 
-        position_and_show(&app);
+        position_and_show(&app, OVERLAY_LABEL, Anchor::UpperMiddle);
         let _ = app.emit_to(OVERLAY_LABEL, "overlay-show", &status);
 
         let secs = prefs.duration_secs.max(1) as u64;
@@ -85,14 +85,25 @@ pub fn trigger(app: &tauri::AppHandle) {
     });
 }
 
-/// The overlay window — recreated from its tauri.conf.json definition when the
-/// WM destroyed it anyway (issue #3: a force-closed overlay must not kill the
-/// hotkey for the rest of the session). CloseRequested is intercepted in
-/// lib.rs (hide, not destroy), so this only fires on hard kills that bypass
-/// the close protocol. The webview self-fetches status on mount, so a rebuilt
-/// window renders correctly even if it misses this press's emit.
-fn overlay_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
-    if let Some(w) = app.get_webview_window(OVERLAY_LABEL) {
+/// Where an overlay window sits on the monitor under the cursor. Both overlay
+/// windows (Cascade pill, relic-crack HUD box) share the positioning helper.
+#[derive(Clone, Copy)]
+pub enum Anchor {
+    /// Centered horizontally, ~12% down — the Cascade pill.
+    UpperMiddle,
+    /// Pinned to the top-left corner (small inset) — the relic-crack box sits
+    /// where Warframe puts its own mission info, reading like game HUD.
+    TopLeft,
+}
+
+/// An overlay window by label — recreated from its tauri.conf.json definition
+/// when the WM destroyed it anyway (issue #3: a force-closed overlay must not
+/// kill the hotkey for the rest of the session). CloseRequested is intercepted
+/// in lib.rs (hide, not destroy), so this only fires on hard kills that bypass
+/// the close protocol. Each overlay webview self-fetches its payload on mount,
+/// so a rebuilt window renders correctly even if it misses this press's emit.
+pub fn overlay_window(app: &tauri::AppHandle, label: &str) -> Option<tauri::WebviewWindow> {
+    if let Some(w) = app.get_webview_window(label) {
         return Some(w);
     }
     let cfg = app
@@ -100,26 +111,29 @@ fn overlay_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
         .app
         .windows
         .iter()
-        .find(|w| w.label == OVERLAY_LABEL)?
+        .find(|w| w.label == label)?
         .clone();
     match tauri::WebviewWindowBuilder::from_config(app, &cfg).and_then(|b| b.build()) {
         Ok(w) => {
-            tracing::info!("overlay: window was destroyed — recreated from config");
+            tracing::info!(
+                label,
+                "overlay: window was destroyed — recreated from config"
+            );
             Some(w)
         }
         Err(e) => {
-            tracing::warn!(error = %e, "overlay: failed to recreate destroyed window");
+            tracing::warn!(error = %e, label, "overlay: failed to recreate destroyed window");
             None
         }
     }
 }
 
-/// Position the overlay upper-middle of the monitor under the cursor (falling
-/// back to the window's current monitor, then the primary), make it
-/// click-through, and show it. All math is in physical pixels, so mixed-DPI
-/// multi-monitor centering stays correct without manual scale-factor handling.
-fn position_and_show(app: &tauri::AppHandle) {
-    let Some(win) = overlay_window(app) else {
+/// Position an overlay on the monitor under the cursor (falling back to the
+/// window's current monitor, then the primary), make it click-through, and
+/// show it. All math is in physical pixels, so mixed-DPI multi-monitor
+/// placement stays correct without manual scale-factor handling.
+pub fn position_and_show(app: &tauri::AppHandle, label: &str, anchor: Anchor) {
+    let Some(win) = overlay_window(app, label) else {
         return;
     };
 
@@ -151,8 +165,16 @@ fn position_and_show(app: &tauri::AppHandle) {
             width: 360,
             height: 120,
         });
-        let x = origin.x + (size.width as i32 - outer.width as i32) / 2;
-        let y = origin.y + size.height as i32 / 8; // ~12% down = upper-middle
+        let (x, y) = match anchor {
+            Anchor::UpperMiddle => (
+                origin.x + (size.width as i32 - outer.width as i32) / 2,
+                origin.y + size.height as i32 / 8, // ~12% down
+            ),
+            Anchor::TopLeft => (
+                origin.x + size.width as i32 / 64, // small inset, scales with res
+                origin.y + size.height as i32 / 36,
+            ),
+        };
         let _ = win.set_position(PhysicalPosition::new(x, y));
     }
 

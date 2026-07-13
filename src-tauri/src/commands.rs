@@ -621,16 +621,7 @@ pub async fn trigger_relic_crack(
 ) -> AppResult<crate::types::CrackCapture> {
     #[cfg(feature = "relic-ocr")]
     {
-        let capture = crate::relic_ocr::run_capture(state.db.clone()).await;
-        *state.last_crack.lock() = Some(capture.clone());
-        use tauri::Emitter;
-        let _ = app.emit_to(
-            crate::relic_ocr::RELIC_OVERLAY_LABEL,
-            "relic-overlay-show",
-            &capture,
-        );
-        let _ = app.emit("crack-capture", ());
-        Ok(capture)
+        Ok(crate::relic_ocr::capture_and_show(&app, state.inner()).await)
     }
     #[cfg(not(feature = "relic-ocr"))]
     {

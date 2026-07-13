@@ -1,0 +1,165 @@
+/* Relic-crack HUD box — styled to read like Warframe's own HUD, NOT like the
+   app (deliberately does not mirror theme.css): near-black translucent panel,
+   hairline light border, angular notched corners (Warframe panel language),
+   airy uppercase lettering with wide tracking, restrained gold accent for the
+   platinum numbers and the best-pick edge. The window is transparent and
+   click-through; nothing here may look like an OS window. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 6px;
+}
+
+.rc {
+  min-width: 440px;
+  max-width: 488px;
+  background: rgba(8, 10, 12, 0.78);
+  border: 1px solid rgba(235, 238, 245, 0.28);
+  /* Warframe panel language: one clipped corner top-left, one bottom-right. */
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  padding: 8px 12px 9px;
+  color: rgba(235, 238, 245, 0.92);
+  animation: rc-in 140ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rc {
+    animation: none;
+  }
+}
+
+@keyframes rc-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rc-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(235, 238, 245, 0.18);
+  padding-bottom: 5px;
+  margin-bottom: 4px;
+}
+
+.rc-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(235, 238, 245, 0.75);
+}
+
+.rc-meta {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: rgba(235, 238, 245, 0.35);
+  font-variant-numeric: tabular-nums;
+}
+
+.rc-row {
+  display: grid;
+  grid-template-columns: 1fr 28px 48px 42px 48px;
+  gap: 6px;
+  align-items: baseline;
+  padding: 4px 6px 4px 8px;
+  margin: 1px -6px;
+  border-left: 2px solid transparent;
+}
+
+.rc-best {
+  border-left-color: #c8a557; /* Warframe gold */
+  background: linear-gradient(90deg, rgba(200, 165, 87, 0.14), rgba(200, 165, 87, 0) 70%);
+}
+
+.rc-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Wanted / completes-a-set markers: compact diamonds ahead of the name so a
+   long name's ellipsis can never swallow them. */
+.rc-flag {
+  font-size: 9px;
+  vertical-align: 1.5px;
+}
+
+.rc-wanted {
+  color: #7fb8e6;
+}
+
+.rc-set {
+  color: #8fce9a;
+}
+
+.rc-owned {
+  font-size: 11px;
+  text-align: right;
+  color: rgba(235, 238, 245, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+.rc-plat {
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+  color: #c8a557;
+  font-variant-numeric: tabular-nums;
+}
+
+.rc-best .rc-plat {
+  color: #e2c076;
+}
+
+.rc-ducats {
+  font-size: 11px;
+  text-align: right;
+  color: rgba(200, 205, 215, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+
+.rc-ratio {
+  font-size: 10px;
+  text-align: right;
+  color: rgba(235, 238, 245, 0.35);
+  font-variant-numeric: tabular-nums;
+}
+
+.rc-error {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: rgba(224, 130, 120, 0.9);
+  padding: 4px 2px;
+}

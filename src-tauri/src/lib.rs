@@ -162,12 +162,12 @@ pub fn run() {
             // recovery mode — which has no AppState and also no OS titlebar —
             // falls through to a real close and never traps the user.
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                // The Cascade overlay is hide-only (issue #3): letting a WM
-                // close destroy it would take the hotkey with it for the rest
-                // of the session (trigger() would find no window). Real
-                // destruction is still recovered — overlay::trigger rebuilds
-                // the window from config — but never let it die on purpose.
-                if window.label() == "overlay" {
+                // Overlay windows are hide-only (issue #3): letting a WM close
+                // destroy one would take its hotkey with it for the rest of
+                // the session (trigger() would find no window). Real
+                // destruction is still recovered — the trigger paths rebuild
+                // from config — but never let one die on purpose.
+                if window.label() == "overlay" || window.label() == "relic-overlay" {
                     api.prevent_close();
                     let _ = window.hide();
                     return;

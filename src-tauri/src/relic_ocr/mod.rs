@@ -156,14 +156,45 @@ pub async fn run_capture(db: Db) -> CrackCapture {
     }
 }
 
-/// Hotkey/auto-detect entry point, shaped like `overlay::trigger`: run the
-/// pipeline, remember the result, push it to the overlay window and the main
-/// window, auto-hide after the duration unless a newer trigger superseded us.
+/// Run the pipeline, remember the result, show the HUD box top-left, push the
+/// payload, and schedule the Rust-owned auto-hide (generation-counter pattern:
+/// a newer trigger while visible restarts the on-screen duration). Shared by
+/// the hotkey, the auto-detect watcher, and the `trigger_relic_crack` command.
+#[cfg(feature = "relic-ocr")]
+pub async fn capture_and_show(
+    app: &tauri::AppHandle,
+    state: &std::sync::Arc<crate::AppState>,
+) -> CrackCapture {
+    use std::sync::atomic::Ordering;
+    use tauri::{Emitter, Manager};
+
+    let capture = run_capture(state.db.clone()).await;
+    *state.last_crack.lock() = Some(capture.clone());
+
+    // This trigger now owns the overlay window.
+    let gen = state.relic_overlay_gen.fetch_add(1, Ordering::SeqCst) + 1;
+    crate::overlay::position_and_show(app, RELIC_OVERLAY_LABEL, crate::overlay::Anchor::TopLeft);
+    let _ = app.emit_to(RELIC_OVERLAY_LABEL, "relic-overlay-show", &capture);
+    let _ = app.emit("crack-capture", ());
+
+    let app = app.clone();
+    let state = state.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(DEFAULT_DURATION_SECS)).await;
+        if state.relic_overlay_gen.load(Ordering::SeqCst) == gen {
+            if let Some(w) = app.get_webview_window(RELIC_OVERLAY_LABEL) {
+                let _ = w.hide();
+            }
+        }
+    });
+    capture
+}
+
+/// Hotkey/auto-detect entry point, shaped like `overlay::trigger`.
 #[cfg(feature = "relic-ocr")]
 #[allow(dead_code)] // dispatched from the shared hotkey registrar (prefs stage)
 pub fn trigger(app: &tauri::AppHandle) {
-    use std::sync::atomic::Ordering;
-    use tauri::{Emitter, Manager};
+    use tauri::Manager;
 
     let Some(state) = app.try_state::<std::sync::Arc<crate::AppState>>() else {
         return; // recovery mode
@@ -171,21 +202,7 @@ pub fn trigger(app: &tauri::AppHandle) {
     let state = state.inner().clone();
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let capture = run_capture(state.db.clone()).await;
-        *state.last_crack.lock() = Some(capture.clone());
-
-        // This trigger now owns the overlay window.
-        let gen = state.relic_overlay_gen.fetch_add(1, Ordering::SeqCst) + 1;
-        // Overlay window ships in the next stage; both emits are best-effort.
-        let _ = app.emit_to(RELIC_OVERLAY_LABEL, "relic-overlay-show", &capture);
-        let _ = app.emit("crack-capture", ());
-
-        tokio::time::sleep(std::time::Duration::from_secs(DEFAULT_DURATION_SECS)).await;
-        if state.relic_overlay_gen.load(Ordering::SeqCst) == gen {
-            if let Some(w) = tauri::Manager::get_webview_window(&app, RELIC_OVERLAY_LABEL) {
-                let _ = w.hide();
-            }
-        }
+        capture_and_show(&app, &state).await;
     });
 }
 

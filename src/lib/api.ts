@@ -12,6 +12,7 @@ import type {
   CascadeStatus,
   CatalogRow,
   CodexData,
+  CrackCapture,
   DucatRow,
   GameDataUpdate,
   GameScanStatus,
@@ -157,6 +158,12 @@ export const getOverlayPrefs = () => invoke<OverlayPrefs>("get_overlay_prefs");
 export const setOverlayPrefs = (prefs: OverlayPrefs) =>
   invoke<void>("set_overlay_prefs", { prefs });
 export const getCascadeStatus = () => invoke<CascadeStatus>("get_cascade_status");
+
+// relic-crack capture (issue #2)
+export const triggerRelicCrack = () => invoke<CrackCapture>("trigger_relic_crack");
+export const getLastCrackCapture = () => invoke<CrackCapture | null>("get_last_crack_capture");
+export const relicOcrRunFile = (path: string) =>
+  invoke<CrackCapture>("relic_ocr_run_file", { path });
 
 // computed
 export const getSets = () => invoke<SetRow[]>("get_sets");
