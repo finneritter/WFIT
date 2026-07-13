@@ -38,7 +38,6 @@ fn engine() -> Result<&'static OcrEngine, String> {
 
 /// Deserialize the models ahead of the first capture. Errors are returned (and
 /// logged by the caller) but never fatal — the capture path re-reports them.
-#[allow(dead_code)] // called at startup once prefs land (prefs stage)
 pub fn warm() -> Result<(), String> {
     engine().map(|_| ())
 }

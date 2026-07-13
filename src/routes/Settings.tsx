@@ -20,12 +20,14 @@ import {
   usePricesRefresh,
   useRebuildCache,
   useRecMinPrice,
+  useRelicOcrPrefs,
   useSetExcludedMinPlat,
   useSetExcludedMinPlatByCat,
   useSetExcludedRarities,
   useSetNotificationPrefs,
   useSetOverlayPrefs,
   useSetRecMinPrice,
+  useSetRelicOcrPrefs,
   useSetsRefresh,
   useSimulateInventory,
   useSummary,
@@ -48,6 +50,7 @@ import {
   openBackupsDir,
   restartApp,
   sendTestNotification,
+  triggerRelicCrack,
   wipeApp,
 } from "../lib/api";
 import { clsx, fmtBytes, syncedAgo } from "../lib/format";
@@ -66,6 +69,7 @@ import type {
   GameDataProgress,
   NotificationPrefs,
   OverlayPrefs,
+  RelicOcrPrefs,
   UpdateProgress,
 } from "../lib/types";
 
@@ -392,6 +396,110 @@ function Overlay() {
             Run Warframe in <b>Borderless/Windowed Fullscreen</b> so the overlay can draw over it —
             nothing composites over true exclusive fullscreen. On native Wayland, global hotkeys are
             unreliable; an X11 session is recommended.
+          </div>
+        </Row>
+      ) : null}
+    </section>
+  );
+}
+
+// Default while the pref query loads — matches the Rust `Default`.
+const RELIC_OCR_DEFAULTS: RelicOcrPrefs = {
+  enabled: false,
+  hotkey: "Alt+KeyX",
+  duration_secs: 10,
+  auto_detect: false,
+};
+
+function RelicOcr() {
+  const { data } = useRelicOcrPrefs();
+  const setPrefs = useSetRelicOcrPrefs();
+  const prefs = data ?? RELIC_OCR_DEFAULTS;
+  const [durInput, setDurInput] = useState("");
+  const [testing, setTesting] = useState(false);
+  const durValue = durInput !== "" ? durInput : String(prefs.duration_secs);
+  const save = (patch: Partial<RelicOcrPrefs>) =>
+    setPrefs.mutate({ ...prefs, ...patch }, { onError: (e) => pushToast(errorMessage(e)) });
+  const commitDuration = () => {
+    const n = Math.round(Number(durInput));
+    if (durInput !== "" && Number.isFinite(n)) {
+      save({ duration_secs: Math.min(30, Math.max(3, n)) });
+    }
+    setDurInput("");
+  };
+  const testCapture = async () => {
+    setTesting(true);
+    try {
+      const cap = await triggerRelicCrack();
+      if (cap.error) pushToast(cap.error);
+      else pushToast(`read ${cap.rewards.length} reward(s) in ${cap.ocr_ms}ms`, "info");
+    } catch (e) {
+      pushToast(errorMessage(e));
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <section className="tpanel">
+      <div className="tpanel-h">
+        <h3>Relic reward prices</h3>
+      </div>
+      <Row
+        label="Enable capture"
+        hint="On the relic reward screen, press the hotkey: WFIT takes a one-off screenshot, reads the offered part names locally, and shows their platinum/ducat prices in a small HUD box top-left. Same approach as WFInfo — a screenshot read on your machine; no game files or memory are touched, DE has tolerated tools like this for years."
+      >
+        <Seg
+          value={prefs.enabled ? "on" : "off"}
+          options={OFF_ON}
+          onChange={(v) => save({ enabled: v === "on" })}
+        />
+      </Row>
+      <Row
+        label="Hotkey"
+        hint="Click, then press your shortcut. Needs at least one modifier. Must differ from the Cascade overlay's key."
+      >
+        <div style={{ opacity: prefs.enabled ? 1 : 0.4 }}>
+          <KeybindCapture value={prefs.hotkey} onChange={(hotkey) => save({ hotkey })} />
+        </div>
+      </Row>
+      <Row
+        label="On-screen time"
+        hint="How long the price box stays visible (3–30 seconds; the reward choice window is about 10)."
+      >
+        <div className="set-num" style={{ opacity: prefs.enabled ? 1 : 0.4 }}>
+          <input
+            type="number"
+            min={3}
+            max={30}
+            value={durValue}
+            onChange={(e) => setDurInput(e.target.value)}
+            onBlur={commitDuration}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            }}
+          />
+          <span className="u">s</span>
+        </div>
+      </Row>
+      <Row
+        label="Test capture"
+        hint="Runs the full pipeline right now against whatever is on screen (with the game up on the reward screen, you should see the box top-left)."
+      >
+        <button
+          type="button"
+          className="btn"
+          disabled={!prefs.enabled || testing}
+          onClick={testCapture}
+        >
+          {testing ? "Capturing…" : "Capture now"}
+        </button>
+      </Row>
+      {IS_LINUX ? (
+        <Row label="Heads-up">
+          <div className="set-note">
+            Run Warframe in <b>Borderless/Windowed Fullscreen</b> — capture and overlay both need
+            it. The game window is captured directly (X11), which works in a Wayland session too.
           </div>
         </Row>
       ) : null}
@@ -778,6 +886,8 @@ export function Settings({
       <Notifications />
 
       <Overlay />
+
+      <RelicOcr />
 
       <section className="tpanel">
         <div className="tpanel-h">

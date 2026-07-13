@@ -7,6 +7,7 @@ mod devtools;
 mod domain;
 mod error;
 mod gamescan;
+mod hotkeys;
 mod market;
 mod notify;
 mod overlay;
@@ -144,14 +145,15 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(
-            // The Cascade overlay's global hotkey. The actual key is registered
-            // dynamically from OverlayPrefs (overlay::apply_shortcut); this just
-            // installs the handler that fires on press. Fire on Pressed only —
-            // not the matching Released — so one keypress = one show.
+            // Global hotkeys (Cascade overlay + relic capture). The actual keys
+            // are registered dynamically from prefs (hotkeys::apply_all); this
+            // just installs the handler, which routes the fired shortcut to the
+            // right feature. Fire on Pressed only — not the matching Released —
+            // so one keypress = one show.
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
+                .with_handler(|app, shortcut, event| {
                     if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                        overlay::trigger(app);
+                        hotkeys::dispatch(app, shortcut);
                     }
                 })
                 .build(),
@@ -271,6 +273,8 @@ pub fn run() {
             commands::set_overlay_prefs,
             commands::get_cascade_status,
             // relic-crack capture (issue #2)
+            commands::get_relic_ocr_prefs,
+            commands::set_relic_ocr_prefs,
             commands::trigger_relic_crack,
             commands::get_last_crack_capture,
             commands::relic_ocr_run_file,
@@ -468,12 +472,24 @@ fn init_app(
     });
     app.manage(state.clone());
 
-    // Register the Cascade overlay's global hotkey from the persisted prefs
-    // (no-op when the feature is off). Failures degrade gracefully inside.
-    overlay::apply_shortcut(
-        app.handle(),
-        &db::settings::overlay_prefs(&state.db).unwrap_or_default(),
-    );
+    // Register every enabled global hotkey (Cascade overlay + relic capture)
+    // from the persisted prefs. Failures degrade gracefully inside.
+    hotkeys::apply_all(app.handle());
+
+    // Pre-warm the OCR engine off the startup path when the relic capture is
+    // enabled: model deserialization costs ~100ms, and the first hotkey press
+    // during a 10-second reward window must not pay it.
+    #[cfg(feature = "relic-ocr")]
+    if db::settings::relic_ocr_prefs(&state.db)
+        .map(|p| p.enabled)
+        .unwrap_or(false)
+    {
+        tauri::async_runtime::spawn_blocking(|| {
+            if let Err(e) = relic_ocr::ocr::warm() {
+                tracing::warn!(error = %e, "relic_ocr: engine pre-warm failed");
+            }
+        });
+    }
 
     // Dev-only local stress/observability dashboard (feature `dev-dashboard`).
     // Loopback-only; `WFIT_DASH_PORT=0` disables. It does NOT auto-open — Settings ›

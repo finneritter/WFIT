@@ -29,6 +29,7 @@ import type {
   RecommendationRow,
   RelicBrowserRow,
   RelicDetail,
+  RelicOcrPrefs,
   RelicSourceRow,
   RepriceApply,
   RepriceRow,
@@ -160,6 +161,9 @@ export const setOverlayPrefs = (prefs: OverlayPrefs) =>
 export const getCascadeStatus = () => invoke<CascadeStatus>("get_cascade_status");
 
 // relic-crack capture (issue #2)
+export const getRelicOcrPrefs = () => invoke<RelicOcrPrefs>("get_relic_ocr_prefs");
+export const setRelicOcrPrefs = (prefs: RelicOcrPrefs) =>
+  invoke<void>("set_relic_ocr_prefs", { prefs });
 export const triggerRelicCrack = () => invoke<CrackCapture>("trigger_relic_crack");
 export const getLastCrackCapture = () => invoke<CrackCapture | null>("get_last_crack_capture");
 export const relicOcrRunFile = (path: string) =>

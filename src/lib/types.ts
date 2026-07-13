@@ -837,6 +837,14 @@ export interface OverlayPrefs {
   duration_secs: number;
 }
 
+/** Relic-crack capture prefs (mirrors db::settings::RelicOcrPrefs). */
+export interface RelicOcrPrefs {
+  enabled: boolean;
+  hotkey: string; // accelerator, e.g. "Alt+KeyX"
+  duration_secs: number;
+  auto_detect: boolean; // EE.log watcher auto-show
+}
+
 /** Cascade overlay status (mirrors worldstate::CascadeStatus). */
 export interface CascadeStatus {
   active: boolean;

@@ -20,11 +20,6 @@ use crate::db::{catalog, relics, wanted, Db};
 use crate::error::AppResult;
 use crate::types::{CrackCapture, CrackReward};
 
-/// How long the result stays on screen. Becomes a pref (default 10s ≈ the
-/// reward-choice window) when the Settings block lands.
-#[allow(dead_code)] // used by trigger(); hotkey dispatch lands with the prefs stage
-pub const DEFAULT_DURATION_SECS: u64 = 10;
-
 /// Overlay window label (the window itself lands with the overlay stage; the
 /// emit is a no-op until then).
 pub const RELIC_OVERLAY_LABEL: &str = "relic-overlay";
@@ -168,6 +163,9 @@ pub async fn capture_and_show(
     use std::sync::atomic::Ordering;
     use tauri::{Emitter, Manager};
 
+    let duration = crate::db::settings::relic_ocr_prefs(&state.db)
+        .map(|p| p.duration_secs.max(1) as u64)
+        .unwrap_or(10);
     let capture = run_capture(state.db.clone()).await;
     *state.last_crack.lock() = Some(capture.clone());
 
@@ -180,7 +178,7 @@ pub async fn capture_and_show(
     let app = app.clone();
     let state = state.clone();
     tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(DEFAULT_DURATION_SECS)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(duration)).await;
         if state.relic_overlay_gen.load(Ordering::SeqCst) == gen {
             if let Some(w) = app.get_webview_window(RELIC_OVERLAY_LABEL) {
                 let _ = w.hide();
@@ -192,7 +190,6 @@ pub async fn capture_and_show(
 
 /// Hotkey/auto-detect entry point, shaped like `overlay::trigger`.
 #[cfg(feature = "relic-ocr")]
-#[allow(dead_code)] // dispatched from the shared hotkey registrar (prefs stage)
 pub fn trigger(app: &tauri::AppHandle) {
     use tauri::Manager;
 

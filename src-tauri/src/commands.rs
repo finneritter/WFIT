@@ -586,7 +586,7 @@ pub fn get_overlay_prefs(state: State<'_, Arc<AppState>>) -> AppResult<settings:
     settings::overlay_prefs(&state.db)
 }
 
-/// Persist the Cascade overlay prefs and re-register the global hotkey to match,
+/// Persist the Cascade overlay prefs and re-register the global hotkeys to match,
 /// so toggling the feature / rebinding the key takes effect immediately.
 #[tauri::command]
 pub fn set_overlay_prefs(
@@ -594,9 +594,57 @@ pub fn set_overlay_prefs(
     state: State<'_, Arc<AppState>>,
     prefs: settings::OverlayPrefs,
 ) -> AppResult<()> {
+    let relic = settings::relic_ocr_prefs(&state.db)?;
+    if prefs.enabled && relic.enabled && same_binding(&prefs.hotkey, &relic.hotkey) {
+        return Err(AppError::Invalid(
+            "that hotkey is already bound to the relic capture".into(),
+        ));
+    }
     settings::set_overlay_prefs(&state.db, &prefs)?;
-    crate::overlay::apply_shortcut(&app, &prefs);
+    crate::hotkeys::apply_all(&app);
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_relic_ocr_prefs(state: State<'_, Arc<AppState>>) -> AppResult<settings::RelicOcrPrefs> {
+    settings::relic_ocr_prefs(&state.db)
+}
+
+/// Persist the relic-capture prefs, re-register the global hotkeys, and keep
+/// the OCR engine warm-started when the feature is on.
+#[tauri::command]
+pub fn set_relic_ocr_prefs(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+    prefs: settings::RelicOcrPrefs,
+) -> AppResult<()> {
+    let overlay = settings::overlay_prefs(&state.db)?;
+    if prefs.enabled && overlay.enabled && same_binding(&prefs.hotkey, &overlay.hotkey) {
+        return Err(AppError::Invalid(
+            "that hotkey is already bound to the Cascade overlay".into(),
+        ));
+    }
+    settings::set_relic_ocr_prefs(&state.db, &prefs)?;
+    crate::hotkeys::apply_all(&app);
+    #[cfg(feature = "relic-ocr")]
+    if prefs.enabled {
+        tauri::async_runtime::spawn_blocking(|| {
+            if let Err(e) = crate::relic_ocr::ocr::warm() {
+                tracing::warn!(error = %e, "relic_ocr: engine pre-warm failed");
+            }
+        });
+    }
+    Ok(())
+}
+
+/// Two accelerator strings collide when they parse to the same shortcut (so
+/// "alt+keyx" and "Alt+KeyX" count as the same binding).
+fn same_binding(a: &str, b: &str) -> bool {
+    use tauri_plugin_global_shortcut::Shortcut;
+    match (a.trim().parse::<Shortcut>(), b.trim().parse::<Shortcut>()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a.trim().eq_ignore_ascii_case(b.trim()),
+    }
 }
 
 /// The Cascade overlay's answer, computed from the cached worldstate. Exposed as

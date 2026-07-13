@@ -9,6 +9,7 @@ import type {
   CatalogRow,
   NotificationPrefs,
   OverlayPrefs,
+  RelicOcrPrefs,
   RepriceApply,
   RivenQuery,
   ScanApply,
@@ -38,6 +39,8 @@ export const keys = {
   recMinPrice: ["recMinPrice"] as const,
   notificationPrefs: ["notificationPrefs"] as const,
   overlayPrefs: ["overlayPrefs"] as const,
+  relicOcrPrefs: ["relicOcrPrefs"] as const,
+  lastCrackCapture: ["lastCrackCapture"] as const,
   sets: ["sets"] as const,
   ducats: ["ducats"] as const,
   arcanes: ["arcanes"] as const,
@@ -546,6 +549,20 @@ export function useSetOverlayPrefs() {
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.overlayPrefs }),
   });
 }
+
+// ---- relic-crack capture (issue #2) ----
+export const useRelicOcrPrefs = () =>
+  useQuery({ queryKey: keys.relicOcrPrefs, queryFn: api.getRelicOcrPrefs });
+export function useSetRelicOcrPrefs() {
+  const qc = useQueryClient();
+  return useMutation({
+    // The setter re-registers the global hotkeys backend-side as a side effect.
+    mutationFn: (prefs: RelicOcrPrefs) => api.setRelicOcrPrefs(prefs),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.relicOcrPrefs }),
+  });
+}
+export const useLastCrackCapture = () =>
+  useQuery({ queryKey: keys.lastCrackCapture, queryFn: api.getLastCrackCapture });
 
 // ---- live heartbeat ----
 // The backend's rolling repricer emits `prices-updated` after every tick that

@@ -17,35 +17,14 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use tauri::{Emitter, Manager, PhysicalPosition};
-use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
-use crate::db::settings::OverlayPrefs;
 use crate::AppState;
 
 const OVERLAY_LABEL: &str = "overlay";
 
-/// Apply the persisted [`OverlayPrefs`]: clear any current grab, then register
-/// the hotkey if the feature is enabled. Called at startup and whenever the
-/// setter command persists a change, so toggling/rebinding takes effect live.
-/// Never fatal — a failed grab (combo already held, parse error, or no X11
-/// grab available on Wayland) is logged and the app carries on.
-pub fn apply_shortcut(app: &tauri::AppHandle, prefs: &OverlayPrefs) {
-    let gs = app.global_shortcut();
-    // Idempotent reset: drop whatever we registered last time before re-binding.
-    if let Err(e) = gs.unregister_all() {
-        tracing::warn!(error = %e, "overlay: failed to clear previous hotkey");
-    }
-    if prefs.enabled && !prefs.hotkey.trim().is_empty() {
-        match gs.register(prefs.hotkey.as_str()) {
-            Ok(()) => tracing::info!(hotkey = %prefs.hotkey, "overlay hotkey registered"),
-            Err(e) => tracing::warn!(
-                error = %e,
-                hotkey = %prefs.hotkey,
-                "overlay hotkey registration failed (already grabbed / unparseable / no Wayland grab)"
-            ),
-        }
-    }
-}
+// Hotkey (re)registration lives in `crate::hotkeys` — shared with the relic
+// capture, since the global-shortcut plugin has one flat registration set and
+// one handler for the whole app.
 
 /// Hotkey pressed: compute the cascade status from the cached worldstate, show
 /// the overlay upper-middle on the monitor under the cursor, push the payload,
