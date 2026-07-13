@@ -214,7 +214,9 @@ pub fn spawn_update_check(state: Arc<AppState>, app: tauri::AppHandle) {
                                 body,
                                 nav_screen: Some("settings".into()),
                                 nav_slug: None,
-                                payload: None,
+                                // Deep-link: land on (and flash) the Updates row
+                                // instead of the top of a long Settings page.
+                                payload: Some(r#"{"settings_section":"updates"}"#.into()),
                             },
                         );
                         match filed {

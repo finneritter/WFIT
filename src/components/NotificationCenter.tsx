@@ -11,7 +11,7 @@ import type { AppNotification } from "../lib/types";
 import { Icon } from "./Icon";
 import type { ScreenId } from "./Sidebar";
 
-type NavOpts = { loadSearchId?: number };
+type NavOpts = { loadSearchId?: number; settingsSection?: string };
 
 /** Compact "5m ago" relative time. */
 function ago(iso: string): string {
@@ -58,15 +58,20 @@ export function NotificationCenter({
   const activate = async (n: AppNotification) => {
     setOpen(false);
     let loadSearchId: number | undefined;
+    let settingsSection: string | undefined;
     if (n.payload) {
       try {
-        const p = JSON.parse(n.payload) as { saved_search_id?: number };
+        const p = JSON.parse(n.payload) as {
+          saved_search_id?: number;
+          settings_section?: string;
+        };
         loadSearchId = p.saved_search_id;
+        settingsSection = p.settings_section;
       } catch {
         // ignore malformed payload
       }
     }
-    if (n.nav_screen) onNavigate(n.nav_screen as ScreenId, { loadSearchId });
+    if (n.nav_screen) onNavigate(n.nav_screen as ScreenId, { loadSearchId, settingsSection });
     await api.dismissNotification(n.id);
     refresh();
   };

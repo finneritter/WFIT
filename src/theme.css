@@ -1257,6 +1257,11 @@ body.flat-deltas .neg {
 .setrow.flash {
   animation: setrow-flash 1.6s ease-out;
 }
+/* Same treatment for a Settings row arrived-at via a notification deep-link
+   (e.g. "update available" → About › Updates). */
+.set-row.flash {
+  animation: setrow-flash 1.6s ease-out;
+}
 @keyframes setrow-flash {
   0%,
   30% {

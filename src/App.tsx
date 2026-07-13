@@ -99,6 +99,9 @@ export default function App() {
   const [marketSlug, setMarketSlug] = useState<string | null>(null);
   // Set the Sets screen should scroll to + flash (cross-screen link from Relics).
   const [focusSetSlug, setFocusSetSlug] = useState<string | null>(null);
+  // Settings section to scroll to + flash (deep-link from a notification,
+  // e.g. "update available" → the About panel's Updates row).
+  const [settingsSection, setSettingsSection] = useState<string | null>(null);
   // Input stays on `search`; screens filter on the deferred value so keystrokes
   // never block on a large grid re-render.
   const deferredSearch = useDeferredValue(search);
@@ -167,6 +170,7 @@ export default function App() {
         marketSlug?: string;
         focusSetSlug?: string;
         loadSearchId?: number;
+        settingsSection?: string;
       },
     ) => {
       setScreen(s);
@@ -174,6 +178,7 @@ export default function App() {
       setListingsTab(opts?.listingsTab ?? "mine");
       setMarketSlug(opts?.marketSlug ?? null);
       setFocusSetSlug(opts?.focusSetSlug ?? null);
+      setSettingsSection(opts?.settingsSection ?? null);
       // Deep-link into a saved riven search (from a notification).
       if (s === "rivens" && opts?.loadSearchId != null) requestRivenLoad(opts.loadSearchId);
     },
@@ -343,7 +348,9 @@ export default function App() {
                 {screen === "vendors" && <Vendors onOpen={open} />}
                 {screen === "account" && <Account onOpen={open} onNavigate={navigate} />}
                 {screen === "sold" && <SoldHistory onOpen={open} />}
-                {screen === "settings" && <Settings onNavigate={navigate} />}
+                {screen === "settings" && (
+                  <Settings onNavigate={navigate} focusSection={settingsSection} />
+                )}
               </ErrorBoundary>
             </SearchProvider>
           </div>

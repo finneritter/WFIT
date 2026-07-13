@@ -33,6 +33,7 @@ import {
 } from "../../hooks/queries";
 import { clsx, fmt, fmtK, msUntil, nextUtc, pct, syncedAgo } from "../../lib/format";
 import { usePersistedJSON } from "../../lib/persist";
+import type { AppNotification } from "../../lib/types";
 import { Countdown, TierBadge } from "../Countdown";
 import { Icon } from "../Icon";
 import type { ScreenId } from "../Sidebar";
@@ -48,7 +49,21 @@ import {
   within,
 } from "./selectors";
 
-export type Nav = (s: ScreenId, opts?: { listingsTab?: "mine" | "recommended" }) => void;
+export type Nav = (
+  s: ScreenId,
+  opts?: { listingsTab?: "mine" | "recommended"; settingsSection?: string },
+) => void;
+
+/** Nav opts carried in a notification's JSON payload (mirrors NotificationCenter). */
+function notificationNavOpts(n: AppNotification): { settingsSection?: string } | undefined {
+  if (!n.payload) return undefined;
+  try {
+    const p = JSON.parse(n.payload) as { settings_section?: string };
+    return p.settings_section ? { settingsSection: p.settings_section } : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export interface WidgetProps {
   w: number;
@@ -1176,7 +1191,7 @@ function AlertsWidget({ w, h, focused, onOpen, onNavigate }: WidgetProps) {
               n.nav_slug
                 ? () => onOpen(n.nav_slug as string)
                 : n.nav_screen
-                  ? () => onNavigate(n.nav_screen as ScreenId)
+                  ? () => onNavigate(n.nav_screen as ScreenId, notificationNavOpts(n))
                   : undefined
             }
           />

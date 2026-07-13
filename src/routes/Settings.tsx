@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GameScanPanel } from "../components/GameScanPanel";
 import { Icon } from "../components/Icon";
 import { KeybindCapture } from "../components/KeybindCapture";
@@ -73,15 +73,18 @@ function Row({
   label,
   hint,
   children,
+  flash,
 }: {
   label: string;
   // Detailed explanation, shown on hover behind a small ⓘ. Omit for
   // self-evident controls so they stay clean.
   hint?: string;
   children: React.ReactNode;
+  /** Flash-highlight the row (arrived-at via a notification deep-link). */
+  flash?: boolean;
 }) {
   return (
-    <div className="set-row">
+    <div className={flash ? "set-row flash" : "set-row"}>
       <div className="set-l">
         <div className="set-k">
           {label}
@@ -143,7 +146,7 @@ const OFF_ON: [string, string][] = [
 /** Settings › About › Updates: check → install (with live download %) → restart.
  *  Windows never reaches the restart step — the installer exits the app itself.
  *  Installs that can't self-update (deb/rpm/bare binary) get a GitHub link. */
-function UpdatesRow() {
+function UpdatesRow({ flash }: { flash?: boolean }) {
   const upd = useUpdateStatus();
   const [phase, setPhase] = useState<"idle" | "installing" | "done">("idle");
   const [prog, setProg] = useState<UpdateProgress | null>(null);
@@ -224,6 +227,7 @@ function UpdatesRow() {
     <Row
       label="Updates"
       hint="Windows installs and Linux AppImages update in place; other installs link to GitHub."
+      flash={flash}
     >
       {body}
     </Row>
@@ -581,8 +585,26 @@ function DevDashboardRow() {
   );
 }
 
-export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void }) {
+export function Settings({
+  onNavigate,
+  focusSection,
+}: {
+  onNavigate: (id: ScreenId) => void;
+  /** Section to scroll to + flash on mount ("updates" from the update notification). */
+  focusSection?: string | null;
+}) {
   const [prefs, setPrefs] = useState<Prefs>(() => loadPrefs());
+  // Notification deep-link: scroll the About panel into view and flash the
+  // Updates row, so "new version" clicks land on the control that installs it.
+  const aboutRef = useRef<HTMLElement | null>(null);
+  const [flashUpdates, setFlashUpdates] = useState(false);
+  useEffect(() => {
+    if (focusSection !== "updates") return;
+    aboutRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setFlashUpdates(true);
+    const t = setTimeout(() => setFlashUpdates(false), 1700);
+    return () => clearTimeout(t);
+  }, [focusSection]);
   const { data: summary } = useSummary();
   const { data: account } = useWfmAccount();
   const { data: version } = useAppVersion();
@@ -1004,14 +1026,14 @@ export function Settings({ onNavigate }: { onNavigate: (id: ScreenId) => void })
 
       <GameScanPanel />
 
-      <section className="tpanel">
+      <section className="tpanel" ref={aboutRef}>
         <div className="tpanel-h">
           <h3>About</h3>
         </div>
         <Row label="Version">
           <span className="num">v{version ?? "…"}</span>
         </Row>
-        <UpdatesRow />
+        <UpdatesRow flash={flashUpdates} />
         <Row label="Data sources">
           <span className="muted">warframe.market · warframestat.us</span>
         </Row>
