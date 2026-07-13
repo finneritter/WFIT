@@ -202,8 +202,6 @@ pub struct RelicOcrPrefs {
     pub hotkey: String,
     /// How long the HUD box stays up (the reward-choice window is ~10s).
     pub duration_secs: u32,
-    /// Auto-show on the reward screen via the EE.log watcher (no hotkey needed).
-    pub auto_detect: bool,
 }
 
 impl Default for RelicOcrPrefs {
@@ -213,7 +211,6 @@ impl Default for RelicOcrPrefs {
             enabled: false,
             hotkey: "Alt+KeyT".into(), // Finn's pick; Alt like the Cascade key
             duration_secs: 10,
-            auto_detect: false,
         }
     }
 }

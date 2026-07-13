@@ -1,7 +1,7 @@
 {
   "identifier": "overlay",
-  "description": "Cascade HUD overlay window — read-only status display. It only listens for the push event and invokes the read-only status command; all window show/hide/position is done from Rust.",
+  "description": "Overlay windows (Cascade HUD pill, relic-crack price box) — read-only displays. They only listen for their push events and invoke read-only fetch commands; all window show/hide/position is done from Rust. NOTE: a window absent from this list gets NO permissions — its webview can't listen/invoke, renders nothing, and the transparent window is invisible.",
   "local": true,
-  "windows": ["overlay"],
+  "windows": ["overlay", "relic-overlay"],
   "permissions": ["core:event:default"]
 }

@@ -627,15 +627,12 @@ pub fn set_relic_ocr_prefs(
     settings::set_relic_ocr_prefs(&state.db, &prefs)?;
     crate::hotkeys::apply_all(&app);
     #[cfg(feature = "relic-ocr")]
-    {
-        if prefs.enabled {
-            tauri::async_runtime::spawn_blocking(|| {
-                if let Err(e) = crate::relic_ocr::ocr::warm() {
-                    tracing::warn!(error = %e, "relic_ocr: engine pre-warm failed");
-                }
-            });
-        }
-        crate::relic_ocr::log_watch::apply(&app);
+    if prefs.enabled {
+        tauri::async_runtime::spawn_blocking(|| {
+            if let Err(e) = crate::relic_ocr::ocr::warm() {
+                tracing::warn!(error = %e, "relic_ocr: engine pre-warm failed");
+            }
+        });
     }
     Ok(())
 }
@@ -681,6 +678,14 @@ pub async fn trigger_relic_crack(
             "this build was compiled without the relic-ocr feature".into(),
         ))
     }
+}
+
+/// Show the relic HUD box with sample rows (no capture) — Settings' "Test
+/// overlay" button, to verify the box composites over the game at all.
+#[tauri::command]
+pub fn test_relic_overlay(app: tauri::AppHandle, state: State<'_, Arc<AppState>>) -> AppResult<()> {
+    crate::relic_ocr::show_test_overlay(&app, state.inner());
+    Ok(())
 }
 
 /// The most recent relic-crack capture (in-memory). The overlay webview fetches

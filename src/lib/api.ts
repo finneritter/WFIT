@@ -165,6 +165,7 @@ export const getRelicOcrPrefs = () => invoke<RelicOcrPrefs>("get_relic_ocr_prefs
 export const setRelicOcrPrefs = (prefs: RelicOcrPrefs) =>
   invoke<void>("set_relic_ocr_prefs", { prefs });
 export const triggerRelicCrack = () => invoke<CrackCapture>("trigger_relic_crack");
+export const testRelicOverlay = () => invoke<void>("test_relic_overlay");
 export const getLastCrackCapture = () => invoke<CrackCapture | null>("get_last_crack_capture");
 export const relicOcrRunFile = (path: string) =>
   invoke<CrackCapture>("relic_ocr_run_file", { path });

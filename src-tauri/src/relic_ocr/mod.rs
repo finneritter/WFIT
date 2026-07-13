@@ -11,8 +11,6 @@
 #[cfg(feature = "relic-ocr")]
 pub mod capture;
 pub mod layout;
-#[cfg(feature = "relic-ocr")]
-pub mod log_watch;
 pub mod matching;
 #[cfg(feature = "relic-ocr")]
 pub mod ocr;
@@ -165,7 +163,12 @@ pub async fn run_capture(db: Db) -> CrackCapture {
 /// Run the pipeline, remember the result, show the HUD box top-left, push the
 /// payload, and schedule the Rust-owned auto-hide (generation-counter pattern:
 /// a newer trigger while visible restarts the on-screen duration). Shared by
-/// the hotkey, the auto-detect watcher, and the `trigger_relic_crack` command.
+/// the hotkey and the `trigger_relic_crack` command.
+///
+/// (An EE.log auto-detect watcher existed briefly and was removed: the game
+/// buffers its log and flushed the reward-screen marker ~12s late in live
+/// testing — after the choice window — so auto-detection can't be timely.
+/// The hotkey is the trigger.)
 #[cfg(feature = "relic-ocr")]
 pub async fn capture_and_show(
     app: &tauri::AppHandle,
@@ -199,7 +202,7 @@ pub async fn capture_and_show(
     capture
 }
 
-/// Hotkey/auto-detect entry point, shaped like `overlay::trigger`.
+/// Hotkey entry point, shaped like `overlay::trigger`.
 #[cfg(feature = "relic-ocr")]
 pub fn trigger(app: &tauri::AppHandle) {
     use tauri::Manager;
@@ -211,6 +214,78 @@ pub fn trigger(app: &tauri::AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         capture_and_show(&app, &state).await;
+    });
+}
+
+/// Show the HUD box with sample data — Settings' "Test overlay" button, so the
+/// user can verify the box actually composites over the game without needing a
+/// reward screen. Same show/auto-hide path as a real capture.
+pub fn show_test_overlay(app: &tauri::AppHandle, state: &std::sync::Arc<crate::AppState>) {
+    use std::sync::atomic::Ordering;
+    use tauri::Emitter;
+
+    let sample = CrackCapture {
+        captured_at: chrono::Utc::now().to_rfc3339(),
+        rewards: vec![
+            CrackReward {
+                reward_name: "Test Prime Barrel".into(),
+                slug: None,
+                plat: Some(42),
+                ducats: Some(45),
+                ducats_per_plat: Some(1.1),
+                owned_qty: 2,
+                wanted: false,
+                set_slug: None,
+                confidence: 1.0,
+                best: true,
+            },
+            CrackReward {
+                reward_name: "Test Prime Systems Blueprint".into(),
+                slug: None,
+                plat: Some(12),
+                ducats: Some(65),
+                ducats_per_plat: Some(5.4),
+                owned_qty: 0,
+                wanted: true,
+                set_slug: Some("test_prime_set".into()),
+                confidence: 1.0,
+                best: false,
+            },
+            CrackReward {
+                reward_name: "Forma Blueprint".into(),
+                slug: None,
+                plat: None,
+                ducats: None,
+                ducats_per_plat: None,
+                owned_qty: 0,
+                wanted: false,
+                set_slug: None,
+                confidence: 1.0,
+                best: false,
+            },
+        ],
+        ocr_lines: vec!["(test overlay — not a real capture)".into()],
+        capture_ms: 0,
+        ocr_ms: 0,
+        error: None,
+    };
+
+    let duration = crate::db::settings::relic_ocr_prefs(&state.db)
+        .map(|p| p.duration_secs.max(1) as u64)
+        .unwrap_or(10);
+    let gen = state.relic_overlay_gen.fetch_add(1, Ordering::SeqCst) + 1;
+    crate::overlay::position_and_show(app, RELIC_OVERLAY_LABEL, crate::overlay::Anchor::TopLeft);
+    let _ = app.emit_to(RELIC_OVERLAY_LABEL, "relic-overlay-show", &sample);
+
+    let app = app.clone();
+    let state = state.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(duration)).await;
+        if state.relic_overlay_gen.load(Ordering::SeqCst) == gen {
+            if let Some(w) = tauri::Manager::get_webview_window(&app, RELIC_OVERLAY_LABEL) {
+                let _ = w.hide();
+            }
+        }
     });
 }
 

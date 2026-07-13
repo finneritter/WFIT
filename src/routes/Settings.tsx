@@ -50,6 +50,7 @@ import {
   openBackupsDir,
   restartApp,
   sendTestNotification,
+  testRelicOverlay,
   triggerRelicCrack,
   wipeApp,
 } from "../lib/api";
@@ -408,7 +409,6 @@ const RELIC_OCR_DEFAULTS: RelicOcrPrefs = {
   enabled: false,
   hotkey: "Alt+KeyT",
   duration_secs: 10,
-  auto_detect: false,
 };
 
 function RelicOcr() {
@@ -483,16 +483,16 @@ function RelicOcr() {
         </div>
       </Row>
       <Row
-        label="Auto-detect reward screen"
-        hint="Watches the game's engine log (EE.log, a plain text file — read only) and shows the price box automatically the moment the reward choices appear, no hotkey needed. The hotkey keeps working either way."
+        label="Test overlay"
+        hint="Shows the price box top-left with sample rows for the configured duration — check it's visible over the game without needing a reward screen."
       >
-        <div style={{ opacity: prefs.enabled ? 1 : 0.4 }}>
-          <Seg
-            value={prefs.auto_detect ? "on" : "off"}
-            options={OFF_ON}
-            onChange={(v) => prefs.enabled && save({ auto_detect: v === "on" })}
-          />
-        </div>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => testRelicOverlay().catch((e) => pushToast(errorMessage(e)))}
+        >
+          Show test box
+        </button>
       </Row>
       <Row
         label="Test capture"
