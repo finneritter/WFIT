@@ -9,9 +9,13 @@
 //! `tokio::time::sleep` guarded by a generation counter can't.
 //!
 //! Platform caveats (surfaced to the user in Settings, not hidden): global
-//! shortcuts go through X11 `XGrabKey`, unreliable on native Wayland; and no
-//! always-on-top window composites over EXCLUSIVE-fullscreen on any OS —
-//! Borderless/Windowed Fullscreen works.
+//! shortcuts go through X11 `XGrabKey`, unreliable on native Wayland. On
+//! Windows, no always-on-top window composites over EXCLUSIVE-fullscreen —
+//! Borderless/Windowed Fullscreen works. On Linux/KWin, plain always-on-top
+//! loses even to a *focused borderless-fullscreen* window (ActiveLayer beats
+//! AboveLayer), so `claim_osd_layer` re-types the overlay windows as KDE
+//! On-Screen-Displays — the layer Plasma's own volume OSD uses, which
+//! composites over fullscreen games.
 
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -161,14 +165,14 @@ pub fn position_and_show(app: &tauri::AppHandle, label: &str, anchor: Anchor, pi
             .and_then(|m| m.into_iter().next())
     });
 
-    if let Some(m) = monitor {
+    let pos = monitor.map(|m| {
         let size = m.size();
         let origin = m.position();
         let outer = win.outer_size().unwrap_or(tauri::PhysicalSize {
             width: 360,
             height: 120,
         });
-        let (x, y) = match anchor {
+        match anchor {
             Anchor::UpperMiddle => (
                 origin.x + (size.width as i32 - outer.width as i32) / 2,
                 origin.y + size.height as i32 / 8, // ~12% down
@@ -177,7 +181,10 @@ pub fn position_and_show(app: &tauri::AppHandle, label: &str, anchor: Anchor, pi
                 origin.x + size.width as i32 - outer.width as i32 - size.width as i32 / 64,
                 origin.y + size.height as i32 / 36, // small inset, scales with res
             ),
-        };
+        }
+    });
+    // Position before show so the window doesn't flash at a stale spot…
+    if let Some((x, y)) = pos {
         let _ = win.set_position(PhysicalPosition::new(x, y));
     }
 
@@ -191,5 +198,59 @@ pub fn position_and_show(app: &tauri::AppHandle, label: &str, anchor: Anchor, pi
     // request on the same FIFO event-loop channel, so the GDK window is live by
     // the time click-through is applied.
     let _ = win.show();
+    #[cfg(target_os = "linux")]
+    claim_osd_layer(&win);
+    // …and re-assert the anchor AFTER mapping: once the window carries the KDE
+    // OSD type (claim_osd_layer), KWin's OSD placement policy centers it at
+    // every map, discarding the pre-show position. A post-map move request
+    // wins. (Verified live: without this, re-shows land horizontally centered.)
+    if let Some((x, y)) = pos {
+        let _ = win.set_position(PhysicalPosition::new(x, y));
+    }
     let _ = win.set_ignore_cursor_events(true);
+}
+
+/// KWin stacks a FOCUSED FULLSCREEN window (ActiveLayer, 5) above every
+/// keep-above window (AboveLayer, 3) — so `alwaysOnTop` alone leaves both
+/// overlays rendering UNDER the game whenever it's fullscreen and focused,
+/// i.e. always while playing. Plasma's own volume/brightness OSDs float over
+/// fullscreen games by carrying the KDE-specific On-Screen-Display window
+/// type (OnScreenDisplayLayer, 8), so the overlays claim the same type on
+/// their X11 window (we force XWayland via GDK_BACKEND=x11 in main()).
+/// Verified live on KWin 6: the property change re-layers a mapped window
+/// immediately, no remap needed. Non-KDE WMs skip the unknown KDE atom and
+/// fall back to NOTIFICATION (above normal windows in most WMs); keep-above
+/// still applies regardless. Must run after show() — the GDK window only
+/// exists once realized — and on the main thread (GTK is not thread-safe).
+#[cfg(target_os = "linux")]
+fn claim_osd_layer(win: &tauri::WebviewWindow) {
+    let w = win.clone();
+    let _ = win.run_on_main_thread(move || {
+        use gtk::prelude::*;
+        let Ok(gtk_win) = w.gtk_window() else { return };
+        let Some(gdk_win) = gtk_win.window() else {
+            return;
+        };
+        // X11/XWayland only — on a native-Wayland GDK (user overrode
+        // GDK_BACKEND) there is no X property to set and gdk would warn.
+        if !gdk_win.display().type_().name().starts_with("GdkX11") {
+            return;
+        }
+        // With type ATOM, gdk_property_change expects the data as GdkAtoms
+        // (it translates them to X atoms per-entry); ULongs is the matching
+        // ChangeData shape since GdkAtom is pointer-sized.
+        let types = [
+            gdk::Atom::intern("_KDE_NET_WM_WINDOW_TYPE_ON_SCREEN_DISPLAY").value()
+                as std::os::raw::c_ulong,
+            gdk::Atom::intern("_NET_WM_WINDOW_TYPE_NOTIFICATION").value() as std::os::raw::c_ulong,
+        ];
+        gdk::property_change(
+            &gdk_win,
+            &gdk::Atom::intern("_NET_WM_WINDOW_TYPE"),
+            &gdk::Atom::intern("ATOM"),
+            32,
+            gdk::PropMode::Replace,
+            gdk::ChangeData::ULongs(&types),
+        );
+    });
 }

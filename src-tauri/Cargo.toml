@@ -58,6 +58,12 @@ rten = { version = "0.24", optional = true }
 image = { version = "0.25", default-features = false, features = ["png"] }
 xcap = { version = "0.9", optional = true }
 
+# Linux: overlay window re-typing (overlay.rs::claim_osd_layer). Same gtk3/gdk3
+# already in the tree via tauri/wry — a direct dep only to call gdk::property_change.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+gdk = "0.18"
+
 # Windows: game-inventory memory scan (gamescan/memory_windows.rs, process_windows.rs).
 # Pure-Rust bindings — no extra SDK needed to `cargo check` the target from other hosts.
 [target.'cfg(windows)'.dependencies]

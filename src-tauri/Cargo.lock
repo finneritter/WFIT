@@ -6621,6 +6621,8 @@ dependencies = [
  "chrono",
  "criterion",
  "futures-util",
+ "gdk",
+ "gtk",
  "image",
  "keyring",
  "ocrs",
