@@ -25,14 +25,19 @@ use crate::types::{CrackCapture, CrackReward};
 pub const RELIC_OVERLAY_LABEL: &str = "relic-overlay";
 
 /// Preprocessed band → OCR → card grouping → closed-vocabulary matching.
-/// The file-based and live-capture paths both funnel through here.
+/// The file-based and live-capture paths both funnel through here. Returns the
+/// raw card texts alongside the matches so a dropped card (seen but not
+/// matched) is diagnosable from logs/debug artifacts.
 #[cfg(feature = "relic-ocr")]
-pub fn read_rewards(frame: &image::RgbaImage) -> Result<Vec<matching::LineMatch>, String> {
+pub fn read_rewards(
+    frame: &image::RgbaImage,
+) -> Result<(Vec<String>, Vec<matching::LineMatch>), String> {
     let band = preprocess::reward_band(frame);
     let words = ocr::words(&band)?;
     let cards = layout::group_into_cards(&words);
     let vocab = matching::build_vocab();
-    Ok(matching::match_lines(&vocab, &cards, 4))
+    let matches = matching::match_lines(&vocab, &cards, 4);
+    Ok((cards, matches))
 }
 
 /// Price matched reward names through the same preload the Relics browser uses
@@ -98,8 +103,12 @@ pub fn price_matches(db: &Db, matches: &[matching::LineMatch]) -> AppResult<Vec<
 /// The full capture pipeline: grab the game frame, OCR it off the async
 /// runtime (CPU-heavy), price the matches. Never errors — failures come back
 /// as a `CrackCapture { error, .. }` the overlay renders as a failure state.
+///
+/// When `debug_dir` is set, the raw frame and a sidecar of what was seen vs
+/// matched are written there (overwrite-in-place, off the hot path) — the live
+/// 2-of-4-cards incident was undiagnosable without the frame.
 #[cfg(feature = "relic-ocr")]
-pub async fn run_capture(db: Db) -> CrackCapture {
+pub async fn run_capture(db: Db, debug_dir: Option<std::path::PathBuf>) -> CrackCapture {
     let captured_at = chrono::Utc::now().to_rfc3339();
     let fail = |error: String, capture_ms: i64| CrackCapture {
         captured_at: captured_at.clone(),
@@ -121,20 +130,23 @@ pub async fn run_capture(db: Db) -> CrackCapture {
     tracing::info!(capture_ms, path, "relic_ocr: frame captured");
 
     let t1 = std::time::Instant::now();
-    let matches = tauri::async_runtime::spawn_blocking(move || read_rewards(&frame)).await;
+    let ocr_frame = frame.clone();
+    let read = tauri::async_runtime::spawn_blocking(move || read_rewards(&ocr_frame)).await;
     let ocr_ms = t1.elapsed().as_millis() as i64;
-    let matches = match matches {
-        Ok(Ok(m)) => m,
-        Ok(Err(e)) => return fail(e, capture_ms),
-        Err(e) => return fail(format!("ocr task: {e}"), capture_ms),
+    let (cards, matches, read_err) = match read {
+        Ok(Ok((cards, matches))) => (cards, matches, None),
+        Ok(Err(e)) => (Vec::new(), Vec::new(), Some(e)),
+        Err(e) => (Vec::new(), Vec::new(), Some(format!("ocr task: {e}"))),
     };
     // The step between "frame captured" and the box appearing — log it so a
     // slow or empty read is diagnosable from the console (this was invisible
-    // when debug-build inference silently took ~20s).
+    // when debug-build inference silently took ~20s). Cards too: a card that
+    // was seen but matched nothing is the interesting failure.
     tracing::info!(
         ocr_ms,
         matched = matches.len(),
         names = ?matches.iter().map(|m| m.display_name.as_str()).collect::<Vec<_>>(),
+        cards = ?cards,
         "relic_ocr: rewards read"
     );
 
@@ -142,14 +154,30 @@ pub async fn run_capture(db: Db) -> CrackCapture {
         .iter()
         .map(|m| format!("{} ({:.2})", m.display_name, m.confidence))
         .collect();
-    let (rewards, error) = match price_matches(&db, &matches) {
-        Ok(r) if r.is_empty() => (
-            Vec::new(),
-            Some("no reward names recognized — is the reward screen up?".to_string()),
-        ),
-        Ok(r) => (r, None),
-        Err(e) => (Vec::new(), Some(format!("pricing failed: {e}"))),
+    let (rewards, error) = match &read_err {
+        Some(e) => (Vec::new(), Some(e.clone())),
+        None => match price_matches(&db, &matches) {
+            Ok(r) if r.is_empty() => (
+                Vec::new(),
+                Some("no reward names recognized — is the reward screen up?".to_string()),
+            ),
+            Ok(r) => (r, None),
+            Err(e) => (Vec::new(), Some(format!("pricing failed: {e}"))),
+        },
     };
+    if let Some(dir) = debug_dir {
+        let sidecar = debug_sidecar(
+            &captured_at,
+            path,
+            frame.dimensions(),
+            capture_ms,
+            ocr_ms,
+            &cards,
+            &matches,
+            error.as_deref(),
+        );
+        write_debug_artifacts(dir, frame, sidecar);
+    }
     CrackCapture {
         captured_at,
         rewards,
@@ -160,10 +188,69 @@ pub async fn run_capture(db: Db) -> CrackCapture {
     }
 }
 
+/// Human-readable record of one capture: what the pipeline saw (raw card
+/// texts) vs what it matched. Pure formatting so it's testable without a
+/// frame; pairs with the saved PNG in the debug dir.
+#[allow(clippy::too_many_arguments)]
+pub fn debug_sidecar(
+    captured_at: &str,
+    source: &str,
+    dims: (u32, u32),
+    capture_ms: i64,
+    ocr_ms: i64,
+    cards: &[String],
+    matches: &[matching::LineMatch],
+    error: Option<&str>,
+) -> String {
+    let mut out = format!(
+        "captured_at: {captured_at}\nsource: {source}\nframe: {}x{}\ncapture_ms: {capture_ms}\nocr_ms: {ocr_ms}\n",
+        dims.0, dims.1
+    );
+    out.push_str(&format!("\ncards seen ({}):\n", cards.len()));
+    for c in cards {
+        out.push_str(&format!("  {c}\n"));
+    }
+    out.push_str(&format!("\nmatched ({}):\n", matches.len()));
+    for m in matches {
+        out.push_str(&format!("  {} ({:.2})\n", m.display_name, m.confidence));
+    }
+    if let Some(e) = error {
+        out.push_str(&format!("\nerror: {e}\n"));
+    }
+    out
+}
+
+/// Write the frame + sidecar to the debug dir on a blocking thread (PNG encode
+/// is not free; the box is already on screen when this runs). Overwrites in
+/// place — only the latest capture is kept.
+#[cfg(feature = "relic-ocr")]
+fn write_debug_artifacts(dir: std::path::PathBuf, frame: image::RgbaImage, sidecar: String) {
+    tauri::async_runtime::spawn_blocking(move || {
+        let write = || -> Result<(), String> {
+            std::fs::create_dir_all(&dir).map_err(|e| format!("create {dir:?}: {e}"))?;
+            frame
+                .save(dir.join("last-frame.png"))
+                .map_err(|e| format!("save frame: {e}"))?;
+            std::fs::write(dir.join("last-capture.txt"), sidecar)
+                .map_err(|e| format!("write sidecar: {e}"))
+        };
+        match write() {
+            Ok(()) => tracing::info!(?dir, "relic_ocr: debug artifacts written"),
+            Err(e) => tracing::warn!(error = %e, "relic_ocr: debug artifacts failed"),
+        }
+    });
+}
+
 /// Run the pipeline, remember the result, show the HUD box top-left, push the
 /// payload, and schedule the Rust-owned auto-hide (generation-counter pattern:
 /// a newer trigger while visible restarts the on-screen duration). Shared by
 /// the hotkey and the `trigger_relic_crack` command.
+///
+/// Smart re-press: while the box is visible with a *successful* capture, a
+/// re-trigger only resets the auto-hide timer — re-running OCR there could
+/// only replace good results with "no reward names recognized" once the
+/// reward screen is gone. Visible-with-error (pressed too early) or hidden
+/// runs the full capture.
 ///
 /// (An EE.log auto-detect watcher existed briefly and was removed: the game
 /// buffers its log and flushed the reward-screen marker ~12s late in live
@@ -180,7 +267,29 @@ pub async fn capture_and_show(
     let duration = crate::db::settings::relic_ocr_prefs(&state.db)
         .map(|p| p.duration_secs.max(1) as u64)
         .unwrap_or(10);
-    let capture = run_capture(state.db.clone()).await;
+
+    let shown_ok = app
+        .get_webview_window(RELIC_OVERLAY_LABEL)
+        .is_some_and(|w| w.is_visible().unwrap_or(false))
+        && state
+            .last_crack
+            .lock()
+            .as_ref()
+            .is_some_and(|c| c.error.is_none());
+    if shown_ok {
+        let last = state.last_crack.lock().clone().expect("checked above");
+        tracing::info!("relic_ocr: re-trigger while visible — resetting auto-hide only");
+        let gen = state.relic_overlay_gen.fetch_add(1, Ordering::SeqCst) + 1;
+        spawn_auto_hide(app, state, gen, duration);
+        return last;
+    }
+
+    let debug_dir = app
+        .path()
+        .app_data_dir()
+        .ok()
+        .map(|d| d.join("relic-ocr-debug"));
+    let capture = run_capture(state.db.clone(), debug_dir).await;
     *state.last_crack.lock() = Some(capture.clone());
 
     // This trigger now owns the overlay window.
@@ -194,17 +303,30 @@ pub async fn capture_and_show(
     let _ = app.emit_to(RELIC_OVERLAY_LABEL, "relic-overlay-show", &capture);
     let _ = app.emit("crack-capture", ());
 
+    spawn_auto_hide(app, state, gen, duration);
+    capture
+}
+
+/// Hide the HUD box after `duration` seconds unless a newer trigger has taken
+/// ownership (generation counter bumped) in the meantime.
+fn spawn_auto_hide(
+    app: &tauri::AppHandle,
+    state: &std::sync::Arc<crate::AppState>,
+    gen: u64,
+    duration: u64,
+) {
+    use std::sync::atomic::Ordering;
+
     let app = app.clone();
     let state = state.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(duration)).await;
         if state.relic_overlay_gen.load(Ordering::SeqCst) == gen {
-            if let Some(w) = app.get_webview_window(RELIC_OVERLAY_LABEL) {
+            if let Some(w) = tauri::Manager::get_webview_window(&app, RELIC_OVERLAY_LABEL) {
                 let _ = w.hide();
             }
         }
     });
-    capture
 }
 
 /// Hotkey entry point, shaped like `overlay::trigger`.
@@ -287,16 +409,41 @@ pub fn show_test_overlay(app: &tauri::AppHandle, state: &std::sync::Arc<crate::A
     );
     let _ = app.emit_to(RELIC_OVERLAY_LABEL, "relic-overlay-show", &sample);
 
-    let app = app.clone();
-    let state = state.clone();
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(duration)).await;
-        if state.relic_overlay_gen.load(Ordering::SeqCst) == gen {
-            if let Some(w) = tauri::Manager::get_webview_window(&app, RELIC_OVERLAY_LABEL) {
-                let _ = w.hide();
-            }
-        }
-    });
+    spawn_auto_hide(app, state, gen, duration);
+}
+
+#[cfg(test)]
+mod sidecar_tests {
+    use super::*;
+
+    #[test]
+    fn sidecar_shows_seen_vs_matched_and_error() {
+        let cards = vec![
+            "AKSTILETTO PRIME BARREL".to_string(),
+            "GARBLED TEXT NOISE".to_string(),
+        ];
+        let matches = vec![matching::LineMatch {
+            display_name: "Akstiletto Prime Barrel".to_string(),
+            confidence: 0.93,
+        }];
+        let s = debug_sidecar(
+            "2026-07-15T00:00:00Z",
+            "window",
+            (2560, 1440),
+            80,
+            750,
+            &cards,
+            &matches,
+            Some("boom"),
+        );
+        assert!(s.contains("source: window"));
+        assert!(s.contains("frame: 2560x1440"));
+        assert!(s.contains("cards seen (2):"));
+        assert!(s.contains("  GARBLED TEXT NOISE\n"));
+        assert!(s.contains("matched (1):"));
+        assert!(s.contains("  Akstiletto Prime Barrel (0.93)\n"));
+        assert!(s.contains("error: boom"));
+    }
 }
 
 #[cfg(all(test, feature = "relic-ocr"))]
@@ -314,7 +461,7 @@ mod tests {
             "/src/relic_ocr/testdata/synthetic_reward_screen_1080p.png"
         );
         let frame = image::open(path).expect("fixture loads").into_rgba8();
-        let matches = read_rewards(&frame).expect("pipeline runs");
+        let (_cards, matches) = read_rewards(&frame).expect("pipeline runs");
         let names: Vec<&str> = matches.iter().map(|m| m.display_name.as_str()).collect();
         assert_eq!(
             names,
