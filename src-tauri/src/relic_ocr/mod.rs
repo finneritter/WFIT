@@ -34,9 +34,10 @@ pub fn read_rewards(
 ) -> Result<(Vec<String>, Vec<matching::LineMatch>), String> {
     let band = preprocess::reward_band(frame);
     let words = ocr::words(&band)?;
-    let cards = layout::group_into_cards(&words);
+    let card_segments = layout::group_into_card_segments(&words);
     let vocab = matching::build_vocab();
-    let matches = matching::match_lines(&vocab, &cards, 4);
+    let matches = matching::match_cards(&vocab, &card_segments, 4);
+    let cards = card_segments.into_iter().map(|s| s.join(" ")).collect();
     Ok((cards, matches))
 }
 
@@ -449,6 +450,61 @@ mod sidecar_tests {
 #[cfg(all(test, feature = "relic-ocr"))]
 mod tests {
     use super::*;
+
+    /// Ad-hoc pipeline run over any frame on disk:
+    /// `WFIT_OCR_FRAME=/path/to/frame.png cargo test --features relic-ocr \
+    ///    pipeline_reads_env_frame -- --ignored --nocapture`
+    /// Set `WFIT_OCR_BAND_OUT=/path/out.png` to also dump the preprocessed
+    /// band — how new testdata fixtures are made from debug frames.
+    #[test]
+    #[ignore]
+    fn pipeline_reads_env_frame() {
+        let path = std::env::var("WFIT_OCR_FRAME").expect("set WFIT_OCR_FRAME");
+        let frame = image::open(&path).expect("frame loads").into_rgba8();
+        if let Ok(out) = std::env::var("WFIT_OCR_BAND_OUT") {
+            preprocess::reward_band(&frame)
+                .save(&out)
+                .expect("band saves");
+            println!("band written to {out}");
+        }
+        let (cards, matches) = read_rewards(&frame).expect("pipeline runs");
+        println!("cards seen ({}):", cards.len());
+        for c in &cards {
+            println!("  {c}");
+        }
+        println!("matched ({}):", matches.len());
+        for m in &matches {
+            println!("  {} ({:.2})", m.display_name, m.confidence);
+        }
+    }
+
+    /// Real 1440p 4-player capture (2026-07-15, preprocessed band): the third
+    /// card's title wraps onto two lines AND is hovered, so the game's tooltip
+    /// panel + a squadmate name row merge into its layout column. Regression
+    /// for the live "only some rewards detected" bug — whole-column matching
+    /// drowned the title; segment-run matching must find all four.
+    #[test]
+    fn real_1440p_hovered_wrapped_title_reads_all_four_cards() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/relic_ocr/testdata/real_reward_screen_1440p_hover_band.png"
+        );
+        let band = image::open(path).expect("fixture loads").into_luma8();
+        let words = ocr::words(&band).expect("ocr runs");
+        let cards = layout::group_into_card_segments(&words);
+        let matches = matching::match_cards(&matching::build_vocab(), &cards, 4);
+        let names: Vec<&str> = matches.iter().map(|m| m.display_name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "Paris Prime String",
+                "Dual Zoren Prime Handle",
+                "Voruna Prime Neuroptics Blueprint",
+                "Bronco Prime Barrel"
+            ],
+            "expected all four card titles, left to right"
+        );
+    }
 
     /// Full pipeline over the committed synthetic reward screen: 1080p frame,
     /// four cards, two titles wrapped onto a second line, plus a "SELECT A

@@ -115,8 +115,20 @@ fn row_segments(row: &[&OcrWord]) -> Vec<Segment> {
     out
 }
 
-/// Group words into cards and return each card's joined text, left→right.
+/// Each card's joined text, left→right — test-facing sugar over
+/// [`group_into_card_segments`] (production joins inline for the sidecar).
+#[cfg(test)]
 pub fn group_into_cards(words: &[OcrWord]) -> Vec<String> {
+    group_into_card_segments(words)
+        .into_iter()
+        .map(|segments| segments.join(" "))
+        .collect()
+}
+
+/// Like [`group_into_cards`] but keeps each card's segment texts separate
+/// (top-to-bottom) — the matcher scans contiguous runs so injected non-title
+/// rows (hover tooltip, squadmate names) can't sink the title.
+pub fn group_into_card_segments(words: &[OcrWord]) -> Vec<Vec<String>> {
     let segments: Vec<Segment> = rows(words).iter().flat_map(|r| row_segments(r)).collect();
     // Merge segments into card columns: x-overlap AND vertically adjacent
     // (stacked wrapped lines), so distant text like the screen header stays
@@ -154,12 +166,11 @@ pub fn group_into_cards(words: &[OcrWord]) -> Vec<String> {
             members.sort_by_key(|&i| segments[i].top);
             members
                 .iter()
-                .map(|&i| segments[i].text.as_str())
+                .map(|&i| segments[i].text.clone())
                 .filter(|t| !t.is_empty())
-                .collect::<Vec<_>>()
-                .join(" ")
+                .collect::<Vec<String>>()
         })
-        .filter(|joined| !joined.is_empty())
+        .filter(|texts| !texts.is_empty())
         .collect()
 }
 
