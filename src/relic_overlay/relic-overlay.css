@@ -34,41 +34,29 @@ body {
 }
 
 .rc {
-  min-width: 440px;
-  max-width: 488px;
-  background: rgba(8, 10, 12, 0.78);
-  border: 1px solid rgba(235, 238, 245, 0.28);
+  min-width: 480px;
+  max-width: 540px;
+  /* Near-opaque: a translucent panel over a bright game scene killed
+     readability (Finn, 2026-07-15). Solid dark, game barely bleeds through. */
+  background: rgba(10, 12, 15, 0.96);
+  border: 1px solid rgba(235, 238, 245, 0.4);
   /* Warframe panel language: one clipped corner top-left, one bottom-right. */
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
-  padding: 8px 12px 9px;
-  color: rgba(235, 238, 245, 0.92);
-  animation: rc-in 140ms ease-out;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .rc {
-    animation: none;
-  }
-}
-
-@keyframes rc-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+  padding: 9px 14px 10px;
+  color: rgba(240, 243, 248, 0.97);
+  /* NO entrance animation: this webview is background-throttled while the
+     game holds focus, and a throttled opacity fade freezes mid-run — the box
+     sat at ~0.2 opacity in live play. Same hazard class as the Rust-owned
+     auto-hide. It must render at full opacity on its first frame. */
 }
 
 .rc-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(235, 238, 245, 0.18);
-  padding-bottom: 5px;
-  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(235, 238, 245, 0.25);
+  padding-bottom: 6px;
+  margin-bottom: 5px;
 }
 
 .rc-title {
@@ -76,22 +64,22 @@ body {
   font-weight: 600;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: rgba(235, 238, 245, 0.75);
+  color: rgba(235, 238, 245, 0.8);
 }
 
 .rc-meta {
   font-size: 9px;
   letter-spacing: 0.08em;
-  color: rgba(235, 238, 245, 0.35);
+  color: rgba(235, 238, 245, 0.45);
   font-variant-numeric: tabular-nums;
 }
 
 .rc-row {
   display: grid;
-  grid-template-columns: 1fr 28px 48px 42px 48px;
-  gap: 6px;
+  grid-template-columns: 1fr 30px 52px 46px 52px;
+  gap: 7px;
   align-items: baseline;
-  padding: 4px 6px 4px 8px;
+  padding: 5px 6px 5px 8px;
   margin: 1px -6px;
   border-left: 2px solid transparent;
 }
@@ -102,7 +90,7 @@ body {
 }
 
 .rc-name {
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -114,7 +102,7 @@ body {
 /* Wanted / completes-a-set markers: compact diamonds ahead of the name so a
    long name's ellipsis can never swallow them. */
 .rc-flag {
-  font-size: 9px;
+  font-size: 10px;
   vertical-align: 1.5px;
 }
 
@@ -127,17 +115,17 @@ body {
 }
 
 .rc-owned {
-  font-size: 11px;
+  font-size: 12px;
   text-align: right;
-  color: rgba(235, 238, 245, 0.45);
+  color: rgba(235, 238, 245, 0.55);
   font-variant-numeric: tabular-nums;
 }
 
 .rc-plat {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   text-align: right;
-  color: #c8a557;
+  color: #d4b168;
   font-variant-numeric: tabular-nums;
 }
 
@@ -146,21 +134,21 @@ body {
 }
 
 .rc-ducats {
-  font-size: 11px;
+  font-size: 12px;
   text-align: right;
-  color: rgba(200, 205, 215, 0.6);
+  color: rgba(205, 210, 220, 0.7);
   font-variant-numeric: tabular-nums;
 }
 
 .rc-ratio {
-  font-size: 10px;
+  font-size: 11px;
   text-align: right;
-  color: rgba(235, 238, 245, 0.35);
+  color: rgba(235, 238, 245, 0.45);
   font-variant-numeric: tabular-nums;
 }
 
 .rc-error {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.05em;
   color: rgba(224, 130, 120, 0.9);
   padding: 4px 2px;
