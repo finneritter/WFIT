@@ -40,6 +40,24 @@
         "closable": false,
         "minimizable": false,
         "maximizable": false
+      },
+      {
+        "label": "relic-overlay",
+        "url": "relic-overlay.html",
+        "title": "WFIT Relic Crack Overlay",
+        "width": 500,
+        "height": 260,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "shadow": false,
+        "resizable": false,
+        "visible": false,
+        "closable": false,
+        "minimizable": false,
+        "maximizable": false
       }
     ],
     "security": {

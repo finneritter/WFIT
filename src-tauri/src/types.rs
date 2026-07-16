@@ -226,6 +226,40 @@ pub struct RelicDetailDrop {
     pub rare: bool, // the gold-tier (lowest-chance) reward
 }
 
+/// One reward read off the in-game reward-selection screen by the relic-OCR
+/// capture, priced from the local caches. Mirrors src/lib/types.ts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrackReward {
+    pub reward_name: String,
+    pub slug: Option<String>, // None = untradeable (Forma, Kuva)
+    pub plat: Option<i64>,    // effective price
+    pub ducats: Option<i64>,
+    /// Ducats per plat — the "sell it or ducat it" signal (high = Baro fodder).
+    pub ducats_per_plat: Option<f64>,
+    pub owned_qty: i64,
+    pub wanted: bool,
+    pub set_slug: Option<String>, // completes a one-away set
+    /// OCR match confidence in [0.7, 1.0]; gates presentation, not inclusion.
+    pub confidence: f64,
+    /// Highest-plat reward of the capture (the overlay highlights it).
+    pub best: bool,
+}
+
+/// Result of one reward-screen capture (hotkey or auto-detect): what was read,
+/// how sure we are, and how long each pipeline step took.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrackCapture {
+    pub captured_at: String, // RFC3339
+    pub rewards: Vec<CrackReward>,
+    /// The joined per-card texts the OCR produced (diagnostics for Settings).
+    pub ocr_lines: Vec<String>,
+    pub capture_ms: i64,
+    pub ocr_ms: i64,
+    /// Set when the pipeline failed (no game window, OCR error…); the overlay
+    /// renders this instead of rewards.
+    pub error: Option<String>,
+}
+
 /// Per-refinement economics for the relic drawer: EV, radshare odds, and the
 /// refine-or-not ROI vs Intact (trace costs are cumulative from Intact).
 #[derive(Debug, Clone, Serialize, Deserialize)]

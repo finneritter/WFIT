@@ -189,6 +189,47 @@ pub fn set_overlay_prefs(db: &Db, prefs: &OverlayPrefs) -> AppResult<()> {
     set(db, KEY_OVERLAY_PREFS, &json)
 }
 
+/// The relic-crack price capture (issue #2): hotkey → screenshot → OCR →
+/// priced HUD overlay. Same JSON-blob approach as [`OverlayPrefs`]. Read at
+/// startup (hotkey registration + OCR engine pre-warm) and re-applied live by
+/// the setter command.
+pub const KEY_RELIC_OCR_PREFS: &str = "relic_ocr_prefs";
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(default)] // missing fields fill from Default — adding a field can't break a stored blob
+pub struct RelicOcrPrefs {
+    pub enabled: bool,
+    pub hotkey: String,
+    /// How long the HUD box stays up (the reward-choice window is ~10s).
+    pub duration_secs: u32,
+}
+
+impl Default for RelicOcrPrefs {
+    fn default() -> Self {
+        Self {
+            // Off by default: a global key-grab is intrusive, so the user opts in.
+            enabled: false,
+            hotkey: "Alt+KeyT".into(), // Finn's pick; Alt like the Cascade key
+            duration_secs: 10,
+        }
+    }
+}
+
+pub fn relic_ocr_prefs_conn(c: &Connection) -> AppResult<RelicOcrPrefs> {
+    Ok(get_conn(c, KEY_RELIC_OCR_PREFS)?
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default())
+}
+
+pub fn relic_ocr_prefs(db: &Db) -> AppResult<RelicOcrPrefs> {
+    db.read(relic_ocr_prefs_conn)
+}
+
+pub fn set_relic_ocr_prefs(db: &Db, prefs: &RelicOcrPrefs) -> AppResult<()> {
+    let json = serde_json::to_string(prefs)?;
+    set(db, KEY_RELIC_OCR_PREFS, &json)
+}
+
 /// Parsed list of excluded mod rarities (lowercase canonical slugs).
 pub fn excluded_rarities_conn(c: &Connection) -> AppResult<Vec<String>> {
     Ok(get_conn(c, KEY_EXCLUDED_RARITIES)?

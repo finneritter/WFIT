@@ -42,16 +42,21 @@ fn round1(v: f64) -> f64 {
 
 /// Everything a browser/detail pass needs, preloaded in one pooled read so the
 /// per-relic work is pure in-memory math (pattern: `inventory::owned_holdings`).
-struct BrowserCtx {
-    name_to_slug: HashMap<String, String>,
-    prices: prices::PriceMaps,
-    ducats: HashMap<String, i64>,
-    owned_parts: HashMap<String, i64>,
+/// pub(crate): `relic_ocr` prices its captured rewards through this same
+/// preload so capture-time prices can never drift from the Relics browser.
+pub(crate) struct BrowserCtx {
+    pub(crate) name_to_slug: HashMap<String, String>,
+    pub(crate) prices: prices::PriceMaps,
+    pub(crate) ducats: HashMap<String, i64>,
+    pub(crate) owned_parts: HashMap<String, i64>,
     stacks: HashMap<(String, String), Vec<RelicStack>>,
     protected: HashSet<(String, String)>,
 }
 
-fn load_ctx(c: &Connection, name_to_slug: HashMap<String, String>) -> AppResult<BrowserCtx> {
+pub(crate) fn load_ctx(
+    c: &Connection,
+    name_to_slug: HashMap<String, String>,
+) -> AppResult<BrowserCtx> {
     let prices = prices::load_price_maps_all(c)?;
     let mut ducats = HashMap::new();
     let mut stmt = c.prepare("SELECT slug, ducats FROM catalog_items WHERE ducats IS NOT NULL")?;

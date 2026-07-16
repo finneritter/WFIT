@@ -586,7 +586,7 @@ pub fn get_overlay_prefs(state: State<'_, Arc<AppState>>) -> AppResult<settings:
     settings::overlay_prefs(&state.db)
 }
 
-/// Persist the Cascade overlay prefs and re-register the global hotkey to match,
+/// Persist the Cascade overlay prefs and re-register the global hotkeys to match,
 /// so toggling the feature / rebinding the key takes effect immediately.
 #[tauri::command]
 pub fn set_overlay_prefs(
@@ -594,9 +594,57 @@ pub fn set_overlay_prefs(
     state: State<'_, Arc<AppState>>,
     prefs: settings::OverlayPrefs,
 ) -> AppResult<()> {
+    let relic = settings::relic_ocr_prefs(&state.db)?;
+    if prefs.enabled && relic.enabled && same_binding(&prefs.hotkey, &relic.hotkey) {
+        return Err(AppError::Invalid(
+            "that hotkey is already bound to the relic capture".into(),
+        ));
+    }
     settings::set_overlay_prefs(&state.db, &prefs)?;
-    crate::overlay::apply_shortcut(&app, &prefs);
+    crate::hotkeys::apply_all(&app);
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_relic_ocr_prefs(state: State<'_, Arc<AppState>>) -> AppResult<settings::RelicOcrPrefs> {
+    settings::relic_ocr_prefs(&state.db)
+}
+
+/// Persist the relic-capture prefs, re-register the global hotkeys, and keep
+/// the OCR engine warm-started when the feature is on.
+#[tauri::command]
+pub fn set_relic_ocr_prefs(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+    prefs: settings::RelicOcrPrefs,
+) -> AppResult<()> {
+    let overlay = settings::overlay_prefs(&state.db)?;
+    if prefs.enabled && overlay.enabled && same_binding(&prefs.hotkey, &overlay.hotkey) {
+        return Err(AppError::Invalid(
+            "that hotkey is already bound to the Cascade overlay".into(),
+        ));
+    }
+    settings::set_relic_ocr_prefs(&state.db, &prefs)?;
+    crate::hotkeys::apply_all(&app);
+    #[cfg(feature = "relic-ocr")]
+    if prefs.enabled {
+        tauri::async_runtime::spawn_blocking(|| {
+            if let Err(e) = crate::relic_ocr::ocr::warm() {
+                tracing::warn!(error = %e, "relic_ocr: engine pre-warm failed");
+            }
+        });
+    }
+    Ok(())
+}
+
+/// Two accelerator strings collide when they parse to the same shortcut (so
+/// "alt+keyx" and "Alt+KeyX" count as the same binding).
+fn same_binding(a: &str, b: &str) -> bool {
+    use tauri_plugin_global_shortcut::Shortcut;
+    match (a.trim().parse::<Shortcut>(), b.trim().parse::<Shortcut>()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a.trim().eq_ignore_ascii_case(b.trim()),
+    }
 }
 
 /// The Cascade overlay's answer, computed from the cached worldstate. Exposed as
@@ -608,6 +656,94 @@ pub async fn get_cascade_status(
 ) -> AppResult<crate::worldstate::CascadeStatus> {
     let ws = state.worldstate.get().await?;
     Ok(crate::worldstate::cascade_status(&ws.fissures))
+}
+
+/// Run the relic-crack capture pipeline right now (the Settings/dev path; the
+/// global hotkey and auto-detect go through the same `relic_ocr::trigger`).
+/// Registered unconditionally so the command surface never changes with the
+/// Cargo feature; without `relic-ocr` it reports why it can't run.
+#[tauri::command]
+pub async fn trigger_relic_crack(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<crate::types::CrackCapture> {
+    #[cfg(feature = "relic-ocr")]
+    {
+        Ok(crate::relic_ocr::capture_and_show(&app, state.inner()).await)
+    }
+    #[cfg(not(feature = "relic-ocr"))]
+    {
+        let _ = (app, state);
+        Err(AppError::Invalid(
+            "this build was compiled without the relic-ocr feature".into(),
+        ))
+    }
+}
+
+/// Show the relic HUD box with sample rows (no capture) — Settings' "Test
+/// overlay" button, to verify the box composites over the game at all.
+#[tauri::command]
+pub fn test_relic_overlay(app: tauri::AppHandle, state: State<'_, Arc<AppState>>) -> AppResult<()> {
+    crate::relic_ocr::show_test_overlay(&app, state.inner());
+    Ok(())
+}
+
+/// The most recent relic-crack capture (in-memory). The overlay webview fetches
+/// this on mount (rebuilt-window recovery) and the main window's last-capture
+/// view reads it too.
+#[tauri::command]
+pub fn get_last_crack_capture(
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<Option<crate::types::CrackCapture>> {
+    Ok(state.last_crack.lock().clone())
+}
+
+/// Run the OCR pipeline on a PNG screenshot from disk (Settings › Developer).
+/// Kept in release builds so users can self-diagnose from a screenshot when
+/// filing an issue — no capture, no overlay, just the pipeline.
+#[tauri::command]
+pub async fn relic_ocr_run_file(
+    state: State<'_, Arc<AppState>>,
+    path: String,
+) -> AppResult<crate::types::CrackCapture> {
+    #[cfg(feature = "relic-ocr")]
+    {
+        let captured_at = chrono::Utc::now().to_rfc3339();
+        let t0 = std::time::Instant::now();
+        let (cards, matches) = tauri::async_runtime::spawn_blocking(move || {
+            let frame = image::open(&path)
+                .map_err(|e| format!("open {path}: {e}"))?
+                .into_rgba8();
+            crate::relic_ocr::read_rewards(&frame)
+        })
+        .await
+        .map_err(|e| AppError::Other(format!("ocr task: {e}")))?
+        .map_err(AppError::Invalid)?;
+        let ocr_ms = t0.elapsed().as_millis() as i64;
+        // Matches first, then every raw card text — a card that matched
+        // nothing is exactly what this self-diagnosis command exists to show.
+        let ocr_lines = matches
+            .iter()
+            .map(|m| format!("{} ({:.2})", m.display_name, m.confidence))
+            .chain(cards.iter().map(|c| format!("card: {c}")))
+            .collect();
+        let rewards = crate::relic_ocr::price_matches(&state.db, &matches)?;
+        Ok(crate::types::CrackCapture {
+            captured_at,
+            rewards,
+            ocr_lines,
+            capture_ms: 0,
+            ocr_ms,
+            error: None,
+        })
+    }
+    #[cfg(not(feature = "relic-ocr"))]
+    {
+        let _ = (state, path);
+        Err(AppError::Invalid(
+            "this build was compiled without the relic-ocr feature".into(),
+        ))
+    }
 }
 
 /// Fire a notification immediately so the user can confirm OS toasts work (and

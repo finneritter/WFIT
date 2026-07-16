@@ -31,7 +31,20 @@ src-tauri/src/          Rust core
                         inventory import (Linux + Windows; isolated from the market path)
   rivens/               riven search: separate wfm surface (v2 reference + v1 auctions),
                         value estimator (grade.rs/price.rs), saved-search watcher (watch.rs)
-  overlay.rs            global-hotkey always-on-top Void Cascade HUD (separate tiny webview)
+  overlay.rs            always-on-top overlay windows: the Void Cascade HUD pill + the shared
+                        positioning/rebuild helpers both overlays use (separate tiny webviews)
+  relic_ocr/            relic-crack price capture (issue #2): hotkey (Alt+T; no auto-detect —
+                        the game flushes EE.log ~12s late) → one-off screenshot of the game
+                        (xcap, window-first) → pure-Rust OCR (ocrs; models bundled in
+                        resources/ocr; words rebuilt from char geometry — the recognizer can
+                        omit spaces across card gutters) → card layout + closed-vocabulary
+                        segment-run matching (survives hover-tooltip/squadmate text) → prices
+                        from the same preload as the Relics browser → a Warframe-HUD-styled
+                        box top-right of the primary monitor. Re-press re-OCRs but keeps good
+                        results if the re-capture fails; last 4 captures kept in
+                        $APPDATA/wfit/relic-ocr-debug/. Cargo feature `relic-ocr` (default
+                        ON); the WFInfo approach — no injection, no memory reads
+  hotkeys.rs            single registrar/dispatcher for all global hotkeys (cascade + relic)
   notify.rs             desktop + in-app notification engine
   domain/               pure functions + bundled datasets (no I/O): classify, partname,
                         mod_rarity, arcane, relic (incl. squad-EV order statistics),
@@ -147,6 +160,11 @@ scripts/install.sh       # optimized local build installed as a desktop app
 ```
 
 - Linux needs `webkit2gtk-4.1`; the WebKitGTK/Wayland rendering workarounds are set in `main()`.
+- On Linux the whole app forces `GDK_BACKEND=x11` (set in `main()`, overridable): native Wayland
+  breaks overlay self-positioning, keep-above, and global hotkey grabs. On KWin the overlays also
+  claim the KDE OSD window layer after `show()` (`overlay.rs::claim_osd_layer`) — plain
+  always-on-top loses to a focused fullscreen game — and must re-assert position post-show
+  (OSD-typed windows get re-centered by KWin placement at every map).
 - Releases: push a `v*` tag → GitHub Actions builds Linux + Windows bundles, signs the updater
   artifacts, and uploads them with `latest.json` to a draft release. If the tag-push event never
   reaches Actions (observed with v1.4.0 — also check the workflow hasn't been silently disabled),

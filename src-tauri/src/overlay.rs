@@ -9,43 +9,26 @@
 //! `tokio::time::sleep` guarded by a generation counter can't.
 //!
 //! Platform caveats (surfaced to the user in Settings, not hidden): global
-//! shortcuts go through X11 `XGrabKey`, unreliable on native Wayland; and no
-//! always-on-top window composites over EXCLUSIVE-fullscreen on any OS —
-//! Borderless/Windowed Fullscreen works.
+//! shortcuts go through X11 `XGrabKey`, unreliable on native Wayland. On
+//! Windows, no always-on-top window composites over EXCLUSIVE-fullscreen —
+//! Borderless/Windowed Fullscreen works. On Linux/KWin, plain always-on-top
+//! loses even to a *focused borderless-fullscreen* window (ActiveLayer beats
+//! AboveLayer), so `claim_osd_layer` re-types the overlay windows as KDE
+//! On-Screen-Displays — the layer Plasma's own volume OSD uses, which
+//! composites over fullscreen games.
 
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use tauri::{Emitter, Manager, PhysicalPosition};
-use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
-use crate::db::settings::OverlayPrefs;
 use crate::AppState;
 
 const OVERLAY_LABEL: &str = "overlay";
 
-/// Apply the persisted [`OverlayPrefs`]: clear any current grab, then register
-/// the hotkey if the feature is enabled. Called at startup and whenever the
-/// setter command persists a change, so toggling/rebinding takes effect live.
-/// Never fatal — a failed grab (combo already held, parse error, or no X11
-/// grab available on Wayland) is logged and the app carries on.
-pub fn apply_shortcut(app: &tauri::AppHandle, prefs: &OverlayPrefs) {
-    let gs = app.global_shortcut();
-    // Idempotent reset: drop whatever we registered last time before re-binding.
-    if let Err(e) = gs.unregister_all() {
-        tracing::warn!(error = %e, "overlay: failed to clear previous hotkey");
-    }
-    if prefs.enabled && !prefs.hotkey.trim().is_empty() {
-        match gs.register(prefs.hotkey.as_str()) {
-            Ok(()) => tracing::info!(hotkey = %prefs.hotkey, "overlay hotkey registered"),
-            Err(e) => tracing::warn!(
-                error = %e,
-                hotkey = %prefs.hotkey,
-                "overlay hotkey registration failed (already grabbed / unparseable / no Wayland grab)"
-            ),
-        }
-    }
-}
+// Hotkey (re)registration lives in `crate::hotkeys` — shared with the relic
+// capture, since the global-shortcut plugin has one flat registration set and
+// one handler for the whole app.
 
 /// Hotkey pressed: compute the cascade status from the cached worldstate, show
 /// the overlay upper-middle on the monitor under the cursor, push the payload,
@@ -71,7 +54,12 @@ pub fn trigger(app: &tauri::AppHandle) {
         // This press now owns the window.
         let gen = state.overlay_gen.fetch_add(1, Ordering::SeqCst) + 1;
 
-        position_and_show(&app);
+        position_and_show(
+            &app,
+            OVERLAY_LABEL,
+            Anchor::UpperMiddle,
+            MonitorPick::UnderCursor,
+        );
         let _ = app.emit_to(OVERLAY_LABEL, "overlay-show", &status);
 
         let secs = prefs.duration_secs.max(1) as u64;
@@ -85,14 +73,38 @@ pub fn trigger(app: &tauri::AppHandle) {
     });
 }
 
-/// The overlay window — recreated from its tauri.conf.json definition when the
-/// WM destroyed it anyway (issue #3: a force-closed overlay must not kill the
-/// hotkey for the rest of the session). CloseRequested is intercepted in
-/// lib.rs (hide, not destroy), so this only fires on hard kills that bypass
-/// the close protocol. The webview self-fetches status on mount, so a rebuilt
-/// window renders correctly even if it misses this press's emit.
-fn overlay_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
-    if let Some(w) = app.get_webview_window(OVERLAY_LABEL) {
+/// Where an overlay window sits on its monitor. Both overlay windows (Cascade
+/// pill, relic-crack HUD box) share the positioning helper.
+#[derive(Clone, Copy)]
+pub enum Anchor {
+    /// Centered horizontally, ~12% down — the Cascade pill.
+    UpperMiddle,
+    /// Pinned to the top-right corner (small inset) — the relic-crack box,
+    /// clear of Warframe's own top-left mission info.
+    TopRight,
+}
+
+/// Which monitor an overlay targets.
+#[derive(Clone, Copy)]
+pub enum MonitorPick {
+    /// The monitor under the cursor ("where the user is looking") — the
+    /// Cascade pill's historical behavior.
+    UnderCursor,
+    /// The primary monitor — the relic box must land where the game is, and
+    /// mid-mission the cursor is no signal at all (Finn: it showed on the
+    /// wrong screen). Falls back to cursor/current/first when the platform
+    /// reports no primary (Wayland has no such concept; GDK may return None).
+    Primary,
+}
+
+/// An overlay window by label — recreated from its tauri.conf.json definition
+/// when the WM destroyed it anyway (issue #3: a force-closed overlay must not
+/// kill the hotkey for the rest of the session). CloseRequested is intercepted
+/// in lib.rs (hide, not destroy), so this only fires on hard kills that bypass
+/// the close protocol. Each overlay webview self-fetches its payload on mount,
+/// so a rebuilt window renders correctly even if it misses this press's emit.
+pub fn overlay_window(app: &tauri::AppHandle, label: &str) -> Option<tauri::WebviewWindow> {
+    if let Some(w) = app.get_webview_window(label) {
         return Some(w);
     }
     let cfg = app
@@ -100,35 +112,34 @@ fn overlay_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
         .app
         .windows
         .iter()
-        .find(|w| w.label == OVERLAY_LABEL)?
+        .find(|w| w.label == label)?
         .clone();
     match tauri::WebviewWindowBuilder::from_config(app, &cfg).and_then(|b| b.build()) {
         Ok(w) => {
-            tracing::info!("overlay: window was destroyed — recreated from config");
+            tracing::info!(
+                label,
+                "overlay: window was destroyed — recreated from config"
+            );
             Some(w)
         }
         Err(e) => {
-            tracing::warn!(error = %e, "overlay: failed to recreate destroyed window");
+            tracing::warn!(error = %e, label, "overlay: failed to recreate destroyed window");
             None
         }
     }
 }
 
-/// Position the overlay upper-middle of the monitor under the cursor (falling
-/// back to the window's current monitor, then the primary), make it
-/// click-through, and show it. All math is in physical pixels, so mixed-DPI
-/// multi-monitor centering stays correct without manual scale-factor handling.
-fn position_and_show(app: &tauri::AppHandle) {
-    let Some(win) = overlay_window(app) else {
+/// Position an overlay on its target monitor, make it click-through, and
+/// show it. All math is in physical pixels, so mixed-DPI multi-monitor
+/// placement stays correct without manual scale-factor handling.
+pub fn position_and_show(app: &tauri::AppHandle, label: &str, anchor: Anchor, pick: MonitorPick) {
+    let Some(win) = overlay_window(app, label) else {
         return;
     };
 
-    // Pick the monitor whose physical rect contains the cursor — "where the user
-    // is looking", i.e. usually the game's monitor.
-    let monitor = app
-        .cursor_position()
-        .ok()
-        .and_then(|cur| {
+    // The monitor whose physical rect contains the cursor.
+    let under_cursor = || {
+        app.cursor_position().ok().and_then(|cur| {
             win.available_monitors().ok().and_then(|mons| {
                 mons.into_iter().find(|m| {
                     let p = m.position();
@@ -141,18 +152,39 @@ fn position_and_show(app: &tauri::AppHandle) {
                 })
             })
         })
-        .or_else(|| win.current_monitor().ok().flatten())
-        .or_else(|| win.primary_monitor().ok().flatten());
+    };
+    let monitor = match pick {
+        MonitorPick::UnderCursor => under_cursor(),
+        MonitorPick::Primary => win.primary_monitor().ok().flatten().or_else(under_cursor),
+    }
+    .or_else(|| win.current_monitor().ok().flatten())
+    .or_else(|| win.primary_monitor().ok().flatten())
+    .or_else(|| {
+        win.available_monitors()
+            .ok()
+            .and_then(|m| m.into_iter().next())
+    });
 
-    if let Some(m) = monitor {
+    let pos = monitor.map(|m| {
         let size = m.size();
         let origin = m.position();
         let outer = win.outer_size().unwrap_or(tauri::PhysicalSize {
             width: 360,
             height: 120,
         });
-        let x = origin.x + (size.width as i32 - outer.width as i32) / 2;
-        let y = origin.y + size.height as i32 / 8; // ~12% down = upper-middle
+        match anchor {
+            Anchor::UpperMiddle => (
+                origin.x + (size.width as i32 - outer.width as i32) / 2,
+                origin.y + size.height as i32 / 8, // ~12% down
+            ),
+            Anchor::TopRight => (
+                origin.x + size.width as i32 - outer.width as i32 - size.width as i32 / 64,
+                origin.y + size.height as i32 / 36, // small inset, scales with res
+            ),
+        }
+    });
+    // Position before show so the window doesn't flash at a stale spot…
+    if let Some((x, y)) = pos {
         let _ = win.set_position(PhysicalPosition::new(x, y));
     }
 
@@ -166,5 +198,59 @@ fn position_and_show(app: &tauri::AppHandle) {
     // request on the same FIFO event-loop channel, so the GDK window is live by
     // the time click-through is applied.
     let _ = win.show();
+    #[cfg(target_os = "linux")]
+    claim_osd_layer(&win);
+    // …and re-assert the anchor AFTER mapping: once the window carries the KDE
+    // OSD type (claim_osd_layer), KWin's OSD placement policy centers it at
+    // every map, discarding the pre-show position. A post-map move request
+    // wins. (Verified live: without this, re-shows land horizontally centered.)
+    if let Some((x, y)) = pos {
+        let _ = win.set_position(PhysicalPosition::new(x, y));
+    }
     let _ = win.set_ignore_cursor_events(true);
+}
+
+/// KWin stacks a FOCUSED FULLSCREEN window (ActiveLayer, 5) above every
+/// keep-above window (AboveLayer, 3) — so `alwaysOnTop` alone leaves both
+/// overlays rendering UNDER the game whenever it's fullscreen and focused,
+/// i.e. always while playing. Plasma's own volume/brightness OSDs float over
+/// fullscreen games by carrying the KDE-specific On-Screen-Display window
+/// type (OnScreenDisplayLayer, 8), so the overlays claim the same type on
+/// their X11 window (we force XWayland via GDK_BACKEND=x11 in main()).
+/// Verified live on KWin 6: the property change re-layers a mapped window
+/// immediately, no remap needed. Non-KDE WMs skip the unknown KDE atom and
+/// fall back to NOTIFICATION (above normal windows in most WMs); keep-above
+/// still applies regardless. Must run after show() — the GDK window only
+/// exists once realized — and on the main thread (GTK is not thread-safe).
+#[cfg(target_os = "linux")]
+fn claim_osd_layer(win: &tauri::WebviewWindow) {
+    let w = win.clone();
+    let _ = win.run_on_main_thread(move || {
+        use gtk::prelude::*;
+        let Ok(gtk_win) = w.gtk_window() else { return };
+        let Some(gdk_win) = gtk_win.window() else {
+            return;
+        };
+        // X11/XWayland only — on a native-Wayland GDK (user overrode
+        // GDK_BACKEND) there is no X property to set and gdk would warn.
+        if !gdk_win.display().type_().name().starts_with("GdkX11") {
+            return;
+        }
+        // With type ATOM, gdk_property_change expects the data as GdkAtoms
+        // (it translates them to X atoms per-entry); ULongs is the matching
+        // ChangeData shape since GdkAtom is pointer-sized.
+        let types = [
+            gdk::Atom::intern("_KDE_NET_WM_WINDOW_TYPE_ON_SCREEN_DISPLAY").value()
+                as std::os::raw::c_ulong,
+            gdk::Atom::intern("_NET_WM_WINDOW_TYPE_NOTIFICATION").value() as std::os::raw::c_ulong,
+        ];
+        gdk::property_change(
+            &gdk_win,
+            &gdk::Atom::intern("_NET_WM_WINDOW_TYPE"),
+            &gdk::Atom::intern("ATOM"),
+            32,
+            gdk::PropMode::Replace,
+            gdk::ChangeData::ULongs(&types),
+        );
+    });
 }
