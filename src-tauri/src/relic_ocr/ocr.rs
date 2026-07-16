@@ -11,7 +11,7 @@ use ocrs::{ImageSource, OcrEngine, OcrEngineParams, TextItem};
 use once_cell::sync::OnceCell;
 use rten::Model;
 
-use super::layout::OcrWord;
+use super::layout::{self, OcrWord};
 
 const DETECTION_MODEL: &[u8] = include_bytes!("../../resources/ocr/text-detection.rten");
 const RECOGNITION_MODEL: &[u8] = include_bytes!("../../resources/ocr/text-recognition.rten");
@@ -46,6 +46,11 @@ pub fn warm() -> Result<(), String> {
 /// recognized WORD with its bounding box (band pixel coordinates). Words, not
 /// the engine's lines: ocrs merges same-baseline text across the card gutters,
 /// so card segmentation is done by `layout` from word geometry instead.
+///
+/// Words are rebuilt from CHARACTER geometry (`layout::words_from_chars`), not
+/// taken from `line.words()` — that splits only on space characters, and the
+/// recognizer sometimes emits NO space across a card gutter (live 2026-07-15:
+/// three titles fused into one "word" no geometry could split).
 pub fn words(band: &GrayImage) -> Result<Vec<OcrWord>, String> {
     let engine = engine()?;
     let source = ImageSource::from_bytes(band.as_raw(), band.dimensions())
@@ -63,18 +68,16 @@ pub fn words(band: &GrayImage) -> Result<Vec<OcrWord>, String> {
     Ok(texts
         .iter()
         .flatten()
-        .flat_map(|line| line.words())
-        .filter(|w| w.to_string().trim().len() >= MIN_TEXT_LEN)
-        .map(|w| {
-            let rect = w.bounding_rect();
-            OcrWord {
-                text: w.to_string(),
-                left: rect.left(),
-                right: rect.right(),
-                top: rect.top(),
-                bottom: rect.bottom(),
-            }
+        .flat_map(|line| {
+            layout::words_from_chars(line.chars().iter().map(|c| layout::OcrChar {
+                ch: c.char,
+                left: c.rect.left(),
+                right: c.rect.right(),
+                top: c.rect.top(),
+                bottom: c.rect.bottom(),
+            }))
         })
+        .filter(|w| w.text.trim().len() >= MIN_TEXT_LEN)
         .collect())
 }
 

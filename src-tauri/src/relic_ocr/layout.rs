@@ -31,6 +31,66 @@ impl OcrWord {
     }
 }
 
+/// One recognized character with its bounding box — the raw material for
+/// [`words_from_chars`].
+#[derive(Debug, Clone)]
+pub struct OcrChar {
+    pub ch: char,
+    pub left: i32,
+    pub right: i32,
+    pub top: i32,
+    pub bottom: i32,
+}
+
+/// Break a word even WITHOUT a space character when the horizontal gap between
+/// consecutive characters exceeds this × glyph height: the CTC recognizer
+/// sometimes emits no space across a card gutter (live 2026-07-15: three
+/// same-baseline titles fused into "Burston Prime BlueprintVasto Prime
+/// BlueprintTipedo Prime Blueprint"), and a "word" spanning two cards defeats
+/// all downstream geometry. In-word letter gaps run ~0.1×, word spaces ~0.3×,
+/// gutters several ×.
+const CHAR_SPLIT_GAP: f32 = 0.8;
+
+/// Rebuild words from per-character geometry instead of trusting the
+/// recognizer's space characters: split at whitespace AND at gutter-sized
+/// horizontal gaps between consecutive characters.
+pub fn words_from_chars(chars: impl IntoIterator<Item = OcrChar>) -> Vec<OcrWord> {
+    let mut out: Vec<OcrWord> = Vec::new();
+    let mut cur: Option<OcrWord> = None;
+    for c in chars {
+        if c.ch.is_whitespace() {
+            out.extend(cur.take());
+            continue;
+        }
+        let split = cur.as_ref().is_some_and(|w| {
+            let height = w.height().max((c.bottom - c.top).max(1));
+            (c.left - w.right) as f32 > CHAR_SPLIT_GAP * height as f32
+        });
+        if split {
+            out.extend(cur.take());
+        }
+        match &mut cur {
+            Some(w) => {
+                w.text.push(c.ch);
+                w.right = w.right.max(c.right);
+                w.top = w.top.min(c.top);
+                w.bottom = w.bottom.max(c.bottom);
+            }
+            None => {
+                cur = Some(OcrWord {
+                    text: c.ch.to_string(),
+                    left: c.left,
+                    right: c.right,
+                    top: c.top,
+                    bottom: c.bottom,
+                });
+            }
+        }
+    }
+    out.extend(cur);
+    out
+}
+
 /// Same text row when vertical centers differ by less than this × glyph height.
 const ROW_TOLERANCE: f32 = 0.6;
 
@@ -263,5 +323,79 @@ mod tests {
     #[test]
     fn empty_input_is_fine() {
         assert!(group_into_cards(&[]).is_empty());
+    }
+
+    /// 30px-tall chars, `w` px wide each, laid out contiguously from `left`.
+    fn chars_of(text: &str, left: i32, w: i32, top: i32) -> Vec<OcrChar> {
+        text.chars()
+            .enumerate()
+            .map(|(i, ch)| OcrChar {
+                ch,
+                left: left + i as i32 * w,
+                right: left + (i as i32 + 1) * w,
+                top,
+                bottom: top + 30,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn gutter_gap_splits_words_even_without_space_char() {
+        // The live 2026-07-15 fusion: the recognizer emitted NO space across
+        // the card gutter, so "Blueprint" + "Vasto" arrived as one character
+        // stream. The gutter-sized gap between char boxes must split them.
+        let mut chars = chars_of("Blueprint", 0, 20, 10); // ends at x=180
+        chars.extend(chars_of("Vasto", 400, 20, 10)); // 220px gap ≫ 30px height
+        let texts: Vec<String> = words_from_chars(chars)
+            .into_iter()
+            .map(|w| w.text)
+            .collect();
+        assert_eq!(texts, ["Blueprint", "Vasto"]);
+    }
+
+    #[test]
+    fn space_chars_split_words_and_are_dropped() {
+        let words = words_from_chars(chars_of("FORMA BLUEPRINT", 0, 20, 10));
+        let texts: Vec<&str> = words.iter().map(|w| w.text.as_str()).collect();
+        assert_eq!(texts, ["FORMA", "BLUEPRINT"]);
+        // Boxes hug the glyphs: FORMA = chars 0..5, BLUEPRINT = chars 6..15.
+        assert_eq!((words[0].left, words[0].right), (0, 100));
+        assert_eq!((words[1].left, words[1].right), (120, 300));
+    }
+
+    #[test]
+    fn letter_and_word_space_gaps_stay_one_word() {
+        // Gaps well under CHAR_SPLIT_GAP × height (30px → limit 24px) must not
+        // split: kerning gaps (~3px) and even a word-space-sized hole (~10px)
+        // without a space char stay fused — the matcher tolerates a missing
+        // space, but a missed split loses whole cards.
+        let chars = vec![
+            OcrChar {
+                ch: 'A',
+                left: 0,
+                right: 20,
+                top: 10,
+                bottom: 40,
+            },
+            OcrChar {
+                ch: 'B',
+                left: 23,
+                right: 43,
+                top: 10,
+                bottom: 40,
+            },
+            OcrChar {
+                ch: 'C',
+                left: 53,
+                right: 73,
+                top: 10,
+                bottom: 40,
+            },
+        ];
+        let texts: Vec<String> = words_from_chars(chars)
+            .into_iter()
+            .map(|w| w.text)
+            .collect();
+        assert_eq!(texts, ["ABC"]);
     }
 }
