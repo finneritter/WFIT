@@ -10,6 +10,7 @@ import type React from "react";
 import { useMemo, useState } from "react";
 import {
   useAccountProfile,
+  useAccountResources,
   useArcaneDashboard,
   useBudget,
   useBuyList,
@@ -33,7 +34,7 @@ import {
 } from "../../hooks/queries";
 import { clsx, fmt, fmtK, msUntil, nextUtc, pct, syncedAgo } from "../../lib/format";
 import { usePersistedJSON } from "../../lib/persist";
-import type { AppNotification } from "../../lib/types";
+import type { AppNotification, ResourceRow } from "../../lib/types";
 import { Countdown, TierBadge } from "../Countdown";
 import { Icon } from "../Icon";
 import type { ScreenId } from "../Sidebar";
@@ -1017,6 +1018,51 @@ function AccountWidget({ w, h, focused }: WidgetProps) {
   );
 }
 
+// Tracked resources — mirrors the Account › Resources pin tray. Featured stacks
+// (pathos clamps, steel essence, aya, kuva, tau shards, …) at a glance on home.
+function ResourcesWidget({ w, h, focused, onOpen }: WidgetProps) {
+  const { data, isLoading, isError } = useAccountResources();
+  const [pinned] = usePersistedJSON<string[]>("account.resources.pinned", []);
+  const rows = data ?? [];
+  // Show what's pinned in Account; fall back to the largest stacks when nothing
+  // is pinned yet, so the tile is never blank once a scan exists.
+  const { picks, usingPins } = useMemo(() => {
+    const byKey = new Map(rows.map((r) => [r.unique_name, r]));
+    const pins = pinned.map((k) => byKey.get(k)).filter((r): r is ResourceRow => r != null);
+    if (pins.length) return { picks: pins, usingPins: true };
+    const top = [...rows].sort((a, b) => b.count - a.count).slice(0, ROW_POOL);
+    return { picks: top, usingPins: false };
+  }, [rows, pinned]);
+
+  return (
+    <WidgetBody
+      w={w}
+      h={h}
+      focused={focused}
+      loading={isLoading}
+      error={isError && !data}
+      big={fmt(picks.length)}
+      sub={usingPins ? "pinned resources" : "top stacks · pin in Account"}
+      empty={!isLoading && rows.length === 0 ? "No scan yet — scan your account." : undefined}
+      cells={picks.slice(0, 3).map((r) => ({ k: r.display_name, v: fmtK(r.count) }))}
+      rows={picks
+        .slice(0, ROW_POOL)
+        .map((r) => (
+          <HwRow
+            key={r.unique_name}
+            slug={r.slug}
+            name={r.display_name}
+            plat={null}
+            thumb={r.icon_url}
+            sub={r.kind}
+            right={fmtK(r.count)}
+            onOpen={onOpen}
+          />
+        ))}
+    />
+  );
+}
+
 // ---------------------------------------------------------------------------
 // "Do next" — the action centerpiece, condensed.
 // ---------------------------------------------------------------------------
@@ -1479,6 +1525,15 @@ export const WIDGETS: WidgetDef[] = [
     group: "Portfolio",
     default: { w: 1, h: 1 },
     Render: DucatsWidget,
+  },
+  {
+    key: "resources",
+    title: "Resources",
+    icon: "inventory",
+    screen: "account",
+    group: "Portfolio",
+    default: { w: 1, h: 2 },
+    Render: ResourcesWidget,
   },
   {
     key: "watchlist",
