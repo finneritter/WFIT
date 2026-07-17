@@ -55,6 +55,7 @@ jobs:
             pkg-config \
             libssl-dev \
             libpipewire-0.3-dev \
+            libgbm-dev \
             libclang-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
