@@ -130,6 +130,7 @@ impl Lookup {
             checked,
             check_source,
             rank,
+            bonus: None,
         }
     }
 }

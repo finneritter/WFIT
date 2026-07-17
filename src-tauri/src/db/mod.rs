@@ -13,6 +13,7 @@ pub mod arcanes;
 pub mod backup;
 pub mod buylist;
 pub mod catalog;
+pub mod coda;
 pub mod gamescan;
 pub mod inventory;
 pub mod meta;
@@ -38,7 +39,7 @@ pub mod wfm;
 /// The schema version the MIGRATIONS list produces (`PRAGMA user_version` after
 /// `to_latest`). Bump in lockstep when appending a migration — the pre-migration
 /// backup gate and its test both pin it.
-pub const SCHEMA_VERSION: i64 = 19;
+pub const SCHEMA_VERSION: i64 = 20;
 
 // Append future migrations here; never edit a shipped one.
 static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
@@ -66,6 +67,7 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         M::up(include_str!(
             "../../migrations/0019_nightwave_completions.sql"
         )),
+        M::up(include_str!("../../migrations/0020_coda_rotation.sql")),
     ])
 });
 

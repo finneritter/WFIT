@@ -1155,7 +1155,7 @@ pub fn get_vendor_group(
     state: State<'_, Arc<AppState>>,
     group: String,
 ) -> AppResult<Vec<VendorPanel>> {
-    crate::domain::vendors::group(&group)
+    let mut panels: Vec<VendorPanel> = crate::domain::vendors::group(&group)
         .map(|v| {
             Ok(VendorPanel {
                 key: v.key.into(),
@@ -1169,7 +1169,13 @@ pub fn get_vendor_group(
                 rows: vendor::enrich_static(&state.db, v.key, v.offers)?,
             })
         })
-        .collect()
+        .collect::<AppResult<_>>()?;
+    // Eleanor's Coda column is dynamic — built from the OCR'd rotation store, not
+    // a static TSV (there's no API for her current stock). She lives on Höllvania.
+    if group == "hollvania" {
+        panels.push(crate::db::coda::eleanor_panel(&state.db)?);
+    }
+    Ok(panels)
 }
 
 /// The Vendors board: one panel per rotating vendor (Baro, Varzia, Teshin/Steel

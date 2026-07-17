@@ -20,6 +20,7 @@ const CURRENCY: Record<string, { cls: string; label: string; unit: string; compa
   steel_essence: { cls: "essence", label: "Essence", unit: "ess" },
   cred: { cls: "cred", label: "Creds", unit: "cr" },
   standing: { cls: "standing", label: "Standing", unit: "st", compact: true },
+  live_heartcell: { cls: "heartcell", label: "Heartcells", unit: "hc" },
   // "none" (the Circuit — earned, not bought) is deliberately unmapped:
   // no cost cell, no "pays X" header line.
 };
@@ -32,6 +33,7 @@ const GROUPS: [string, string][] = [
   ["cetus", "Cetus"],
   ["fortuna", "Fortuna"],
   ["deimos", "Deimos"],
+  ["hollvania", "Höllvania"],
 ];
 
 /** Distinct row currencies, stable order (aya before regal). Falls back to the
@@ -285,6 +287,8 @@ function VendorCell({
           tags={
             <>
               {row.good_deal ? <span className="itag itag-deal">DEAL</span> : null}
+              {/* Eleanor's Coda rotation: progenitor bonus element + % */}
+              {row.bonus ? <span className="itag itag-bonus num">{row.bonus}</span> : null}
               {owned && row.owned_qty > 1 ? (
                 <span className="itag itag-qty num">×{row.owned_qty}</span>
               ) : null}

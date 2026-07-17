@@ -3234,6 +3234,12 @@ body.hide-scan-tag .itag-scan {
   border: 1px solid var(--standing);
   padding: 0 3px;
 }
+/* Eleanor's Coda progenitor bonus (e.g. "+45% Heat") — warm/alien, like Regal Aya. */
+.itag-bonus {
+  color: var(--regal);
+  border: 1px solid var(--regal);
+  padding: 0 3px;
+}
 .vcell .vrank {
   flex: none;
 }
@@ -7722,6 +7728,9 @@ button.hw-nav:hover {
 }
 .vcell .vcost.standing {
   color: var(--standing);
+}
+.vcell .vcost.heartcell {
+  color: var(--neg); /* Live Heartcells — organic crimson, fits the 1999/Coda palette */
 }
 /* per-cell currency unit — only rendered in mixed-currency columns (Varzia) */
 .vcell .vcost .vunit {

@@ -106,6 +106,9 @@ pub struct VendorIntelRow {
     pub check_source: Option<String>,
     /// Syndicate rank gate for static-vendor offers (None = ungated / rotating stock).
     pub rank: Option<u8>,
+    /// Pre-formatted progenitor bonus badge for Eleanor's Coda rotation
+    /// (e.g. "+45% Heat"); None for every other vendor row.
+    pub bonus: Option<String>,
 }
 
 /// One vendor column on the Vendors board: its live status/countdown plus enriched stock.

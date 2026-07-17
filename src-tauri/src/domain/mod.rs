@@ -4,6 +4,7 @@
 
 pub mod arcane;
 pub mod classify;
+pub mod coda;
 pub mod mastery;
 pub mod mod_rarity;
 pub mod nightwave;

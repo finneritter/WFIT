@@ -562,6 +562,7 @@ export interface VendorIntelRow {
   checked: boolean; // owned (auto) or manually ticked
   check_source: "owned" | "manual" | null;
   rank: number | null; // syndicate rank gate (static vendors; null = ungated)
+  bonus: string | null; // Eleanor's Coda rotation: preformatted "+45% Heat"; null elsewhere
 }
 // One vendor column on the Vendors board.
 export interface VendorPanel {
