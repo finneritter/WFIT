@@ -3,6 +3,21 @@
 All notable changes to WFIT are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] — 2026-07-17 · relic OCR + home resources
+
+- **Relic-crack reward prices, on screen (#2).** Press **Alt+T** on the
+  relic-reward selection screen and WFIT reads the four reward names by
+  OCR and overlays their warframe.market prices in a HUD box, top-right
+  of your primary monitor — so you can pick the most valuable drop
+  without alt-tabbing. Re-press to re-capture; the last good box stays
+  up if a capture misses. Off by default is not required — it's on out
+  of the box (`relic-ocr` build feature). Linux (X11) + Windows.
+- **Tracked-resources home widget.** A new dashboard widget surfaces the
+  resources you pin in Account › Resources — pathos clamps, steel
+  essence, aya, kuva, tau shards, whatever you're hoarding — at a glance
+  on the home screen. Add it from **Customize**; it mirrors your pins
+  (and falls back to your largest stacks until you pin any).
+
 ## [1.4.1] — 2026-07-12 · first user-reported bugfixes
 
 - **Set completion respects per-set part quantities** (#1). Sets that
