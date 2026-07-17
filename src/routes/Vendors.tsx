@@ -29,6 +29,9 @@ const CURRENCY: Record<string, { cls: string; label: string; unit: string; compa
 const GROUPS: [string, string][] = [
   ["live", "Live"],
   ["syndicates", "Syndicates"],
+  ["cetus", "Cetus"],
+  ["fortuna", "Fortuna"],
+  ["deimos", "Deimos"],
 ];
 
 /** Distinct row currencies, stable order (aya before regal). Falls back to the

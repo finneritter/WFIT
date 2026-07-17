@@ -23,13 +23,24 @@ WIKI = "https://wiki.warframe.com/w/{page}?action=raw"
 OUT_DIR = Path(__file__).resolve().parent.parent / "src-tauri/src/domain/data/vendors"
 
 # key → (wiki page, currency for every offering row)
+# All syndicate offerings are priced in that syndicate's standing. Open-world
+# syndicate pages (Ostron, Solaris United, Entrati, …) use the same
+# {{SynOfferBox}} template as the relay six, so they parse identically.
 SYNDICATES: dict[str, tuple[str, str]] = {
+    # Relay six (Phase A — hand-reviewed; skip unless explicitly re-run).
     "steel_meridian": ("Steel_Meridian", "standing"),
     "arbiters_of_hexis": ("Arbiters_of_Hexis", "standing"),
     "cephalon_suda": ("Cephalon_Suda", "standing"),
     "perrin_sequence": ("The_Perrin_Sequence", "standing"),
     "red_veil": ("Red_Veil", "standing"),
     "new_loka": ("New_Loka", "standing"),
+    # Open worlds (Phase B).
+    "ostron": ("Ostron", "standing"),                       # Cetus
+    "quills": ("The_Quills", "standing"),                   # Cetus
+    "solaris_united": ("Solaris_United", "standing"),       # Fortuna
+    "vox_solaris": ("Vox_Solaris_(Syndicate)", "standing"),  # Fortuna
+    "entrati": ("Entrati", "standing"),                     # Deimos
+    "necraloid": ("Necraloid", "standing"),                 # Deimos
 }
 
 OFFER_RE = re.compile(r"\{\{SynOfferBox\|([^{}]*)\}\}")
@@ -43,17 +54,28 @@ def fetch_wikitext(page: str) -> str:
 
 
 def offerings_section(wikitext: str) -> str:
+    # Relay + open-world hub pages have a dedicated ==Offerings== section.
     m = re.search(r"==\s*Offerings\s*==(.*?)(?:\n==[^=]|\Z)", wikitext, re.S)
-    if not m:
-        raise SystemExit("no ==Offerings== section found")
-    return m.group(1)
+    if m:
+        return m.group(1)
+    # Some syndicate pages (Solaris United, Entrati, Necraloid) scatter their
+    # {{SynOfferBox}} rows across per-member subsections instead. Fall back to
+    # the whole page — every SynOfferBox is an offering row regardless of where
+    # it sits. (Pages that DO have ==Offerings== keep the tighter scope so we
+    # don't pull in decoration/captura boxes elsewhere on the page.)
+    return wikitext
 
 
 def clean_name(name: str) -> str:
-    # "Scattered Justice (Hek)" → the parenthetical names the modded weapon,
-    # not the item; drop it so name matching sees the market name.
+    # Strip wiki/HTML markup the templates carry: <br />, [[link|text]] → text,
+    # bold/italic quotes. Then drop a trailing "(Hek)"-style parenthetical (it
+    # names the modded weapon, not the item) so name matching sees the market
+    # name.
+    name = re.sub(r"<[^>]+>", " ", name)
+    name = re.sub(r"\[\[(?:[^\]|]*\|)?([^\]]*)\]\]", r"\1", name)
+    name = name.replace("'''", "").replace("''", "")
     name = re.sub(r"\s*\([^)]*\)\s*$", "", name.strip())
-    return re.sub(r"\s{2,}", " ", name)
+    return re.sub(r"\s{2,}", " ", name).strip()
 
 
 def parse_offers(section: str, currency: str) -> list[tuple[str, int, str, str]]:
@@ -78,7 +100,12 @@ def parse_offers(section: str, currency: str) -> list[tuple[str, int, str, str]]
 
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Optional key filter: `scrape_vendors.py ostron quills` regenerates only
+    # those TSVs (leaves the hand-reviewed ones untouched). No args = all.
+    only = set(sys.argv[1:])
     for key, (page, currency) in SYNDICATES.items():
+        if only and key not in only:
+            continue
         section = offerings_section(fetch_wikitext(page))
         rows = parse_offers(section, currency)
         if len(rows) < 20:

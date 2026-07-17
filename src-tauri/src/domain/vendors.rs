@@ -69,6 +69,16 @@ static CEPHALON_SUDA: Lazy<Vec<StaticOffer>> = offers!("cephalon_suda.tsv");
 static PERRIN_SEQUENCE: Lazy<Vec<StaticOffer>> = offers!("perrin_sequence.tsv");
 static RED_VEIL: Lazy<Vec<StaticOffer>> = offers!("red_veil.tsv");
 static NEW_LOKA: Lazy<Vec<StaticOffer>> = offers!("new_loka.tsv");
+// Open worlds (Phase B) — one column per syndicate. Each syndicate page's
+// {{SynOfferBox}} stock is priced in that syndicate's standing, so the whole
+// location's NPCs (Hok, Hai-Luk, Nakak … all sell for Ostron standing) roll up
+// into their syndicate column.
+static OSTRON: Lazy<Vec<StaticOffer>> = offers!("ostron.tsv");
+static QUILLS: Lazy<Vec<StaticOffer>> = offers!("quills.tsv");
+static SOLARIS_UNITED: Lazy<Vec<StaticOffer>> = offers!("solaris_united.tsv");
+static VOX_SOLARIS: Lazy<Vec<StaticOffer>> = offers!("vox_solaris.tsv");
+static ENTRATI: Lazy<Vec<StaticOffer>> = offers!("entrati.tsv");
+static NECRALOID: Lazy<Vec<StaticOffer>> = offers!("necraloid.tsv");
 
 /// Every static vendor, in display order. A tab = the subset with its `group`.
 pub static REGISTRY: &[StaticVendor] = &[
@@ -120,6 +130,57 @@ pub static REGISTRY: &[StaticVendor] = &[
         currency: "standing",
         offers: &NEW_LOKA,
     },
+    // --- Cetus · Plains of Eidolon ---
+    StaticVendor {
+        key: "ostron",
+        name: "Ostron",
+        group: "cetus",
+        location: "Cetus",
+        currency: "standing",
+        offers: &OSTRON,
+    },
+    StaticVendor {
+        key: "quills",
+        name: "The Quills",
+        group: "cetus",
+        location: "Cetus",
+        currency: "standing",
+        offers: &QUILLS,
+    },
+    // --- Fortuna · Orb Vallis ---
+    StaticVendor {
+        key: "solaris_united",
+        name: "Solaris United",
+        group: "fortuna",
+        location: "Fortuna",
+        currency: "standing",
+        offers: &SOLARIS_UNITED,
+    },
+    StaticVendor {
+        key: "vox_solaris",
+        name: "Vox Solaris",
+        group: "fortuna",
+        location: "Fortuna",
+        currency: "standing",
+        offers: &VOX_SOLARIS,
+    },
+    // --- Deimos · Cambion Drift ---
+    StaticVendor {
+        key: "entrati",
+        name: "Entrati",
+        group: "deimos",
+        location: "Necralisk",
+        currency: "standing",
+        offers: &ENTRATI,
+    },
+    StaticVendor {
+        key: "necraloid",
+        name: "Necraloid",
+        group: "deimos",
+        location: "Necralisk",
+        currency: "standing",
+        offers: &NECRALOID,
+    },
 ];
 
 pub fn group(group: &str) -> impl Iterator<Item = &'static StaticVendor> + use<'_> {
@@ -162,5 +223,28 @@ mod tests {
             .expect("Synoid Gammacor present");
         assert_eq!((gammacor.cost, gammacor.rank), (100_000, Some(5)));
         assert_eq!(group("syndicates").count(), 6);
+    }
+
+    #[test]
+    fn open_world_datasets_load_and_look_sane() {
+        // (group id, column count, floor row count) — the open-world tabs.
+        for (grp, cols, floor) in [("cetus", 2, 40), ("fortuna", 2, 40), ("deimos", 2, 40)] {
+            assert_eq!(group(grp).count(), cols, "{grp}: wrong column count");
+            for v in group(grp) {
+                assert!(
+                    v.offers.len() >= floor,
+                    "{}: only {} rows (malformed lines are dropped — check the TSV)",
+                    v.key,
+                    v.offers.len()
+                );
+                assert!(
+                    v.offers
+                        .iter()
+                        .all(|o| o.cost > 0 && o.currency == "standing"),
+                    "{}: a non-standing / non-positive cost slipped in",
+                    v.key
+                );
+            }
+        }
     }
 }
