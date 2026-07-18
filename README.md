@@ -1,8 +1,15 @@
 # WFIT — Warframe Item Tracker
 
-A desktop app for Warframe traders. It tracks what you own, prices it against live
-[warframe.market](https://warframe.market) data, and tells you the things I always wanted a tool
-to tell me: provides the user with real time price information and a more streamlined method for buying and selling items.
+Warframe has a busy player-run trading economy but almost no tools to navigate it. Prices live on
+a separate community site ([warframe.market](https://warframe.market)), the game itself never tells
+you what any of your thousands of tradeable items is worth, and there's no way to see your holdings
+as a portfolio — so most trading happens on guesswork and browser tabs.
+
+WFIT closes that gap. It's a desktop app that tracks what you own, prices it against live
+warframe.market data in real time, and answers the questions I always wanted a tool to answer:
+*what is my inventory actually worth, what should I sell, and what's underpriced right now?* Think
+of it as a trading terminal for a game economy — a portfolio view plus a market screener, in one
+place instead of a spreadsheet and five tabs.
 
 I originally built this as a React + Supabase web app, then got tired of maintaining a cloud
 backend for what is fundamentally a single-player tool. So it's now one binary and one SQLite
@@ -80,6 +87,13 @@ just get a notification pointing back here.
   ledger of what you actually sold.
 - **Watchlist & buy list** — target prices that flip a badge when the market crosses them, and a
   budgeted shopping list.
+- **Home dashboard** — a customizable widget board: portfolio value, movers, watchlist hits, world
+  cycles, and a tracked-resources widget that surfaces the materials you pin (steel essence, aya,
+  kuva, tau shards, whatever you hoard) at a glance.
+- **In-game overlays** — two optional, always-on-top HUD windows toggled by global hotkey: a Void
+  Cascade timer pill, and a relic-crack price box (**Alt+T** on the reward screen) that reads the
+  four drop names by OCR and shows their market prices, so you pick the most valuable reward without
+  alt-tabbing out of the game.
 
 The topbar search works on every screen with a DIM-style query language — things like
 `is:vaulted`, `rare>30`, `drops:nova`, `ducats>45` — alongside regular filters.
