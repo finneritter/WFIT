@@ -1,7 +1,7 @@
-# Handoff: Account / Tenno Trader Profile (Primely / WFIT)
+# Handoff: Account / Tenno Trader Profile (WFIT / WFIT)
 
 ## Overview
-A redesigned **Account profile page** for Primely (the WFIT — Warframe Item Tracker app). It is a *Tenno trader profile*: an identity header, three info columns, a section tab bar, and a default **Overview** tab containing three Day/Week/Month stat cards over a sortable, selectable **trades table**. Four additional tabs (Resources, Armory, Codex, Stats) swap the body content in place.
+A redesigned **Account profile page** for WFIT (the WFIT — Warframe Item Tracker app). It is a *Tenno trader profile*: an identity header, three info columns, a section tab bar, and a default **Overview** tab containing three Day/Week/Month stat cards over a sortable, selectable **trades table**. Four additional tabs (Resources, Armory, Codex, Stats) swap the body content in place.
 
 The layout is modeled on the Koala UI "Profile / user management" page, re-skinned into WFIT's existing dark design system.
 

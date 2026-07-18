@@ -2,7 +2,7 @@ import type { Trend } from "./types";
 
 // ---------------------------------------------------------------------------
 // The backend currently stores only a single median price + a trend enum
-// (up/flat/down) per item — no time series. The Primely design leans heavily on
+// (up/flat/down) per item — no time series. The WFIT design leans heavily on
 // sparklines and a 7d delta %, so until a price-history table lands (a future
 // B-phase), we synthesize *deterministic* visuals seeded by the item slug and
 // shaped by the real trend. Same slug → same sparkline every render; the drift

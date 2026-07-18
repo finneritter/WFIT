@@ -1,8 +1,8 @@
-# Primely — Data Sourcing Master Plan
+# WFIT — Data Sourcing Master Plan
 
 **Status:** Authoritative · **Date:** 2026-05-30 · **Verified against the live warframe.market API on 2026-05-30.**
 
-> **Single source of truth:** Every piece of data in Primely — the prime-part catalog, names,
+> **Single source of truth:** Every piece of data in WFIT — the prime-part catalog, names,
 > thumbnails, ducats, set composition, and prices — comes from **warframe.market**.
 > No WFCD/warframe-items, no DE Public Export, no game-account auth, no other enrichment source.
 > warframe.market in → local SQLite cache → frontend reads the cache. Nothing else phones home.
@@ -43,7 +43,7 @@ in the app — it is all read from warframe.market and cached.
 
 ## 1. The three endpoints (and only these three)
 
-All requests send headers: `User-Agent: primely-desktop/0.1`, `Language: en`, `Platform: pc`,
+All requests send headers: `User-Agent: wfit-desktop/0.1`, `Language: en`, `Platform: pc`,
 `Accept: application/json`. No auth. Throttle to **~2.5 req/s (400 ms min-gap)**, global across the whole client.
 
 | # | Endpoint | Purpose | Cost |
@@ -203,7 +203,7 @@ Add to the PRD §4 schema to support warframe.market-native sets + real history:
 
 ## 9. One-line summary for future sessions
 
-> Primely's data is **100% warframe.market**, via three endpoints: `/v2/items` (skeleton — slug, tags,
+> WFIT's data is **100% warframe.market**, via three endpoints: `/v2/items` (skeleton — slug, tags,
 > names, thumbs, **real ducats**, id; NO set fields, NO vaulted), `/v2/items/<slug>` (set composition:
 > `setParts` id-array on every item + `setRoot` + `quantityInSet` + `tradable`; still NO vaulted), and
 > `/v1/items/<slug>/statistics` (real 90-day price series). **Vault status has no warframe.market

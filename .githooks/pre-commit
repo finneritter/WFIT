@@ -36,8 +36,11 @@ for f in "${staged[@]}"; do
 done
 if [ ${#web[@]} -gt 0 ]; then
   echo "pre-commit: biome check --write"
-  npx --no-install biome check --write "${web[@]}" || \
-    npx biome check --write "${web[@]}"
+  # --no-errors-on-unmatched: staged files under biome-ignored trees
+  # (reference/, docs/) would otherwise make biome exit non-zero with
+  # "No files were processed", failing the commit under `set -e`.
+  npx --no-install biome check --write --no-errors-on-unmatched "${web[@]}" || \
+    npx biome check --write --no-errors-on-unmatched "${web[@]}"
   restage+=("${web[@]}")
 fi
 

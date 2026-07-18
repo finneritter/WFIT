@@ -1,9 +1,9 @@
-# Primely — warframe.market Account Sign-In (Listings Import)
+# WFIT — warframe.market Account Sign-In (Listings Import)
 
 **Status:** Proposal · **Date:** 2026-05-30 · **Verified against the warframe.market v1 API surface 2026-05-30.**
 
 > **What this is:** an *optional* convenience feature that lets a user connect their warframe.market
-> account to import their **active orders (listings)** into Primely. It is **not** in-game inventory sync.
+> account to import their **active orders (listings)** into WFIT. It is **not** in-game inventory sync.
 >
 > **The distinction matters and must stay visible in the UI:** warframe.market knows what you've
 > **posted for sale/buy**, not what you **own**. A part you have ten of but haven't listed is invisible
@@ -53,7 +53,7 @@ existing mixed-version usage).
 - **Validation:** before trusting a stored token, make one cheap authenticated request; if it 401s, mark
   the session expired and fall back to the signed-out state. Never block app launch on WFM auth.
 
-**Token storage:** OS keychain via Tauri (`keyring` crate / secure store) — **never** in `primely.db`,
+**Token storage:** OS keychain via Tauri (`keyring` crate / secure store) — **never** in `wfit.db`,
 never in plaintext, never logged. The DB stays a pure cache of public game data; the session is a secret.
 
 ---
@@ -66,7 +66,7 @@ never in plaintext, never logged. The DB stays a pure cache of public game data;
 | `POST /v1/auth/signin` | — | Tier 3 only: exchange email/password for a JWT |
 | `GET /v1/profile/{username}` (or `/settings/accounts`) | JWT | Confirm who's signed in; show linked-platform info (informational) |
 
-All requests keep the existing headers (`User-Agent: primely-desktop/0.1`, `Language: en`,
+All requests keep the existing headers (`User-Agent: wfit-desktop/0.1`, `Language: en`,
 `Platform: pc`, `Accept: application/json`) and the **same global 400 ms throttle** — no separate
 rate-limit pool.
 
@@ -124,7 +124,7 @@ like `add_to_inventory` / `record_sale`.
 
 ## 7. Safety, scope, and ToS posture
 
-- **Read-only.** Primely never *creates, edits, or deletes* warframe.market orders. It only reads the
+- **Read-only.** WFIT never *creates, edits, or deletes* warframe.market orders. It only reads the
   user's own orders. (Order management is explicitly out of scope.)
 - **Stays on the public/authenticated WFM API** — the sanctioned surface. No game-memory scanning, no
   private DE mobile endpoint, no scraping. This is the safe lane.

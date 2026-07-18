@@ -1,9 +1,9 @@
-# Primely / WFIT — Visual Design Spec
+# WFIT / WFIT — Visual Design Spec
 
 > A reference for reproducing the **look** of the WFIT (Warframe Item Tracker) desktop UI in code.
 > This is **not** a build/handoff doc — there are no install steps, data contracts, or component APIs here.
 > It documents the *aesthetic*: the exact tokens, the rules, the textures, and the gotchas that make
-> a screen read as "Primely" rather than generic dark dashboard #4,000.
+> a screen read as "WFIT" rather than generic dark dashboard #4,000.
 >
 > If you internalize one thing: **this is a dense, square, terminal-adjacent desktop app. Hairline
 > borders do the work that whitespace and shadows do elsewhere. Monospace carries every number.**
@@ -12,7 +12,7 @@
 
 ## 1. The aesthetic in one paragraph
 
-Primely looks like a **professional desktop trading terminal** wearing a game-tracker's data. It is
+WFIT looks like a **professional desktop trading terminal** wearing a game-tracker's data. It is
 near-black, flat, and **gridded** — panels are separated by 1px hairlines, not gaps or drop shadows.
 Information density is high and deliberate: a single screen carries 6–9 modules without feeling
 cluttered because everything snaps to the same border system and the same tight type scale. Numbers
@@ -25,7 +25,7 @@ exceptions), and **no decorative anything**. The vibe is Bloomberg Terminal × a
 
 ---
 
-## 2. Hard rules (break these and it stops looking like Primely)
+## 2. Hard rules (break these and it stops looking like WFIT)
 
 1. **Corners are square.** `border-radius` is `0` everywhere except: the active nav/tab pill (`4px`)
    and small circular status dots/LEDs (`border-radius: 50%`). Cards, panels, buttons, badges,

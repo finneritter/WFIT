@@ -1,4 +1,4 @@
-# Primely — Live Game-State (Worldstate) Data
+# WFIT — Live Game-State (Worldstate) Data
 
 **Status:** Proposal · **Date:** 2026-05-30 · **Verified against the worldstate endpoints + WarframeStatus API 2026-05-30.**
 
@@ -193,7 +193,7 @@ Warframe tools) does that decoding for you and exposes tidy per-category endpoin
 
 Returns an array of active fissures. Relevant fields (already decoded by the wrapper):
 
-| Field | Meaning | Use in Primely |
+| Field | Meaning | Use in WFIT |
 |---|---|---|
 | `tier` | Relic tier: `Lith` / `Meso` / `Neo` / `Axi` / `Requiem` / `Omnia` | group/badge |
 | `missionType` | e.g. `Capture`, `Survival`, `Interception` | row detail |
@@ -243,7 +243,7 @@ follow-up** — the v1 fissure panel ("here's what's live, with timers") stands 
 - **TTL: short** (~30–60 s). Fissures rotate frequently; anything older is misleading. Always show a
   "as of HH:MM" timestamp — same honesty rule as prices.
 - **Don't poll tighter than the TTL.** One fetch per panel open + a gentle background refresh; never hammer.
-- **Set a `User-Agent`** identifying the app (`primely-desktop/0.1`) — courtesy for a free community service.
+- **Set a `User-Agent`** identifying the app (`wfit-desktop/0.1`) — courtesy for a free community service.
 - **Third-party dependency:** WarframeStatus can have downtime. Degrade gracefully (show last-known + a
   "couldn't refresh" note); never crash or block the rest of the app.
 - **Read-only, no auth.** Nothing about this writes anywhere or identifies the user.

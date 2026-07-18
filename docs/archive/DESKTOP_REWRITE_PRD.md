@@ -1,4 +1,4 @@
-# Primely Desktop — Rewrite PRD
+# WFIT Desktop — Rewrite PRD
 
 **Status:** Draft for handoff · **Date:** 2026-05-30
 **From:** React/Vite + Supabase webapp (`wfinv`, this repo) → **To:** Tauri (Rust core + web frontend) + local SQLite desktop app.
@@ -7,7 +7,7 @@
 
 ## 1. Why rewrite
 
-Primely is a single-user, single-machine Warframe prime-part inventory + sales tracker with warframe.market pricing. The current webapp carries a full cloud backend (Supabase Auth + Postgres + RLS + an edge-function CORS proxy + a broken deploy pipeline) that exists **only to work around the browser** — none of it serves the actual use case.
+WFIT is a single-user, single-machine Warframe prime-part inventory + sales tracker with warframe.market pricing. The current webapp carries a full cloud backend (Supabase Auth + Postgres + RLS + an edge-function CORS proxy + a broken deploy pipeline) that exists **only to work around the browser** — none of it serves the actual use case.
 
 Going desktop collapses the entire backend into one binary:
 
@@ -39,7 +39,7 @@ Going desktop collapses the entire backend into one binary:
 ## 3. Target architecture
 
 ```
-primely-desktop/
+wfit-desktop/
 ├─ src-tauri/                 # Rust backend
 │  ├─ src/
 │  │  ├─ main.rs              # Tauri builder, command registration, app state
@@ -62,7 +62,7 @@ primely-desktop/
 └─ package.json
 ```
 
-**Where SQLite lives:** `$APPDATA/primely/primely.db` via Tauri's `app_data_dir()`. Created + migrated on first launch.
+**Where SQLite lives:** `$APPDATA/wfit/wfit.db` via Tauri's `app_data_dir()`. Created + migrated on first launch.
 
 ---
 
@@ -138,7 +138,7 @@ STATIC_BASE = "https://warframe.market/static/assets/"
 PRICE_TTL   = 6 hours
 MIN_GAP_MS  = 400           // ~2.5 req/s; enforce a global min-gap throttle
 ```
-Headers on every request: `User-Agent: primely-desktop/0.1`, `Language: en`, `Platform: pc`, `Accept: application/json`.
+Headers on every request: `User-Agent: wfit-desktop/0.1`, `Language: en`, `Platform: pc`, `Accept: application/json`.
 
 **`catalog_refresh()`**
 1. `GET /v2/items`.

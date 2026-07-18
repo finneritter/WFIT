@@ -3,7 +3,7 @@ export type Trend = "up" | "flat" | "down" | null;
 export type Category = "Warframe" | "Weapon" | "Other";
 
 /**
- * Normalized shape consumed by every Primely table/row/modal. Built from
+ * Normalized shape consumed by every WFIT table/row/modal. Built from
  * inventory rows (owned, has `qty`) or catalog rows (not owned, no `qty`).
  */
 export type PartItem = {
