@@ -710,7 +710,7 @@ pub async fn relic_ocr_run_file(
     {
         let captured_at = chrono::Utc::now().to_rfc3339();
         let t0 = std::time::Instant::now();
-        let (cards, matches) = tauri::async_runtime::spawn_blocking(move || {
+        let (cards, slots) = tauri::async_runtime::spawn_blocking(move || {
             let frame = image::open(&path)
                 .map_err(|e| format!("open {path}: {e}"))?
                 .into_rgba8();
@@ -720,14 +720,17 @@ pub async fn relic_ocr_run_file(
         .map_err(|e| AppError::Other(format!("ocr task: {e}")))?
         .map_err(AppError::Invalid)?;
         let ocr_ms = t0.elapsed().as_millis() as i64;
-        // Matches first, then every raw card text — a card that matched
+        // Slots first, then every raw card text — a card that matched
         // nothing is exactly what this self-diagnosis command exists to show.
-        let ocr_lines = matches
+        let ocr_lines = slots
             .iter()
-            .map(|m| format!("{} ({:.2})", m.display_name, m.confidence))
+            .map(|s| match &s.matched {
+                Some(m) => format!("{} ({:.2})", m.display_name, m.confidence),
+                None => format!("? {}", s.text),
+            })
             .chain(cards.iter().map(|c| format!("card: {c}")))
             .collect();
-        let rewards = crate::relic_ocr::price_matches(&state.db, &matches)?;
+        let rewards = crate::relic_ocr::price_matches(&state.db, &slots)?;
         Ok(crate::types::CrackCapture {
             captured_at,
             rewards,

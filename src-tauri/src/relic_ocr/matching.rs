@@ -97,36 +97,6 @@ pub fn match_line(vocab: &RewardVocab, raw: &str) -> Option<LineMatch> {
     })
 }
 
-/// Resolve cards given as their text SEGMENTS (top-to-bottom, from
-/// `layout::group_into_card_segments`), in on-screen order, dropping
-/// non-reward text, deduping repeated hits on the same reward (keep the
-/// highest-confidence one, at its first position), and capping at `cap` (a
-/// squad shows at most 4 cards).
-///
-/// Matching runs over contiguous segment runs instead of the whole joined
-/// string: the game injects non-title text into a card's column — the hover
-/// tooltip panel opens directly below the hovered card's title, and squadmate
-/// name rows sit close under wrapped titles — and requiring the junk to match
-/// too sank real titles below the floor (live 2026-07-15: a wrapped, hovered
-/// title read perfectly but drowned in tooltip text).
-pub fn match_cards(vocab: &RewardVocab, cards: &[Vec<String>], cap: usize) -> Vec<LineMatch> {
-    let mut out: Vec<LineMatch> = Vec::new();
-    for segments in cards {
-        for m in match_card(vocab, segments) {
-            match out.iter_mut().find(|e| e.display_name == m.display_name) {
-                Some(existing) => {
-                    if m.confidence > existing.confidence {
-                        existing.confidence = m.confidence;
-                    }
-                }
-                None => out.push(m),
-            }
-        }
-    }
-    out.truncate(cap);
-    out
-}
-
 /// Best non-overlapping vocabulary matches within one card's segments: score
 /// every contiguous run, then greedily keep winners (highest confidence, ties
 /// to the longer name) whose segments aren't already claimed, in top-to-bottom
@@ -239,71 +209,6 @@ mod tests {
         ] {
             assert!(match_line(&v, junk).is_none(), "matched junk: {junk}");
         }
-    }
-
-    #[test]
-    fn hover_tooltip_and_player_name_do_not_hide_a_wrapped_title() {
-        // Live 1440p failure (2026-07-15): hovering a card opens a tooltip
-        // panel right below its wrapped title, and the layout column merge
-        // chains the tooltip header + a squadmate's name into the card text.
-        // Whole-string matching failed the floor; the title is still in there
-        // as a contiguous segment run and must be found.
-        let v = vocab();
-        let card: Vec<String> = [
-            "Voruna Prime Neurobtics", // OCR error: p → b
-            "Blueprint",
-            "VORUNA PRIME NEUROPTICS", // hover tooltip header, line 1
-            "Pakman_56",               // squadmate name row
-            "BLUEPRINT",               // hover tooltip header, line 2
-        ]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-        let got = match_cards(&v, &[card], 4);
-        let names: Vec<&str> = got.iter().map(|m| m.display_name.as_str()).collect();
-        assert_eq!(names, ["Voruna Prime Neuroptics Blueprint"]);
-    }
-
-    #[test]
-    fn junk_only_cards_match_nothing_via_windows() {
-        let v = vocab();
-        let cards: Vec<Vec<String>> = vec![
-            vec![
-                "Neuroptics component of the".into(),
-                "Voruna Prime Warframe.".into(),
-            ],
-            vec!["Pakman_56".into()],
-            vec!["SELECT A".into(), "REWARD".into()],
-        ];
-        assert!(match_cards(&v, &cards, 4).is_empty());
-    }
-
-    #[test]
-    fn batch_dedupes_keeps_order_and_caps() {
-        let v = vocab();
-        let cards: Vec<Vec<String>> = [
-            "Braton Prime Stock",
-            "SELECT A REWARD",
-            "Akstiletto Prime Barrel",
-            "BRATON PRIME STOCK", // dupe, noisier
-            "Forma Blueprint",
-            "2X Forma Blueprint",
-            "Akbolto Prime Barrel", // 5th distinct — beyond cap
-        ]
-        .iter()
-        .map(|s| vec![s.to_string()])
-        .collect();
-        let got = match_cards(&v, &cards, 4);
-        let names: Vec<&str> = got.iter().map(|m| m.display_name.as_str()).collect();
-        assert_eq!(
-            names,
-            [
-                "Braton Prime Stock",
-                "Akstiletto Prime Barrel",
-                "Forma Blueprint",
-                "2X Forma Blueprint"
-            ]
-        );
     }
 
     #[test]

@@ -268,7 +268,10 @@ pub fn group_into_card_columns(words: &[OcrWord]) -> Vec<CardColumn> {
 }
 
 /// Each card's segment texts (top-to-bottom), cards left-to-right — sugar over
-/// [`group_into_card_columns`] for callers that don't need geometry.
+/// [`group_into_card_columns`] for callers that don't need geometry. Only
+/// [`group_into_cards`] (test-only) calls this now that `read_rewards` reads
+/// columns directly for their geometry.
+#[cfg(test)]
 pub fn group_into_card_segments(words: &[OcrWord]) -> Vec<Vec<String>> {
     group_into_card_columns(words)
         .into_iter()
