@@ -448,7 +448,7 @@ pub async fn capture_and_show(
     crate::overlay::position_and_show(
         app,
         RELIC_OVERLAY_LABEL,
-        crate::overlay::Anchor::TopRight,
+        crate::overlay::Anchor::TopCenter,
         crate::overlay::MonitorPick::Primary,
     );
     let _ = app.emit_to(RELIC_OVERLAY_LABEL, "relic-overlay-show", &capture);
@@ -607,7 +607,7 @@ pub fn show_test_overlay(app: &tauri::AppHandle, state: &std::sync::Arc<crate::A
     crate::overlay::position_and_show(
         app,
         RELIC_OVERLAY_LABEL,
-        crate::overlay::Anchor::TopRight,
+        crate::overlay::Anchor::TopCenter,
         crate::overlay::MonitorPick::Primary,
     );
     let _ = app.emit_to(RELIC_OVERLAY_LABEL, "relic-overlay-show", &sample);

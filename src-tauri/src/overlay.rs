@@ -82,6 +82,9 @@ pub enum Anchor {
     /// Pinned to the top-right corner (small inset) — the relic-crack box,
     /// clear of Warframe's own top-left mission info.
     TopRight,
+    /// Centered horizontally, pinned near the top edge — the relic-crack card
+    /// strip, hovering above the game's reward cards (which start ~22% down).
+    TopCenter,
 }
 
 /// Which monitor an overlay targets.
@@ -180,6 +183,10 @@ pub fn position_and_show(app: &tauri::AppHandle, label: &str, anchor: Anchor, pi
             Anchor::TopRight => (
                 origin.x + size.width as i32 - outer.width as i32 - size.width as i32 / 64,
                 origin.y + size.height as i32 / 36, // small inset, scales with res
+            ),
+            Anchor::TopCenter => (
+                origin.x + (size.width as i32 - outer.width as i32) / 2,
+                origin.y + size.height as i32 / 36, // same inset as TopRight
             ),
         }
     });
