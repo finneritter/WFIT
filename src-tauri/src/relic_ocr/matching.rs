@@ -164,6 +164,24 @@ fn match_card(vocab: &RewardVocab, segments: &[String]) -> Vec<LineMatch> {
     picked.into_iter().map(|(_, m)| m).collect()
 }
 
+/// Resolve each card column to its single best match, or None. Position is
+/// preserved (same length/order as the input): the strip overlay renders one
+/// panel per column, and duplicates ACROSS columns are legitimate (radshare
+/// squads crack the same relic). The hover-tooltip's repeated title lives
+/// within its card's own column, so best-of-column absorbs it.
+pub fn resolve_columns(vocab: &RewardVocab, cards: &[Vec<String>]) -> Vec<Option<LineMatch>> {
+    cards
+        .iter()
+        .map(|segments| {
+            match_card(vocab, segments).into_iter().max_by(|a, b| {
+                a.confidence
+                    .total_cmp(&b.confidence)
+                    .then(a.display_name.len().cmp(&b.display_name.len()))
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -286,5 +304,67 @@ mod tests {
                 "2X Forma Blueprint"
             ]
         );
+    }
+
+    #[test]
+    fn duplicate_rewards_across_columns_are_preserved() {
+        // Radshare: two cards legitimately show the same reward. The old
+        // cross-card dedupe collapsed them — per-column resolution must not.
+        let v = vocab();
+        let cards: Vec<Vec<String>> = vec![
+            vec!["Braton Prime Stock".into()],
+            vec!["Akstiletto Prime Barrel".into()],
+            vec!["BRATON PRIME STOCK".into()],
+        ];
+        let got = resolve_columns(&v, &cards);
+        let names: Vec<Option<&str>> = got
+            .iter()
+            .map(|m| m.as_ref().map(|m| m.display_name.as_str()))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                Some("Braton Prime Stock"),
+                Some("Akstiletto Prime Barrel"),
+                Some("Braton Prime Stock"),
+            ]
+        );
+    }
+
+    #[test]
+    fn tooltip_duplicate_within_a_column_yields_one_match() {
+        // The hover tooltip repeats the card's own title inside the SAME
+        // column; per-column best-pick must yield exactly one match.
+        let v = vocab();
+        let card: Vec<String> = [
+            "Voruna Prime Neurobtics", // OCR error: p → b
+            "Blueprint",
+            "VORUNA PRIME NEUROPTICS",
+            "Pakman_56",
+            "BLUEPRINT",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        let got = resolve_columns(&v, &[card]);
+        assert_eq!(got.len(), 1);
+        assert_eq!(
+            got[0].as_ref().unwrap().display_name,
+            "Voruna Prime Neuroptics Blueprint"
+        );
+    }
+
+    #[test]
+    fn junk_columns_resolve_to_none_in_place() {
+        let v = vocab();
+        let cards: Vec<Vec<String>> = vec![
+            vec!["SELECT A".into(), "REWARD".into()],
+            vec!["Forma Blueprint".into()],
+            vec!["xX_TennoSlayer_Xx".into()],
+        ];
+        let got = resolve_columns(&v, &cards);
+        assert!(got[0].is_none());
+        assert_eq!(got[1].as_ref().unwrap().display_name, "Forma Blueprint");
+        assert!(got[2].is_none());
     }
 }
