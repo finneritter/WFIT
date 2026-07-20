@@ -244,8 +244,16 @@ pub struct CrackReward {
     pub set_slug: Option<String>, // completes a one-away set
     /// OCR match confidence in [0.7, 1.0]; gates presentation, not inclusion.
     pub confidence: f64,
-    /// Highest-plat reward of the capture (the overlay highlights it).
+    /// The recommended pick (see pick_reason).
     pub best: bool,
+    /// 0-based on-screen card position, left to right — the strip overlay
+    /// renders one panel per card, mirroring the game.
+    pub card_index: u32,
+    /// Card slot detected but no vocabulary match cleared the floor: rendered
+    /// as a "?" placeholder so a partial read is visible.
+    pub unread: bool,
+    /// Why `best` is the pick: "wanted" | "set" | "price". Only on the best.
+    pub pick_reason: Option<String>,
 }
 
 /// Result of one reward-screen capture (hotkey or auto-detect): what was read,

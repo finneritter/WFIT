@@ -102,62 +102,112 @@ pub fn read_rewards(frame: &image::RgbaImage) -> Result<(Vec<String>, Vec<CardSl
     Ok((all_texts, card_slots(&columns, matches)))
 }
 
-/// Price matched reward names through the same preload the Relics browser uses
-/// (`relics::BrowserCtx`), so a captured part's plat always equals what the
-/// Relics screen shows for that slug. Marks the highest-plat reward `best`.
-/// Unread slots (`matched: None`) are skipped — pending Task 4.
+/// Price card slots through the same preload the Relics browser uses. Returns
+/// one entry PER SLOT (unread ones included, zeroed) in on-screen order, and
+/// marks the recommended pick: wanted → completes-set → plat → ducats.
 pub fn price_matches(db: &Db, slots: &[CardSlot]) -> AppResult<Vec<CrackReward>> {
     let signals = wanted::crack_signals(db)?;
     let name_to_slug = catalog::name_slug_map(db)?;
     db.read(|c| {
         let ctx = relics::load_ctx(c, name_to_slug)?;
-        let mut rewards: Vec<CrackReward> = Vec::new();
-        for slot in slots {
-            let Some(m) = &slot.matched else { continue };
-            let slug = ctx
-                .name_to_slug
-                .get(&catalog::normalize_name(&m.display_name))
-                .cloned();
-            let plat = slug
-                .as_deref()
-                .and_then(|s| crate::db::prices::effective_price_from(&ctx.prices, s, None));
-            let ducats = slug.as_deref().and_then(|s| ctx.ducats.get(s).copied());
-            let ducats_per_plat = match (ducats, plat) {
-                (Some(d), Some(p)) if p > 0 => Some((d as f64 / p as f64 * 10.0).round() / 10.0),
-                _ => None,
-            };
-            rewards.push(CrackReward {
-                reward_name: m.display_name.clone(),
-                owned_qty: slug
-                    .as_deref()
-                    .and_then(|s| ctx.owned_parts.get(s).copied())
-                    .unwrap_or(0),
-                wanted: slug
-                    .as_deref()
-                    .is_some_and(|s| signals.watch_buy.contains(s)),
-                set_slug: slug
-                    .as_deref()
-                    .and_then(|s| signals.one_away.get(s))
-                    .map(|(set_slug, _)| set_slug.clone()),
-                plat,
-                ducats,
-                ducats_per_plat,
-                slug,
-                confidence: m.confidence,
-                best: false,
-            });
-        }
-        if let Some(best_idx) = rewards
+        let mut rewards: Vec<CrackReward> = slots
             .iter()
             .enumerate()
-            .filter_map(|(i, r)| r.plat.map(|p| (i, p)))
-            .max_by_key(|&(_, p)| p)
-            .map(|(i, _)| i)
-        {
-            rewards[best_idx].best = true;
-        }
+            .map(|(i, slot)| {
+                let Some(m) = &slot.matched else {
+                    return CrackReward {
+                        reward_name: String::new(),
+                        slug: None,
+                        plat: None,
+                        ducats: None,
+                        ducats_per_plat: None,
+                        owned_qty: 0,
+                        wanted: false,
+                        set_slug: None,
+                        confidence: 0.0,
+                        best: false,
+                        card_index: i as u32,
+                        unread: true,
+                        pick_reason: None,
+                    };
+                };
+                let slug = ctx
+                    .name_to_slug
+                    .get(&catalog::normalize_name(&m.display_name))
+                    .cloned();
+                let plat = slug
+                    .as_deref()
+                    .and_then(|s| crate::db::prices::effective_price_from(&ctx.prices, s, None));
+                let ducats = slug.as_deref().and_then(|s| ctx.ducats.get(s).copied());
+                let ducats_per_plat = match (ducats, plat) {
+                    (Some(d), Some(p)) if p > 0 => {
+                        Some((d as f64 / p as f64 * 10.0).round() / 10.0)
+                    }
+                    _ => None,
+                };
+                CrackReward {
+                    reward_name: m.display_name.clone(),
+                    owned_qty: slug
+                        .as_deref()
+                        .and_then(|s| ctx.owned_parts.get(s).copied())
+                        .unwrap_or(0),
+                    wanted: slug
+                        .as_deref()
+                        .is_some_and(|s| signals.watch_buy.contains(s)),
+                    set_slug: slug
+                        .as_deref()
+                        .and_then(|s| signals.one_away.get(s))
+                        .map(|(set_slug, _)| set_slug.clone()),
+                    plat,
+                    ducats,
+                    ducats_per_plat,
+                    slug,
+                    confidence: m.confidence,
+                    best: false,
+                    card_index: i as u32,
+                    unread: false,
+                    pick_reason: None,
+                }
+            })
+            .collect();
+        apply_best(&mut rewards);
         Ok(rewards)
     })
+}
+
+/// Mark the recommended pick. Personal need beats plat: a watchlist/buy-list
+/// part outranks a set-completing part outranks raw price; ties fall through
+/// to plat then ducats. Unread slots and flagless priceless rewards (Forma
+/// with no data) are never picked.
+fn apply_best(rewards: &mut [CrackReward]) {
+    let best = rewards
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| !r.unread && (r.wanted || r.set_slug.is_some() || r.plat.is_some()))
+        .max_by_key(|&(_, r)| {
+            let tier = if r.wanted {
+                3
+            } else if r.set_slug.is_some() {
+                2
+            } else {
+                1
+            };
+            (tier, r.plat.unwrap_or(-1), r.ducats.unwrap_or(-1))
+        })
+        .map(|(i, _)| i);
+    if let Some(i) = best {
+        rewards[i].best = true;
+        rewards[i].pick_reason = Some(
+            if rewards[i].wanted {
+                "wanted"
+            } else if rewards[i].set_slug.is_some() {
+                "set"
+            } else {
+                "price"
+            }
+            .to_string(),
+        );
+    }
 }
 
 /// The full capture pipeline: grab the game frame, OCR it off the async
@@ -455,29 +505,50 @@ pub fn show_test_overlay(app: &tauri::AppHandle, state: &std::sync::Arc<crate::A
             CrackReward {
                 reward_name: "Test Prime Barrel".into(),
                 slug: None,
-                plat: Some(42),
+                plat: Some(4),
                 ducats: Some(45),
-                ducats_per_plat: Some(1.1),
-                owned_qty: 2,
+                ducats_per_plat: Some(11.3),
+                owned_qty: 3,
                 wanted: false,
                 set_slug: None,
                 confidence: 1.0,
-                best: true,
+                best: false,
+                card_index: 0,
+                unread: false,
+                pick_reason: None,
             },
             CrackReward {
                 reward_name: "Test Prime Systems Blueprint".into(),
                 slug: None,
-                plat: Some(12),
+                plat: Some(38),
                 ducats: Some(65),
-                ducats_per_plat: Some(5.4),
+                ducats_per_plat: Some(1.7),
                 owned_qty: 0,
                 wanted: true,
                 set_slug: Some("test_prime_set".into()),
                 confidence: 1.0,
-                best: false,
+                best: true,
+                card_index: 1,
+                unread: false,
+                pick_reason: Some("wanted".into()),
             },
             CrackReward {
-                reward_name: "Forma Blueprint".into(),
+                reward_name: "Test Prime Barrel".into(),
+                slug: None,
+                plat: Some(4),
+                ducats: Some(45),
+                ducats_per_plat: Some(11.3),
+                owned_qty: 3,
+                wanted: false,
+                set_slug: None,
+                confidence: 1.0,
+                best: false,
+                card_index: 2,
+                unread: false,
+                pick_reason: None,
+            },
+            CrackReward {
+                reward_name: String::new(),
                 slug: None,
                 plat: None,
                 ducats: None,
@@ -485,8 +556,11 @@ pub fn show_test_overlay(app: &tauri::AppHandle, state: &std::sync::Arc<crate::A
                 owned_qty: 0,
                 wanted: false,
                 set_slug: None,
-                confidence: 1.0,
+                confidence: 0.0,
                 best: false,
+                card_index: 3,
+                unread: true,
+                pick_reason: None,
             },
         ],
         ocr_lines: vec!["(test overlay — not a real capture)".into()],
@@ -508,6 +582,98 @@ pub fn show_test_overlay(app: &tauri::AppHandle, state: &std::sync::Arc<crate::A
     let _ = app.emit_to(RELIC_OVERLAY_LABEL, "relic-overlay-show", &sample);
 
     spawn_auto_hide(app, state, gen, duration);
+}
+
+#[cfg(test)]
+mod pick_tests {
+    use super::*;
+    use crate::types::CrackReward;
+
+    fn reward(
+        name: &str,
+        plat: Option<i64>,
+        ducats: Option<i64>,
+        wanted: bool,
+        set: bool,
+    ) -> CrackReward {
+        CrackReward {
+            reward_name: name.to_string(),
+            slug: None,
+            plat,
+            ducats,
+            ducats_per_plat: None,
+            owned_qty: 0,
+            wanted,
+            set_slug: set.then(|| "some_set".to_string()),
+            confidence: 0.9,
+            best: false,
+            card_index: 0,
+            unread: false,
+            pick_reason: None,
+        }
+    }
+
+    fn best_of(mut rs: Vec<CrackReward>) -> (usize, Option<String>) {
+        apply_best(&mut rs);
+        let i = rs.iter().position(|r| r.best).expect("a pick exists");
+        (i, rs[i].pick_reason.clone())
+    }
+
+    #[test]
+    fn wanted_beats_plat() {
+        let (i, reason) = best_of(vec![
+            reward("pricey", Some(80), Some(100), false, false),
+            reward("wanted", Some(4), Some(45), true, false),
+        ]);
+        assert_eq!((i, reason.as_deref()), (1, Some("wanted")));
+    }
+
+    #[test]
+    fn set_beats_plat_but_not_wanted() {
+        let (i, reason) = best_of(vec![
+            reward("set", Some(4), None, false, true),
+            reward("pricey", Some(80), None, false, false),
+            reward("wanted", Some(2), None, true, false),
+        ]);
+        assert_eq!((i, reason.as_deref()), (2, Some("wanted")));
+        let (i, reason) = best_of(vec![
+            reward("set", Some(4), None, false, true),
+            reward("pricey", Some(80), None, false, false),
+        ]);
+        assert_eq!((i, reason.as_deref()), (0, Some("set")));
+    }
+
+    #[test]
+    fn plat_wins_with_no_flags_ducats_break_ties() {
+        let (i, reason) = best_of(vec![
+            reward("a", Some(10), Some(45), false, false),
+            reward("b", Some(10), Some(65), false, false),
+            reward("c", Some(4), Some(100), false, false),
+        ]);
+        assert_eq!((i, reason.as_deref()), (1, Some("price")));
+    }
+
+    #[test]
+    fn two_wanted_fall_through_to_plat() {
+        let (i, reason) = best_of(vec![
+            reward("wanted-cheap", Some(4), None, true, false),
+            reward("wanted-pricey", Some(30), None, true, false),
+        ]);
+        assert_eq!((i, reason.as_deref()), (1, Some("wanted")));
+    }
+
+    #[test]
+    fn unread_and_flagless_priceless_never_win() {
+        let mut rs = vec![
+            reward("forma", None, None, false, false),
+            CrackReward {
+                unread: true,
+                ..reward("", None, None, false, false)
+            },
+        ];
+        apply_best(&mut rs);
+        assert!(rs.iter().all(|r| !r.best), "no eligible pick → no best");
+    }
 }
 
 #[cfg(test)]

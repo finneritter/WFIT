@@ -656,7 +656,10 @@ export interface CrackReward {
   wanted: boolean;
   set_slug: string | null; // completes a one-away set
   confidence: number; // OCR match confidence in [0.7, 1]
-  best: boolean; // highest-plat reward of the capture
+  best: boolean; // the recommended pick (see pick_reason)
+  card_index: number; // 0-based on-screen card position, left to right
+  unread: boolean; // card detected but not readable — render a "?" panel
+  pick_reason: "wanted" | "set" | "price" | null; // why `best` is the pick
 }
 // Result of one reward-screen capture (mirrors types.rs::CrackCapture).
 export interface CrackCapture {
