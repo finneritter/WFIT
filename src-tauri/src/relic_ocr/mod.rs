@@ -439,6 +439,9 @@ pub async fn capture_and_show(
         return state.last_crack.lock().clone().expect("checked above");
     }
     *state.last_crack.lock() = Some(capture.clone());
+    if capture.rewards.iter().any(|r| r.unread) {
+        refresh_vocab_if_stale(state);
+    }
 
     // This trigger now owns the overlay window.
     let gen = state.relic_overlay_gen.fetch_add(1, Ordering::SeqCst) + 1;
@@ -453,6 +456,34 @@ pub async fn capture_and_show(
 
     spawn_auto_hide(app, state, gen, duration);
     capture
+}
+
+/// An unreadable card right after a Prime release usually means the relic
+/// tables predate the new items. If the last WFCD sync is older than 6h,
+/// refresh once per app run in the background — the overlay is not updated
+/// retroactively, but the (documented) Alt+T re-press re-OCRs and matches.
+const VOCAB_REFRESH_MAX_AGE_HOURS: i64 = 6;
+
+#[cfg(feature = "relic-ocr")]
+fn refresh_vocab_if_stale(state: &std::sync::Arc<crate::AppState>) {
+    use std::sync::atomic::Ordering;
+
+    let stale = crate::db::meta::get(&state.db, crate::db::meta::KEY_LAST_RELIC_SYNC)
+        .ok()
+        .flatten()
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+        .map(|t| {
+            chrono::Utc::now().signed_duration_since(t).num_hours() >= VOCAB_REFRESH_MAX_AGE_HOURS
+        })
+        .unwrap_or(true);
+    if !stale || state.relic_vocab_refresh.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let db = state.db.clone();
+    tauri::async_runtime::spawn(async move {
+        tracing::info!("relic_ocr: unread card + stale relic data — refreshing vocab from WFCD");
+        let _ = crate::db::relic_data::refresh(&db).await;
+    });
 }
 
 /// Hide the HUD box after `duration` seconds unless a newer trigger has taken

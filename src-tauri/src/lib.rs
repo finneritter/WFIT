@@ -59,6 +59,9 @@ pub struct AppState {
     pub overlay_gen: AtomicU64,
     /// Same generation-counter pattern for the relic-crack overlay.
     pub relic_overlay_gen: AtomicU64,
+    /// One-shot latch: a capture with an unreadable card triggers at most one
+    /// background WFCD relic-data refresh per app run (new-Prime-release gap).
+    pub relic_vocab_refresh: std::sync::atomic::AtomicBool,
     /// Most recent relic-crack capture (in-memory only — it's a snapshot of a
     /// 10-second on-screen moment, not durable data). The main window's "last
     /// capture" view and a rebuilt overlay both self-fetch from here.
@@ -469,6 +472,7 @@ fn init_app(
         close_to_tray: AtomicBool::new(close_to_tray),
         overlay_gen: AtomicU64::new(0),
         relic_overlay_gen: AtomicU64::new(0),
+        relic_vocab_refresh: std::sync::atomic::AtomicBool::new(false),
         last_crack: parking_lot::Mutex::new(None),
     });
     app.manage(state.clone());
