@@ -36,6 +36,11 @@ pub struct CardSlot {
 /// A squad shows at most 4 reward cards.
 const MAX_CARDS: usize = 4;
 
+/// Capture-level error when OCR ran but matched nothing at all (zero card
+/// slots) — shared between where it's set (`run_capture`) and where it's
+/// checked as a vocab-staleness trigger (`capture_and_show`).
+const NO_REWARDS_MSG: &str = "no reward names recognized — is the reward screen up?";
+
 /// Decide which columns are card slots. Reward-card titles share one text
 /// row, so the topmost matched column anchors the title row; any column whose
 /// top segment sits within ±1 glyph height of it is a card (matched or
@@ -274,10 +279,7 @@ pub async fn run_capture(db: Db, debug_dir: Option<std::path::PathBuf>) -> Crack
     let (rewards, error) = match &read_err {
         Some(e) => (Vec::new(), Some(e.clone())),
         None => match price_matches(&db, &slots) {
-            Ok(r) if r.is_empty() => (
-                Vec::new(),
-                Some("no reward names recognized — is the reward screen up?".to_string()),
-            ),
+            Ok(r) if r.is_empty() => (Vec::new(), Some(NO_REWARDS_MSG.to_string())),
             Ok(r) => (r, None),
             Err(e) => (Vec::new(), Some(format!("pricing failed: {e}"))),
         },
@@ -439,7 +441,11 @@ pub async fn capture_and_show(
         return state.last_crack.lock().clone().expect("checked above");
     }
     *state.last_crack.lock() = Some(capture.clone());
-    if capture.rewards.iter().any(|r| r.unread) {
+    // Also fires on the all-unmatched case (zero slots, `NO_REWARDS_MSG`):
+    // a brand-new Prime relic right after release makes every card unknown,
+    // so there's no `unread` reward to key off — this is the hook's marquee
+    // case, not an edge case.
+    if capture_suggests_stale_vocab(&capture) {
         refresh_vocab_if_stale(state);
     }
 
@@ -458,10 +464,19 @@ pub async fn capture_and_show(
     capture
 }
 
-/// An unreadable card right after a Prime release usually means the relic
-/// tables predate the new items. If the last WFCD sync is older than 6h,
-/// refresh once per app run in the background — the overlay is not updated
-/// retroactively, but the (documented) Alt+T re-press re-OCRs and matches.
+/// Whether a finished capture should trigger the vocab staleness check:
+/// an unreadable card slot, or a reward screen where nothing matched at
+/// all (zero slots — every card unknown, the new-Prime-release case).
+fn capture_suggests_stale_vocab(capture: &CrackCapture) -> bool {
+    capture.rewards.iter().any(|r| r.unread) || capture.error.as_deref() == Some(NO_REWARDS_MSG)
+}
+
+/// An unreadable card, or a fully-unmatched reward screen (see
+/// [`capture_suggests_stale_vocab`]), right after a Prime release usually
+/// means the relic tables predate the new items. If the last WFCD sync is
+/// older than 6h, refresh once per app run in the background — the overlay
+/// is not updated retroactively, but the (documented) Alt+T re-press
+/// re-OCRs and matches.
 const VOCAB_REFRESH_MAX_AGE_HOURS: i64 = 6;
 
 #[cfg(feature = "relic-ocr")]
@@ -704,6 +719,65 @@ mod pick_tests {
         ];
         apply_best(&mut rs);
         assert!(rs.iter().all(|r| !r.best), "no eligible pick → no best");
+    }
+}
+
+#[cfg(test)]
+mod capture_suggests_stale_vocab_tests {
+    use super::*;
+    use crate::types::CrackReward;
+
+    fn capture(rewards: Vec<CrackReward>, error: Option<&str>) -> CrackCapture {
+        CrackCapture {
+            captured_at: "2026-07-21T00:00:00Z".to_string(),
+            rewards,
+            ocr_lines: Vec::new(),
+            capture_ms: 0,
+            ocr_ms: 0,
+            error: error.map(str::to_string),
+        }
+    }
+
+    fn reward(unread: bool) -> CrackReward {
+        CrackReward {
+            reward_name: "forma".to_string(),
+            slug: None,
+            plat: None,
+            ducats: None,
+            ducats_per_plat: None,
+            owned_qty: 0,
+            wanted: false,
+            set_slug: None,
+            confidence: 0.9,
+            best: false,
+            card_index: 0,
+            unread,
+            pick_reason: None,
+        }
+    }
+
+    #[test]
+    fn unread_entry_triggers() {
+        let c = capture(vec![reward(false), reward(true)], None);
+        assert!(capture_suggests_stale_vocab(&c));
+    }
+
+    #[test]
+    fn all_matched_no_error_does_not_trigger() {
+        let c = capture(vec![reward(false), reward(false)], None);
+        assert!(!capture_suggests_stale_vocab(&c));
+    }
+
+    #[test]
+    fn empty_rewards_with_no_rewards_msg_triggers() {
+        let c = capture(Vec::new(), Some(NO_REWARDS_MSG));
+        assert!(capture_suggests_stale_vocab(&c));
+    }
+
+    #[test]
+    fn empty_rewards_with_other_error_does_not_trigger() {
+        let c = capture(Vec::new(), Some("capture task: boom"));
+        assert!(!capture_suggests_stale_vocab(&c));
     }
 }
 
