@@ -43,11 +43,13 @@ const NO_REWARDS_MSG: &str = "no reward names recognized — is the reward scree
 
 /// Decide which columns are card slots. Reward-card titles share one text
 /// row, so the topmost matched column anchors the title row; any column whose
-/// top segment sits within ±1 glyph height of it is a card (matched or
-/// unreadable). Everything else — the "SELECT A REWARD" header above, player
-/// names below, a tooltip panel that formed its own column and matched the
-/// hovered card's title again — is dropped. No matches at all → no slots
-/// (the capture-level "no reward names recognized" error covers it).
+/// top segment sits within the sum of the anchor's and its own glyph height
+/// of it is a card (matched or unreadable) — wrapped/hovered titles sit lower
+/// than flat ones, so a tolerance keyed to the anchor alone would clip them.
+/// Everything else — the "SELECT A REWARD" header above, player names below,
+/// a tooltip panel that formed its own column and matched the hovered card's
+/// title again — is dropped. No matches at all → no slots (the capture-level
+/// "no reward names recognized" error covers it).
 fn card_slots(
     columns: &[layout::CardColumn],
     matches: Vec<Option<matching::LineMatch>>,
