@@ -78,6 +78,7 @@ body {
   display: flex;
   gap: 8px;
   align-items: stretch;
+  justify-content: center;
 }
 
 .rc-card {
