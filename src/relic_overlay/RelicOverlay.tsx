@@ -8,6 +8,12 @@ import { listen } from "@tauri-apps/api/event";
 //
 // Styling intent (issue #2): this must read like part of Warframe's own HUD,
 // not an app window — see relic-overlay.css.
+//
+// Layout: a top-center strip, one card panel per on-screen reward, left to
+// right mirroring the game's own card order (`card_index`). Use
+// `key={r.card_index}` — NOT `reward_name` — because radshare can legitimately
+// show duplicate names across cards. Unreadable cards still hold their slot
+// as a dashed "?" panel.
 import { useEffect, useState } from "react";
 import { getLastCrackCapture } from "../lib/api";
 import type { CrackCapture } from "../lib/types";
@@ -36,21 +42,44 @@ export function RelicOverlay() {
       {capture.error ? (
         <div className="rc-error">{capture.error}</div>
       ) : (
-        capture.rewards.map((r) => (
-          <div className={`rc-row${r.best ? " rc-best" : ""}`} key={r.reward_name}>
-            <span className="rc-name">
-              {r.wanted ? <span className="rc-flag rc-wanted">◆ </span> : null}
-              {r.set_slug ? <span className="rc-flag rc-set">◆ </span> : null}
-              {r.reward_name}
-            </span>
-            <span className="rc-owned">{r.owned_qty > 0 ? `×${r.owned_qty}` : ""}</span>
-            <span className="rc-plat">{r.plat != null ? `${r.plat}p` : "—"}</span>
-            <span className="rc-ducats">{r.ducats != null ? `${r.ducats}d` : ""}</span>
-            <span className="rc-ratio">
-              {r.ducats_per_plat != null ? `${r.ducats_per_plat}d/p` : ""}
-            </span>
-          </div>
-        ))
+        <div className="rc-strip">
+          {capture.rewards.map((r) =>
+            r.unread ? (
+              <div className="rc-card rc-unread" key={r.card_index}>
+                <div className="rc-q">?</div>
+                <div className="rc-unread-note">unreadable · Alt+T retries</div>
+              </div>
+            ) : (
+              <div className={`rc-card${r.best ? " rc-best" : ""}`} key={r.card_index}>
+                <div className="rc-name">{r.reward_name}</div>
+                <div className="rc-price">
+                  <span className="rc-plat">{r.plat != null ? `${r.plat}p` : "—"}</span>
+                  <span className="rc-ducats">{r.ducats != null ? `${r.ducats}d` : ""}</span>
+                </div>
+                <div className="rc-sub">
+                  {r.ducats_per_plat != null ? `${r.ducats_per_plat} d/p` : ""}
+                  {r.owned_qty > 0 ? ` · ×${r.owned_qty} owned` : ""}
+                </div>
+                {r.wanted || r.set_slug ? (
+                  <div className="rc-chips">
+                    {r.wanted ? <span className="rc-chip rc-wanted">◆ wanted</span> : null}
+                    {r.set_slug ? <span className="rc-chip rc-set">◆ set</span> : null}
+                  </div>
+                ) : null}
+                {r.best ? (
+                  <div className="rc-pick">
+                    ▶ pick
+                    {r.pick_reason === "wanted"
+                      ? " — wanted"
+                      : r.pick_reason === "set"
+                        ? " — completes set"
+                        : " — best price"}
+                  </div>
+                ) : null}
+              </div>
+            ),
+          )}
+        </div>
       )}
     </div>
   );

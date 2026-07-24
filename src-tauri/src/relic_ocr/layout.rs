@@ -123,31 +123,44 @@ fn overlaps(a: (i32, i32), b: (i32, i32)) -> bool {
 }
 
 /// Cluster words into rows of matching vertical center, ordered top-to-bottom,
-/// each row ordered left-to-right.
+/// each row ordered left-to-right. A word joins a row when its center is
+/// within ROW_TOLERANCE×height of the row's MEAN center (not the last-added
+/// word's — chained jitter must not bridge two real rows).
 fn rows(words: &[OcrWord]) -> Vec<Vec<&OcrWord>> {
     let mut sorted: Vec<&OcrWord> = words.iter().collect();
     sorted.sort_by_key(|w| w.top + w.bottom); // by vertical center ×2
-    let mut rows: Vec<Vec<&OcrWord>> = Vec::new();
+
+    struct Row<'a> {
+        words: Vec<&'a OcrWord>,
+        center_sum: f32,
+        height_max: i32,
+    }
+    let mut rows: Vec<Row> = Vec::new();
     for word in sorted {
         let center = (word.top + word.bottom) as f32 / 2.0;
         match rows.last_mut() {
             Some(row)
                 if {
-                    let last = row.last().expect("rows are never empty");
-                    let last_center = (last.top + last.bottom) as f32 / 2.0;
-                    (center - last_center).abs()
-                        < ROW_TOLERANCE * last.height().max(word.height()) as f32
+                    let mean = row.center_sum / row.words.len() as f32;
+                    (center - mean).abs() < ROW_TOLERANCE * row.height_max.max(word.height()) as f32
                 } =>
             {
-                row.push(word)
+                row.center_sum += center;
+                row.height_max = row.height_max.max(word.height());
+                row.words.push(word);
             }
-            _ => rows.push(vec![word]),
+            _ => rows.push(Row {
+                words: vec![word],
+                center_sum: center,
+                height_max: word.height(),
+            }),
         }
     }
-    for row in &mut rows {
+    let mut out: Vec<Vec<&OcrWord>> = rows.into_iter().map(|r| r.words).collect();
+    for row in &mut out {
         row.sort_by_key(|w| w.left);
     }
-    rows
+    out
 }
 
 /// Split one row into segments at card-sized horizontal gaps.
@@ -185,10 +198,22 @@ pub fn group_into_cards(words: &[OcrWord]) -> Vec<String> {
         .collect()
 }
 
-/// Like [`group_into_cards`] but keeps each card's segment texts separate
-/// (top-to-bottom) — the matcher scans contiguous runs so injected non-title
-/// rows (hover tooltip, squadmate names) can't sink the title.
-pub fn group_into_card_segments(words: &[OcrWord]) -> Vec<Vec<String>> {
+/// One card column with the geometry the card-slot filter needs: reward-card
+/// titles share a text row, so the TOP segment's vertical center identifies
+/// whether an unmatched column is an unreadable card or off-row junk.
+#[derive(Debug)]
+pub struct CardColumn {
+    /// Segment texts, top to bottom.
+    pub segments: Vec<String>,
+    /// Vertical center of the topmost segment (band px).
+    pub top_center: i32,
+    /// Glyph height of the topmost segment.
+    pub top_height: i32,
+}
+
+/// Like [`group_into_card_segments`] but keeps each column's top-segment
+/// geometry for the card-slot filter in `relic_ocr::read_rewards`.
+pub fn group_into_card_columns(words: &[OcrWord]) -> Vec<CardColumn> {
     let segments: Vec<Segment> = rows(words).iter().flat_map(|r| row_segments(r)).collect();
     // Merge segments into card columns: x-overlap AND vertically adjacent
     // (stacked wrapped lines), so distant text like the screen header stays
@@ -222,15 +247,35 @@ pub fn group_into_card_segments(words: &[OcrWord]) -> Vec<Vec<String>> {
     columns.sort_by_key(|c| c.left);
     columns
         .into_iter()
-        .map(|Column { mut members, .. }| {
+        .filter_map(|Column { mut members, .. }| {
             members.sort_by_key(|&i| segments[i].top);
-            members
+            let texts: Vec<String> = members
                 .iter()
                 .map(|&i| segments[i].text.clone())
                 .filter(|t| !t.is_empty())
-                .collect::<Vec<String>>()
+                .collect();
+            if texts.is_empty() {
+                return None;
+            }
+            let top = &segments[members[0]];
+            Some(CardColumn {
+                segments: texts,
+                top_center: (top.top + top.bottom) / 2,
+                top_height: (top.bottom - top.top).max(1),
+            })
         })
-        .filter(|texts| !texts.is_empty())
+        .collect()
+}
+
+/// Each card's segment texts (top-to-bottom), cards left-to-right — sugar over
+/// [`group_into_card_columns`] for callers that don't need geometry. Only
+/// [`group_into_cards`] (test-only) calls this now that `read_rewards` reads
+/// columns directly for their geometry.
+#[cfg(test)]
+pub fn group_into_card_segments(words: &[OcrWord]) -> Vec<Vec<String>> {
+    group_into_card_columns(words)
+        .into_iter()
+        .map(|c| c.segments)
         .collect()
 }
 
@@ -397,5 +442,56 @@ mod tests {
             .map(|w| w.text)
             .collect();
         assert_eq!(texts, ["ABC"]);
+    }
+
+    #[test]
+    fn jitter_chain_does_not_merge_two_rows() {
+        // Three words whose centers step down by 0.5×height each: last-word
+        // comparison chains them into one row; mean-center must keep the third
+        // word (a full row below word 1) out once the mean anchors high.
+        // 30px-tall words: tops 10, 25, 40 → centers 25, 40, 55.
+        let words = [
+            word("BRONCO", 0, 120, 10),
+            word("PRIME", 130, 220, 25),
+            word("BARREL", 230, 330, 40),
+        ];
+        // Mean after 2 words = 32.5; word 3 center 55 differs by 22.5 > 0.6×30.
+        assert_eq!(
+            group_into_cards(&words),
+            ["BRONCO PRIME", "BARREL"],
+            "third word must start a new row, not chain-merge"
+        );
+    }
+
+    #[test]
+    fn wrapped_lines_at_065_spacing_stay_two_rows_and_one_card() {
+        // Tight line spacing just above ROW_TOLERANCE: line 2 top at 0.65×30 ≈ 20px
+        // below line 1 top. Must stay two rows (else words interleave) but still
+        // stack into one card column.
+        let words = [
+            word("AKSTILETTO", 100, 260, 10),
+            word("PRIME", 270, 350, 10),
+            word("BARREL", 160, 280, 30), // centers differ 20px > 0.6×30 = 18
+        ];
+        assert_eq!(group_into_cards(&words), ["AKSTILETTO PRIME BARREL"]);
+    }
+
+    #[test]
+    fn card_columns_expose_top_segment_geometry() {
+        // Two cards, one wrapped: top_center/top_height must describe the TOP
+        // segment (the title row), not the whole column.
+        let words = [
+            word("AKSTILETTO", 100, 260, 10),
+            word("PRIME", 270, 350, 10),
+            word("BARREL", 160, 280, 50),
+            word("FORMA", 500, 610, 10),
+        ];
+        let cols = group_into_card_columns(&words);
+        assert_eq!(cols.len(), 2);
+        assert_eq!(cols[0].segments, ["AKSTILETTO PRIME", "BARREL"]);
+        assert_eq!(cols[0].top_center, 25); // (10+40)/2
+        assert_eq!(cols[0].top_height, 30);
+        assert_eq!(cols[1].segments, ["FORMA"]);
+        assert_eq!(cols[1].top_center, 25);
     }
 }

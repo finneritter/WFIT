@@ -24,34 +24,120 @@ use crate::types::{CrackCapture, CrackReward};
 /// emit is a no-op until then).
 pub const RELIC_OVERLAY_LABEL: &str = "relic-overlay";
 
-/// Preprocessed band → OCR → card grouping → closed-vocabulary matching.
-/// The file-based and live-capture paths both funnel through here. Returns the
-/// raw card texts alongside the matches so a dropped card (seen but not
-/// matched) is diagnosable from logs/debug artifacts.
-#[cfg(feature = "relic-ocr")]
-pub fn read_rewards(
-    frame: &image::RgbaImage,
-) -> Result<(Vec<String>, Vec<matching::LineMatch>), String> {
-    let band = preprocess::reward_band(frame);
-    let words = ocr::words(&band)?;
-    let card_segments = layout::group_into_card_segments(&words);
-    let vocab = matching::build_vocab();
-    let matches = matching::match_cards(&vocab, &card_segments, 4);
-    let cards = card_segments.into_iter().map(|s| s.join(" ")).collect();
-    Ok((cards, matches))
+/// One detected card slot, left-to-right on screen: the raw column text and
+/// the resolved reward (`None` = an unreadable card — seen, on the title row,
+/// but nothing in the vocabulary cleared the confidence floor).
+#[derive(Debug)]
+pub struct CardSlot {
+    pub text: String,
+    pub matched: Option<matching::LineMatch>,
 }
 
-/// Price matched reward names through the same preload the Relics browser uses
-/// (`relics::BrowserCtx`), so a captured part's plat always equals what the
-/// Relics screen shows for that slug. Marks the highest-plat reward `best`.
-pub fn price_matches(db: &Db, matches: &[matching::LineMatch]) -> AppResult<Vec<CrackReward>> {
+/// A squad shows at most 4 reward cards.
+const MAX_CARDS: usize = 4;
+
+/// Capture-level error when OCR ran but matched nothing at all (zero card
+/// slots) — shared between where it's set (`run_capture`) and where it's
+/// checked as a vocab-staleness trigger (`capture_and_show`).
+const NO_REWARDS_MSG: &str = "no reward names recognized — is the reward screen up?";
+
+/// Decide which columns are card slots. Reward-card titles share one text
+/// row, so the topmost matched column anchors the title row; any column whose
+/// top segment sits within the sum of the anchor's and its own glyph height
+/// of it is a card (matched or unreadable) — wrapped/hovered titles sit lower
+/// than flat ones, so a tolerance keyed to the anchor alone would clip them.
+/// Everything else — the "SELECT A REWARD" header above, player names below,
+/// a tooltip panel that formed its own column and matched the hovered card's
+/// title again — is dropped. No matches at all → no slots (the capture-level
+/// "no reward names recognized" error covers it).
+fn card_slots(
+    columns: &[layout::CardColumn],
+    matches: Vec<Option<matching::LineMatch>>,
+) -> Vec<CardSlot> {
+    let anchor = columns
+        .iter()
+        .zip(&matches)
+        .filter(|(_, m)| m.is_some())
+        .map(|(c, _)| (c.top_center, c.top_height))
+        .min_by_key(|&(center, _)| center);
+    let Some((row, height)) = anchor else {
+        return Vec::new();
+    };
+    let mut slots: Vec<CardSlot> = columns
+        .iter()
+        .zip(matches)
+        // "Same row" allows up to a combined glyph-height of vertical slack
+        // (anchor's height + the candidate's own) rather than just the
+        // anchor's: real captures show title rows drifting ~1 line height
+        // apart when one title wraps to two lines and others don't (the
+        // wrapped title's box is taller, so its top edge sits higher) — a
+        // tolerance keyed to the anchor alone clipped those genuine
+        // same-row titles.
+        .filter(|(c, _)| (c.top_center - row).abs() <= height + c.top_height)
+        .map(|(c, m)| CardSlot {
+            text: c.segments.join(" "),
+            matched: m,
+        })
+        .collect();
+    // More than 4 on-row columns means junk slipped in — shed unmatched
+    // extras from the right before ever dropping a real match.
+    while slots.len() > MAX_CARDS {
+        match slots.iter().rposition(|s| s.matched.is_none()) {
+            Some(i) => {
+                slots.remove(i);
+            }
+            None => slots.truncate(MAX_CARDS),
+        }
+    }
+    slots
+}
+
+/// Preprocessed band → OCR → card grouping → closed-vocabulary matching.
+/// The file-based and live-capture paths both funnel through here. Returns the
+/// raw column texts (`.0`, for sidecar diagnostics) alongside the resolved
+/// card slots left→right (`.1`, ≤4) so a dropped card (seen but not matched)
+/// is diagnosable from logs/debug artifacts.
+#[cfg(feature = "relic-ocr")]
+pub fn read_rewards(frame: &image::RgbaImage) -> Result<(Vec<String>, Vec<CardSlot>), String> {
+    let band = preprocess::reward_band(frame);
+    let words = ocr::words(&band)?;
+    let columns = layout::group_into_card_columns(&words);
+    let vocab = matching::build_vocab();
+    let texts: Vec<Vec<String>> = columns.iter().map(|c| c.segments.clone()).collect();
+    let matches = matching::resolve_columns(&vocab, &texts);
+    let all_texts = texts.iter().map(|s| s.join(" ")).collect();
+    Ok((all_texts, card_slots(&columns, matches)))
+}
+
+/// Price card slots through the same preload the Relics browser uses. Returns
+/// one entry PER SLOT (unread ones included, zeroed) in on-screen order, and
+/// marks the recommended pick: wanted → completes-set → plat → ducats.
+pub fn price_matches(db: &Db, slots: &[CardSlot]) -> AppResult<Vec<CrackReward>> {
     let signals = wanted::crack_signals(db)?;
     let name_to_slug = catalog::name_slug_map(db)?;
     db.read(|c| {
         let ctx = relics::load_ctx(c, name_to_slug)?;
-        let mut rewards: Vec<CrackReward> = matches
+        let mut rewards: Vec<CrackReward> = slots
             .iter()
-            .map(|m| {
+            .enumerate()
+            .map(|(i, slot)| {
+                let Some(m) = &slot.matched else {
+                    return CrackReward {
+                        reward_name: String::new(),
+                        slug: None,
+                        plat: None,
+                        ducats: None,
+                        ducats_per_plat: None,
+                        owned_qty: 0,
+                        wanted: false,
+                        set_slug: None,
+                        confidence: 0.0,
+                        best: false,
+                        card_index: i as u32,
+                        unread: true,
+                        pick_reason: None,
+                    };
+                };
                 let slug = ctx
                     .name_to_slug
                     .get(&catalog::normalize_name(&m.display_name))
@@ -85,20 +171,50 @@ pub fn price_matches(db: &Db, matches: &[matching::LineMatch]) -> AppResult<Vec<
                     slug,
                     confidence: m.confidence,
                     best: false,
+                    card_index: i as u32,
+                    unread: false,
+                    pick_reason: None,
                 }
             })
             .collect();
-        if let Some(best_idx) = rewards
-            .iter()
-            .enumerate()
-            .filter_map(|(i, r)| r.plat.map(|p| (i, p)))
-            .max_by_key(|&(_, p)| p)
-            .map(|(i, _)| i)
-        {
-            rewards[best_idx].best = true;
-        }
+        apply_best(&mut rewards);
         Ok(rewards)
     })
+}
+
+/// Mark the recommended pick. Personal need beats plat: a watchlist/buy-list
+/// part outranks a set-completing part outranks raw price; ties fall through
+/// to plat then ducats. Unread slots and flagless priceless rewards (Forma
+/// with no data) are never picked.
+fn apply_best(rewards: &mut [CrackReward]) {
+    let best = rewards
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| !r.unread && (r.wanted || r.set_slug.is_some() || r.plat.is_some()))
+        .max_by_key(|&(_, r)| {
+            let tier = if r.wanted {
+                3
+            } else if r.set_slug.is_some() {
+                2
+            } else {
+                1
+            };
+            (tier, r.plat.unwrap_or(-1), r.ducats.unwrap_or(-1))
+        })
+        .map(|(i, _)| i);
+    if let Some(i) = best {
+        rewards[i].best = true;
+        rewards[i].pick_reason = Some(
+            if rewards[i].wanted {
+                "wanted"
+            } else if rewards[i].set_slug.is_some() {
+                "set"
+            } else {
+                "price"
+            }
+            .to_string(),
+        );
+    }
 }
 
 /// The full capture pipeline: grab the game frame, OCR it off the async
@@ -134,8 +250,8 @@ pub async fn run_capture(db: Db, debug_dir: Option<std::path::PathBuf>) -> Crack
     let ocr_frame = frame.clone();
     let read = tauri::async_runtime::spawn_blocking(move || read_rewards(&ocr_frame)).await;
     let ocr_ms = t1.elapsed().as_millis() as i64;
-    let (cards, matches, read_err) = match read {
-        Ok(Ok((cards, matches))) => (cards, matches, None),
+    let (cards, slots, read_err) = match read {
+        Ok(Ok((cards, slots))) => (cards, slots, None),
         Ok(Err(e)) => (Vec::new(), Vec::new(), Some(e)),
         Err(e) => (Vec::new(), Vec::new(), Some(format!("ocr task: {e}"))),
     };
@@ -145,23 +261,27 @@ pub async fn run_capture(db: Db, debug_dir: Option<std::path::PathBuf>) -> Crack
     // was seen but matched nothing is the interesting failure.
     tracing::info!(
         ocr_ms,
-        matched = matches.len(),
-        names = ?matches.iter().map(|m| m.display_name.as_str()).collect::<Vec<_>>(),
+        slots = slots.len(),
+        matched = slots.iter().filter(|s| s.matched.is_some()).count(),
+        names = ?slots
+            .iter()
+            .map(|s| s.matched.as_ref().map(|m| m.display_name.as_str()).unwrap_or("?"))
+            .collect::<Vec<_>>(),
         cards = ?cards,
         "relic_ocr: rewards read"
     );
 
-    let ocr_lines: Vec<String> = matches
+    let ocr_lines: Vec<String> = slots
         .iter()
-        .map(|m| format!("{} ({:.2})", m.display_name, m.confidence))
+        .map(|s| match &s.matched {
+            Some(m) => format!("{} ({:.2})", m.display_name, m.confidence),
+            None => format!("? {}", s.text),
+        })
         .collect();
     let (rewards, error) = match &read_err {
         Some(e) => (Vec::new(), Some(e.clone())),
-        None => match price_matches(&db, &matches) {
-            Ok(r) if r.is_empty() => (
-                Vec::new(),
-                Some("no reward names recognized — is the reward screen up?".to_string()),
-            ),
+        None => match price_matches(&db, &slots) {
+            Ok(r) if r.is_empty() => (Vec::new(), Some(NO_REWARDS_MSG.to_string())),
             Ok(r) => (r, None),
             Err(e) => (Vec::new(), Some(format!("pricing failed: {e}"))),
         },
@@ -174,7 +294,7 @@ pub async fn run_capture(db: Db, debug_dir: Option<std::path::PathBuf>) -> Crack
             capture_ms,
             ocr_ms,
             &cards,
-            &matches,
+            &slots,
             error.as_deref(),
         );
         write_debug_artifacts(dir, frame, sidecar);
@@ -200,7 +320,7 @@ pub fn debug_sidecar(
     capture_ms: i64,
     ocr_ms: i64,
     cards: &[String],
-    matches: &[matching::LineMatch],
+    slots: &[CardSlot],
     error: Option<&str>,
 ) -> String {
     let mut out = format!(
@@ -211,9 +331,15 @@ pub fn debug_sidecar(
     for c in cards {
         out.push_str(&format!("  {c}\n"));
     }
-    out.push_str(&format!("\nmatched ({}):\n", matches.len()));
-    for m in matches {
-        out.push_str(&format!("  {} ({:.2})\n", m.display_name, m.confidence));
+    out.push_str(&format!("\ncard slots ({}):\n", slots.len()));
+    for (i, s) in slots.iter().enumerate() {
+        match &s.matched {
+            Some(m) => out.push_str(&format!(
+                "  [{i}] {} ({:.2})\n",
+                m.display_name, m.confidence
+            )),
+            None => out.push_str(&format!("  [{i}] ? {}\n", s.text)),
+        }
     }
     if let Some(e) = error {
         out.push_str(&format!("\nerror: {e}\n"));
@@ -317,13 +443,20 @@ pub async fn capture_and_show(
         return state.last_crack.lock().clone().expect("checked above");
     }
     *state.last_crack.lock() = Some(capture.clone());
+    // Also fires on the all-unmatched case (zero slots, `NO_REWARDS_MSG`):
+    // a brand-new Prime relic right after release makes every card unknown,
+    // so there's no `unread` reward to key off — this is the hook's marquee
+    // case, not an edge case.
+    if capture_suggests_stale_vocab(&capture) {
+        refresh_vocab_if_stale(state);
+    }
 
     // This trigger now owns the overlay window.
     let gen = state.relic_overlay_gen.fetch_add(1, Ordering::SeqCst) + 1;
     crate::overlay::position_and_show(
         app,
         RELIC_OVERLAY_LABEL,
-        crate::overlay::Anchor::TopRight,
+        crate::overlay::Anchor::TopCenter,
         crate::overlay::MonitorPick::Primary,
     );
     let _ = app.emit_to(RELIC_OVERLAY_LABEL, "relic-overlay-show", &capture);
@@ -331,6 +464,43 @@ pub async fn capture_and_show(
 
     spawn_auto_hide(app, state, gen, duration);
     capture
+}
+
+/// Whether a finished capture should trigger the vocab staleness check:
+/// an unreadable card slot, or a reward screen where nothing matched at
+/// all (zero slots — every card unknown, the new-Prime-release case).
+fn capture_suggests_stale_vocab(capture: &CrackCapture) -> bool {
+    capture.rewards.iter().any(|r| r.unread) || capture.error.as_deref() == Some(NO_REWARDS_MSG)
+}
+
+/// An unreadable card, or a fully-unmatched reward screen (see
+/// [`capture_suggests_stale_vocab`]), right after a Prime release usually
+/// means the relic tables predate the new items. If the last WFCD sync is
+/// older than 6h, refresh once per app run in the background — the overlay
+/// is not updated retroactively, but the (documented) Alt+T re-press
+/// re-OCRs and matches.
+const VOCAB_REFRESH_MAX_AGE_HOURS: i64 = 6;
+
+#[cfg(feature = "relic-ocr")]
+fn refresh_vocab_if_stale(state: &std::sync::Arc<crate::AppState>) {
+    use std::sync::atomic::Ordering;
+
+    let stale = crate::db::meta::get(&state.db, crate::db::meta::KEY_LAST_RELIC_SYNC)
+        .ok()
+        .flatten()
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+        .map(|t| {
+            chrono::Utc::now().signed_duration_since(t).num_hours() >= VOCAB_REFRESH_MAX_AGE_HOURS
+        })
+        .unwrap_or(true);
+    if !stale || state.relic_vocab_refresh.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let db = state.db.clone();
+    tauri::async_runtime::spawn(async move {
+        tracing::info!("relic_ocr: unread card + stale relic data — refreshing vocab from WFCD");
+        let _ = crate::db::relic_data::refresh(&db).await;
+    });
 }
 
 /// Hide the HUD box after `duration` seconds unless a newer trigger has taken
@@ -383,29 +553,50 @@ pub fn show_test_overlay(app: &tauri::AppHandle, state: &std::sync::Arc<crate::A
             CrackReward {
                 reward_name: "Test Prime Barrel".into(),
                 slug: None,
-                plat: Some(42),
+                plat: Some(4),
                 ducats: Some(45),
-                ducats_per_plat: Some(1.1),
-                owned_qty: 2,
+                ducats_per_plat: Some(11.3),
+                owned_qty: 3,
                 wanted: false,
                 set_slug: None,
                 confidence: 1.0,
-                best: true,
+                best: false,
+                card_index: 0,
+                unread: false,
+                pick_reason: None,
             },
             CrackReward {
                 reward_name: "Test Prime Systems Blueprint".into(),
                 slug: None,
-                plat: Some(12),
+                plat: Some(38),
                 ducats: Some(65),
-                ducats_per_plat: Some(5.4),
+                ducats_per_plat: Some(1.7),
                 owned_qty: 0,
                 wanted: true,
                 set_slug: Some("test_prime_set".into()),
                 confidence: 1.0,
-                best: false,
+                best: true,
+                card_index: 1,
+                unread: false,
+                pick_reason: Some("wanted".into()),
             },
             CrackReward {
-                reward_name: "Forma Blueprint".into(),
+                reward_name: "Test Prime Barrel".into(),
+                slug: None,
+                plat: Some(4),
+                ducats: Some(45),
+                ducats_per_plat: Some(11.3),
+                owned_qty: 3,
+                wanted: false,
+                set_slug: None,
+                confidence: 1.0,
+                best: false,
+                card_index: 2,
+                unread: false,
+                pick_reason: None,
+            },
+            CrackReward {
+                reward_name: String::new(),
                 slug: None,
                 plat: None,
                 ducats: None,
@@ -413,8 +604,11 @@ pub fn show_test_overlay(app: &tauri::AppHandle, state: &std::sync::Arc<crate::A
                 owned_qty: 0,
                 wanted: false,
                 set_slug: None,
-                confidence: 1.0,
+                confidence: 0.0,
                 best: false,
+                card_index: 3,
+                unread: true,
+                pick_reason: None,
             },
         ],
         ocr_lines: vec!["(test overlay — not a real capture)".into()],
@@ -430,12 +624,163 @@ pub fn show_test_overlay(app: &tauri::AppHandle, state: &std::sync::Arc<crate::A
     crate::overlay::position_and_show(
         app,
         RELIC_OVERLAY_LABEL,
-        crate::overlay::Anchor::TopRight,
+        crate::overlay::Anchor::TopCenter,
         crate::overlay::MonitorPick::Primary,
     );
     let _ = app.emit_to(RELIC_OVERLAY_LABEL, "relic-overlay-show", &sample);
 
     spawn_auto_hide(app, state, gen, duration);
+}
+
+#[cfg(test)]
+mod pick_tests {
+    use super::*;
+    use crate::types::CrackReward;
+
+    fn reward(
+        name: &str,
+        plat: Option<i64>,
+        ducats: Option<i64>,
+        wanted: bool,
+        set: bool,
+    ) -> CrackReward {
+        CrackReward {
+            reward_name: name.to_string(),
+            slug: None,
+            plat,
+            ducats,
+            ducats_per_plat: None,
+            owned_qty: 0,
+            wanted,
+            set_slug: set.then(|| "some_set".to_string()),
+            confidence: 0.9,
+            best: false,
+            card_index: 0,
+            unread: false,
+            pick_reason: None,
+        }
+    }
+
+    fn best_of(mut rs: Vec<CrackReward>) -> (usize, Option<String>) {
+        apply_best(&mut rs);
+        let i = rs.iter().position(|r| r.best).expect("a pick exists");
+        (i, rs[i].pick_reason.clone())
+    }
+
+    #[test]
+    fn wanted_beats_plat() {
+        let (i, reason) = best_of(vec![
+            reward("pricey", Some(80), Some(100), false, false),
+            reward("wanted", Some(4), Some(45), true, false),
+        ]);
+        assert_eq!((i, reason.as_deref()), (1, Some("wanted")));
+    }
+
+    #[test]
+    fn set_beats_plat_but_not_wanted() {
+        let (i, reason) = best_of(vec![
+            reward("set", Some(4), None, false, true),
+            reward("pricey", Some(80), None, false, false),
+            reward("wanted", Some(2), None, true, false),
+        ]);
+        assert_eq!((i, reason.as_deref()), (2, Some("wanted")));
+        let (i, reason) = best_of(vec![
+            reward("set", Some(4), None, false, true),
+            reward("pricey", Some(80), None, false, false),
+        ]);
+        assert_eq!((i, reason.as_deref()), (0, Some("set")));
+    }
+
+    #[test]
+    fn plat_wins_with_no_flags_ducats_break_ties() {
+        let (i, reason) = best_of(vec![
+            reward("a", Some(10), Some(45), false, false),
+            reward("b", Some(10), Some(65), false, false),
+            reward("c", Some(4), Some(100), false, false),
+        ]);
+        assert_eq!((i, reason.as_deref()), (1, Some("price")));
+    }
+
+    #[test]
+    fn two_wanted_fall_through_to_plat() {
+        let (i, reason) = best_of(vec![
+            reward("wanted-cheap", Some(4), None, true, false),
+            reward("wanted-pricey", Some(30), None, true, false),
+        ]);
+        assert_eq!((i, reason.as_deref()), (1, Some("wanted")));
+    }
+
+    #[test]
+    fn unread_and_flagless_priceless_never_win() {
+        let mut rs = vec![
+            reward("forma", None, None, false, false),
+            CrackReward {
+                unread: true,
+                ..reward("", None, None, false, false)
+            },
+        ];
+        apply_best(&mut rs);
+        assert!(rs.iter().all(|r| !r.best), "no eligible pick → no best");
+    }
+}
+
+#[cfg(test)]
+mod capture_suggests_stale_vocab_tests {
+    use super::*;
+    use crate::types::CrackReward;
+
+    fn capture(rewards: Vec<CrackReward>, error: Option<&str>) -> CrackCapture {
+        CrackCapture {
+            captured_at: "2026-07-21T00:00:00Z".to_string(),
+            rewards,
+            ocr_lines: Vec::new(),
+            capture_ms: 0,
+            ocr_ms: 0,
+            error: error.map(str::to_string),
+        }
+    }
+
+    fn reward(unread: bool) -> CrackReward {
+        CrackReward {
+            reward_name: "forma".to_string(),
+            slug: None,
+            plat: None,
+            ducats: None,
+            ducats_per_plat: None,
+            owned_qty: 0,
+            wanted: false,
+            set_slug: None,
+            confidence: 0.9,
+            best: false,
+            card_index: 0,
+            unread,
+            pick_reason: None,
+        }
+    }
+
+    #[test]
+    fn unread_entry_triggers() {
+        let c = capture(vec![reward(false), reward(true)], None);
+        assert!(capture_suggests_stale_vocab(&c));
+    }
+
+    #[test]
+    fn all_matched_no_error_does_not_trigger() {
+        let c = capture(vec![reward(false), reward(false)], None);
+        assert!(!capture_suggests_stale_vocab(&c));
+    }
+
+    #[test]
+    fn empty_rewards_with_no_rewards_msg_triggers() {
+        let c = capture(Vec::new(), Some(NO_REWARDS_MSG));
+        assert!(capture_suggests_stale_vocab(&c));
+    }
+
+    #[test]
+    fn empty_rewards_with_other_error_does_not_trigger() {
+        let c = capture(Vec::new(), Some("capture task: boom"));
+        assert!(!capture_suggests_stale_vocab(&c));
+    }
 }
 
 #[cfg(test)]
@@ -489,15 +834,24 @@ mod sidecar_tests {
     use super::*;
 
     #[test]
-    fn sidecar_shows_seen_vs_matched_and_error() {
+    fn sidecar_shows_seen_vs_slots_and_error() {
         let cards = vec![
             "AKSTILETTO PRIME BARREL".to_string(),
             "GARBLED TEXT NOISE".to_string(),
         ];
-        let matches = vec![matching::LineMatch {
-            display_name: "Akstiletto Prime Barrel".to_string(),
-            confidence: 0.93,
-        }];
+        let slots = vec![
+            CardSlot {
+                text: "AKSTILETTO PRIME BARREL".to_string(),
+                matched: Some(matching::LineMatch {
+                    display_name: "Akstiletto Prime Barrel".to_string(),
+                    confidence: 0.93,
+                }),
+            },
+            CardSlot {
+                text: "GARBLED TEXT NOISE".to_string(),
+                matched: None,
+            },
+        ];
         let s = debug_sidecar(
             "2026-07-15T00:00:00Z",
             "window",
@@ -505,16 +859,108 @@ mod sidecar_tests {
             80,
             750,
             &cards,
-            &matches,
+            &slots,
             Some("boom"),
         );
-        assert!(s.contains("source: window"));
-        assert!(s.contains("frame: 2560x1440"));
         assert!(s.contains("cards seen (2):"));
-        assert!(s.contains("  GARBLED TEXT NOISE\n"));
-        assert!(s.contains("matched (1):"));
-        assert!(s.contains("  Akstiletto Prime Barrel (0.93)\n"));
+        assert!(s.contains("card slots (2):"));
+        assert!(s.contains("  [0] Akstiletto Prime Barrel (0.93)\n"));
+        assert!(s.contains("  [1] ? GARBLED TEXT NOISE\n"));
         assert!(s.contains("error: boom"));
+    }
+}
+
+#[cfg(test)]
+mod card_slot_tests {
+    use super::*;
+    use crate::relic_ocr::layout::CardColumn;
+    use crate::relic_ocr::matching::LineMatch;
+
+    fn col(text: &str, top_center: i32) -> CardColumn {
+        CardColumn {
+            segments: vec![text.to_string()],
+            top_center,
+            top_height: 30,
+        }
+    }
+    fn hit(name: &str) -> Option<LineMatch> {
+        Some(LineMatch {
+            display_name: name.to_string(),
+            confidence: 0.9,
+        })
+    }
+
+    #[test]
+    fn unmatched_column_on_the_title_row_becomes_an_unread_slot() {
+        let columns = vec![col("BRATON PRIME STOCK", 100), col("garbled £#!", 105)];
+        let slots = card_slots(&columns, vec![hit("Braton Prime Stock"), None]);
+        assert_eq!(slots.len(), 2);
+        assert!(slots[0].matched.is_some());
+        assert!(
+            slots[1].matched.is_none(),
+            "same-row unmatched column = unread card"
+        );
+    }
+
+    #[test]
+    fn off_row_junk_is_dropped_not_a_slot() {
+        // The screen header floats far above; a squadmate row far below.
+        let columns = vec![
+            col("SELECT A REWARD", 10),
+            col("BRATON PRIME STOCK", 100),
+            col("Pakman_56", 300),
+        ];
+        let slots = card_slots(&columns, vec![None, hit("Braton Prime Stock"), None]);
+        assert_eq!(slots.len(), 1);
+        assert_eq!(
+            slots[0].matched.as_ref().unwrap().display_name,
+            "Braton Prime Stock"
+        );
+    }
+
+    #[test]
+    fn matched_tooltip_column_below_the_title_row_is_dropped() {
+        // A tooltip panel that formed its own column CAN match the title text;
+        // its top sits well below the real title row and must not become a
+        // fifth/duplicate card.
+        let columns = vec![
+            col("BRATON PRIME STOCK", 100),
+            col("BRATON PRIME STOCK", 260), // tooltip header, own column
+        ];
+        let slots = card_slots(
+            &columns,
+            vec![hit("Braton Prime Stock"), hit("Braton Prime Stock")],
+        );
+        assert_eq!(slots.len(), 1);
+    }
+
+    #[test]
+    fn no_matches_means_no_slots() {
+        let columns = vec![col("SELECT A REWARD", 10)];
+        assert!(card_slots(&columns, vec![None]).is_empty());
+    }
+
+    #[test]
+    fn more_than_four_slots_drop_unmatched_extras_first() {
+        let columns = vec![
+            col("A PRIME BARREL", 100),
+            col("junk on row", 101),
+            col("B PRIME STOCK", 102),
+            col("C PRIME LINK", 103),
+            col("D PRIME GRIP", 104),
+        ];
+        let slots = card_slots(
+            &columns,
+            vec![
+                hit("Akstiletto Prime Barrel"),
+                None,
+                hit("Braton Prime Stock"),
+                hit("Burston Prime Receiver"),
+                hit("Dual Kamas Prime Blade"),
+            ],
+        );
+        assert_eq!(slots.len(), 4);
+        assert!(slots.iter().all(|s| s.matched.is_some()));
     }
 }
 
@@ -538,14 +984,17 @@ mod tests {
                 .expect("band saves");
             println!("band written to {out}");
         }
-        let (cards, matches) = read_rewards(&frame).expect("pipeline runs");
+        let (cards, slots) = read_rewards(&frame).expect("pipeline runs");
         println!("cards seen ({}):", cards.len());
         for c in &cards {
             println!("  {c}");
         }
-        println!("matched ({}):", matches.len());
-        for m in &matches {
-            println!("  {} ({:.2})", m.display_name, m.confidence);
+        println!("card slots ({}):", slots.len());
+        for s in &slots {
+            match &s.matched {
+                Some(m) => println!("  {} ({:.2})", m.display_name, m.confidence),
+                None => println!("  ? {}", s.text),
+            }
         }
     }
 
@@ -562,18 +1011,23 @@ mod tests {
         );
         let band = image::open(path).expect("fixture loads").into_luma8();
         let words = ocr::words(&band).expect("ocr runs");
-        let cards = layout::group_into_card_segments(&words);
-        let matches = matching::match_cards(&matching::build_vocab(), &cards, 4);
-        let names: Vec<&str> = matches.iter().map(|m| m.display_name.as_str()).collect();
+        let columns = layout::group_into_card_columns(&words);
+        let texts: Vec<Vec<String>> = columns.iter().map(|c| c.segments.clone()).collect();
+        let matches = matching::resolve_columns(&matching::build_vocab(), &texts);
+        let slots = card_slots(&columns, matches);
+        let names: Vec<Option<&str>> = slots
+            .iter()
+            .map(|s| s.matched.as_ref().map(|m| m.display_name.as_str()))
+            .collect();
         assert_eq!(
             names,
             [
-                "Paris Prime String",
-                "Dual Zoren Prime Handle",
-                "Voruna Prime Neuroptics Blueprint",
-                "Bronco Prime Barrel"
+                Some("Paris Prime String"),
+                Some("Dual Zoren Prime Handle"),
+                Some("Voruna Prime Neuroptics Blueprint"),
+                Some("Bronco Prime Barrel")
             ],
-            "expected all four card titles, left to right"
+            "expected all four card slots matched, left to right"
         );
     }
 
@@ -588,24 +1042,24 @@ mod tests {
             "/src/relic_ocr/testdata/synthetic_reward_screen_1080p.png"
         );
         let frame = image::open(path).expect("fixture loads").into_rgba8();
-        let (_cards, matches) = read_rewards(&frame).expect("pipeline runs");
-        let names: Vec<&str> = matches.iter().map(|m| m.display_name.as_str()).collect();
+        let (_cards, slots) = read_rewards(&frame).expect("pipeline runs");
+        let names: Vec<Option<&str>> = slots
+            .iter()
+            .map(|s| s.matched.as_ref().map(|m| m.display_name.as_str()))
+            .collect();
         assert_eq!(
             names,
             [
-                "Akstiletto Prime Barrel",
-                "Braton Prime Stock",
-                "Forma Blueprint",
-                "2X Forma Blueprint"
+                Some("Akstiletto Prime Barrel"),
+                Some("Braton Prime Stock"),
+                Some("Forma Blueprint"),
+                Some("2X Forma Blueprint")
             ],
-            "expected the four card titles, left to right"
+            "expected the four card slots, left to right"
         );
-        for m in &matches {
-            assert!(
-                m.confidence >= matching::MIN_CONFIDENCE,
-                "{} matched below the confidence floor",
-                m.display_name
-            );
+        for s in &slots {
+            let m = s.matched.as_ref().unwrap();
+            assert!(m.confidence >= matching::MIN_CONFIDENCE);
         }
     }
 }

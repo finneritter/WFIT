@@ -38,10 +38,14 @@ src-tauri/src/          Rust core
                         (xcap, window-first) → pure-Rust OCR (ocrs; models bundled in
                         resources/ocr; words rebuilt from char geometry — the recognizer can
                         omit spaces across card gutters) → card layout + closed-vocabulary
-                        segment-run matching (survives hover-tooltip/squadmate text) → prices
-                        from the same preload as the Relics browser → a Warframe-HUD-styled
-                        box top-right of the primary monitor. Re-press re-OCRs but keeps good
-                        results if the re-capture fails; last 4 captures kept in
+                        segment-run matching (survives hover-tooltip/squadmate text) → one
+                        `CardSlot` per detected card, left to right (radshare duplicates and
+                        unread/unmatched cards all survive as their own slot) → prices from
+                        the same preload as the Relics browser → a recommended pick per need
+                        (wanted → completes-set → plat → ducats, with a stated `pick_reason`)
+                        → a Warframe-HUD-styled top-center card strip over the primary monitor.
+                        Re-press re-OCRs but keeps good results if the re-capture fails; last 4
+                        captures (now recording per-slot outcomes) kept in
                         $APPDATA/wfit/relic-ocr-debug/. Cargo feature `relic-ocr` (default
                         ON); the WFInfo approach — no injection, no memory reads
   hotkeys.rs            single registrar/dispatcher for all global hotkeys (cascade + relic)
